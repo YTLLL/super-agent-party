@@ -4201,7 +4201,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
               <!-- 桌面视觉 -->
               <div v-show="subMenu === 'vision'" class="page">
-                <el-form :model="memorySettings" class="settings-form"  label-position="top">
+                <el-form v-if="isElectron" :model="visionSettings" class="settings-form"  label-position="top">
                   <div class="tool-item">
                     <div class="tool-header">
                       <div class="header-left">
@@ -4233,6 +4233,10 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </div>
                   </div>
                 </el-form>
+                <!-- Web端提示 -->
+                <div v-else >
+                  <el-empty :description="t('webNotSupported')" />
+                </div>
               </div>
             </div>
           </div>
