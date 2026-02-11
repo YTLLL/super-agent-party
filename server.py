@@ -8166,304 +8166,318 @@ async def create_sticker_pack(
         logger.error(f"创建表情包时出错: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
 
-from py.qq_bot_manager import QQBotConfig, QQBotManager
-# 全局机器人管理器
-qq_bot_manager = QQBotManager()
+# ==========================================
+# 机器人管理器延迟加载容器 (Lazy Container)
+# ==========================================
+class BotContainer:
+    """管理所有机器人的单例，只有在第一次调用 get 方法时才会 import 对应的重型 SDK"""
+    _qq = None
+    _feishu = None
+    _dingtalk = None
+    _discord = None
+    _slack = None
+    _telegram = None
+
+    @classmethod
+    def get_qq(cls):
+        if cls._qq is None:
+            from py.qq_bot_manager import QQBotManager
+            cls._qq = QQBotManager()
+        return cls._qq
+
+    @classmethod
+    def get_feishu(cls):
+        if cls._feishu is None:
+            from py.feishu_bot_manager import FeishuBotManager
+            cls._feishu = FeishuBotManager()
+        return cls._feishu
+
+    @classmethod
+    def get_dingtalk(cls):
+        if cls._dingtalk is None:
+            from py.dingtalk_bot_manager import DingtalkBotManager
+            cls._dingtalk = DingtalkBotManager()
+        return cls._dingtalk
+
+    @classmethod
+    def get_discord(cls):
+        if cls._discord is None:
+            from py.discord_bot_manager import DiscordBotManager
+            cls._discord = DiscordBotManager()
+        return cls._discord
+
+    @classmethod
+    def get_slack(cls):
+        if cls._slack is None:
+            from py.slack_bot_manager import SlackBotManager
+            cls._slack = SlackBotManager()
+        return cls._slack
+
+    @classmethod
+    def get_telegram(cls):
+        if cls._telegram is None:
+            from py.telegram_bot_manager import TelegramBotManager
+            cls._telegram = TelegramBotManager()
+        return cls._telegram
+
+# ==========================================
+# 1. QQ 机器人全量路由
+# ==========================================
 
 @app.post("/start_qq_bot")
-async def start_qq_bot(config: QQBotConfig):
+async def start_qq_bot(config_data: dict):
     try:
-        qq_bot_manager.start_bot(config)
-        return {
-            "success": True,
-            "message": "QQ机器人已成功启动",
-            "environment": "thread-based"
-        }
+        from py.qq_bot_manager import QQBotConfig
+        config = QQBotConfig(**config_data)
+        BotContainer.get_qq().start_bot(config)
+        return {"success": True, "message": "QQ机器人已成功启动", "environment": "thread-based"}
     except Exception as e:
         logger.error(f"启动QQ机器人失败: {e}")
-        return JSONResponse(
-            status_code=400,  # 改为 400 表示客户端错误
-            content={
-                "success": False, 
-                "message": f"启动失败: {str(e)}",
-                "error_type": "startup_error"
-            }
-        )
+        return JSONResponse(status_code=400, content={"success": False, "message": f"启动失败: {str(e)}", "error_type": "startup_error"})
 
 @app.post("/stop_qq_bot")
 async def stop_qq_bot():
     try:
-        qq_bot_manager.stop_bot()
+        if BotContainer._qq:
+            BotContainer.get_qq().stop_bot()
         return {"success": True, "message": "QQ机器人已停止"}
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": str(e)}
-        )
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
 @app.get("/qq_bot_status")
 async def qq_bot_status():
-    status = qq_bot_manager.get_status()
-    # 如果有启动错误，在状态中包含错误信息
+    if BotContainer._qq is None:
+        return {"is_running": False, "status": "stopped"}
+    status = BotContainer.get_qq().get_status()
     if status.get("startup_error") and not status.get("is_running"):
         status["error_message"] = f"启动失败: {status['startup_error']}"
     return status
 
 @app.post("/reload_qq_bot")
-async def reload_qq_bot(config: QQBotConfig):
+async def reload_qq_bot(config_data: dict):
     try:
-        # 先停止再启动
-        qq_bot_manager.stop_bot()
-        await asyncio.sleep(1)  # 等待完全停止
-        qq_bot_manager.start_bot(config)
-        
-        return {
-            "success": True,
-            "message": "QQ机器人已重新加载",
-            "config_changed": True
-        }
+        from py.qq_bot_manager import QQBotConfig
+        config = QQBotConfig(**config_data)
+        manager = BotContainer.get_qq()
+        manager.stop_bot()
+        await asyncio.sleep(1)
+        manager.start_bot(config)
+        return {"success": True, "message": "QQ机器人已重新加载", "config_changed": True}
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": str(e)}
-        )
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
-# 入口文件部分代码
-
-from py.feishu_bot_manager import FeishuBotConfig, FeishuBotManager
-
-# 全局飞书机器人管理器
-feishu_bot_manager = FeishuBotManager()
+# ==========================================
+# 2. 飞书 机器人全量路由
+# ==========================================
 
 @app.post("/start_feishu_bot")
-async def start_feishu_bot(config: FeishuBotConfig):
+async def start_feishu_bot(config_data: dict):
     try:
-        feishu_bot_manager.start_bot(config)
-        return {
-            "success": True,
-            "message": "飞书机器人已成功启动",
-            "environment": "thread-based"
-        }
+        from py.feishu_bot_manager import FeishuBotConfig
+        config = FeishuBotConfig(**config_data)
+        BotContainer.get_feishu().start_bot(config)
+        return {"success": True, "message": "飞书机器人已成功启动", "environment": "thread-based"}
     except Exception as e:
         logger.error(f"启动飞书机器人失败: {e}")
-        return JSONResponse(
-            status_code=400,
-            content={
-                "success": False, 
-                "message": f"启动失败: {str(e)}",
-                "error_type": "startup_error"
-            }
-        )
+        return JSONResponse(status_code=400, content={"success": False, "message": f"启动失败: {str(e)}", "error_type": "startup_error"})
 
 @app.post("/stop_feishu_bot")
 async def stop_feishu_bot():
     try:
-        feishu_bot_manager.stop_bot()
+        if BotContainer._feishu:
+            BotContainer.get_feishu().stop_bot()
         return {"success": True, "message": "飞书机器人已停止"}
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": str(e)}
-        )
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
 @app.get("/feishu_bot_status")
 async def feishu_bot_status():
-    status = feishu_bot_manager.get_status()
-    # 如果有启动错误，在状态中包含错误信息
+    if BotContainer._feishu is None:
+        return {"is_running": False}
+    status = BotContainer.get_feishu().get_status()
     if status.get("startup_error") and not status.get("is_running"):
         status["error_message"] = f"启动失败: {status['startup_error']}"
     return status
 
 @app.post("/reload_feishu_bot")
-async def reload_feishu_bot(config: FeishuBotConfig):
+async def reload_feishu_bot(config_data: dict):
     try:
-        # 先停止再启动
-        feishu_bot_manager.stop_bot()
-        await asyncio.sleep(1)  # 等待完全停止
-        feishu_bot_manager.start_bot(config)
-        
-        return {
-            "success": True,
-            "message": "飞书机器人已重新加载",
-            "config_changed": True
-        }
+        from py.feishu_bot_manager import FeishuBotConfig
+        config = FeishuBotConfig(**config_data)
+        manager = BotContainer.get_feishu()
+        manager.stop_bot()
+        await asyncio.sleep(1)
+        manager.start_bot(config)
+        return {"success": True, "message": "飞书机器人已重新加载", "config_changed": True}
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": str(e)}
-        )
-    
-from py.dingtalk_bot_manager import DingtalkBotConfig, DingtalkBotManager
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
-# 全局钉钉机器人管理器
-dingtalk_bot_manager = DingtalkBotManager()
+# ==========================================
+# 3. 钉钉 机器人全量路由
+# ==========================================
 
-# 路由 1: 启动
 @app.post("/start_dingtalk_bot")
-async def start_dingtalk_bot(config: DingtalkBotConfig):
+async def start_dingtalk_bot(config_data: dict):
     try:
-        dingtalk_bot_manager.start_bot(config)
+        from py.dingtalk_bot_manager import DingtalkBotConfig
+        config = DingtalkBotConfig(**config_data)
+        BotContainer.get_dingtalk().start_bot(config)
         return {"success": True, "message": "钉钉机器人已成功启动"}
     except Exception as e:
         return JSONResponse(status_code=400, content={"success": False, "message": str(e)})
 
-# 路由 2: 停止
 @app.post("/stop_dingtalk_bot")
 async def stop_dingtalk_bot():
     try:
-        dingtalk_bot_manager.stop_bot()
+        if BotContainer._dingtalk:
+            BotContainer.get_dingtalk().stop_bot()
         return {"success": True, "message": "钉钉机器人已停止"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
-# 路由 3: 状态检查
 @app.get("/dingtalk_bot_status")
 async def dingtalk_bot_status():
-    return dingtalk_bot_manager.get_status()
+    if BotContainer._dingtalk is None:
+        return {"is_running": False}
+    return BotContainer.get_dingtalk().get_status()
 
-# 路由 4: 重载配置
 @app.post("/reload_dingtalk_bot")
-async def reload_dingtalk_bot(config: DingtalkBotConfig):
+async def reload_dingtalk_bot(config_data: dict):
     try:
-        dingtalk_bot_manager.stop_bot()
-        time.sleep(1)
-        dingtalk_bot_manager.start_bot(config)
+        from py.dingtalk_bot_manager import DingtalkBotConfig
+        config = DingtalkBotConfig(**config_data)
+        manager = BotContainer.get_dingtalk()
+        manager.stop_bot()
+        import time as sync_time # 这里的 time 是为了配合你原代码中的 time.sleep
+        sync_time.sleep(1)
+        manager.start_bot(config)
         return {"success": True, "message": "钉钉机器人配置已重载"}
     except Exception as e:
         return JSONResponse(status_code=400, content={"success": False, "message": str(e)})
 
-from py.discord_bot_manager import DiscordBotManager, DiscordBotConfig
-
-discord_bot_manager = DiscordBotManager()
+# ==========================================
+# 4. Discord 机器人全量路由
+# ==========================================
 
 @app.post("/start_discord_bot")
-async def start_discord_bot(config: DiscordBotConfig):
+async def start_discord_bot(config_data: dict):
     try:
-        discord_bot_manager.start_bot(config)
+        from py.discord_bot_manager import DiscordBotConfig
+        config = DiscordBotConfig(**config_data)
+        BotContainer.get_discord().start_bot(config)
         return {"success": True, "message": "Discord 机器人已启动"}
     except Exception as e:
         return JSONResponse(status_code=400, content={"success": False, "message": str(e)})
 
 @app.post("/stop_discord_bot")
 async def stop_discord_bot():
-    discord_bot_manager.stop_bot()
+    if BotContainer._discord:
+        BotContainer.get_discord().stop_bot()
     return {"success": True, "message": "Discord 机器人已停止"}
 
 @app.get("/discord_bot_status")
 async def discord_bot_status():
-    return discord_bot_manager.get_status()
+    if BotContainer._discord is None:
+        return {"is_running": False}
+    return BotContainer.get_discord().get_status()
 
 @app.post("/reload_discord_bot")
-async def reload_discord_bot(config: DiscordBotConfig):
-    discord_bot_manager.stop_bot()
-    await asyncio.sleep(1)
-    discord_bot_manager.start_bot(config)
-    return {"success": True, "message": "Discord 机器人已重载"}
+async def reload_discord_bot(config_data: dict):
+    try:
+        from py.discord_bot_manager import DiscordBotConfig
+        config = DiscordBotConfig(**config_data)
+        manager = BotContainer.get_discord()
+        manager.stop_bot()
+        await asyncio.sleep(1)
+        manager.start_bot(config)
+        return {"success": True, "message": "Discord 机器人已重载"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
-
-from py.slack_bot_manager import SlackBotManager, SlackBotConfig
-
-slack_bot_manager = SlackBotManager()
+# ==========================================
+# 5. Slack 机器人全量路由
+# ==========================================
 
 @app.post("/start_slack_bot")
-async def start_slack_bot(config: SlackBotConfig):
+async def start_slack_bot(config_data: dict):
     try:
-        slack_bot_manager.start_bot(config)
+        from py.slack_bot_manager import SlackBotConfig
+        config = SlackBotConfig(**config_data)
+        BotContainer.get_slack().start_bot(config)
         return {"success": True, "message": "Slack 机器人已启动"}
     except Exception as e:
         return JSONResponse(status_code=400, content={"success": False, "message": str(e)})
 
 @app.post("/stop_slack_bot")
 async def stop_slack_bot():
-    slack_bot_manager.stop_bot()
+    if BotContainer._slack:
+        BotContainer.get_slack().stop_bot()
     return {"success": True, "message": "Slack 机器人已停止"}
 
 @app.get("/slack_bot_status")
 async def slack_bot_status():
-    return slack_bot_manager.get_status()
+    if BotContainer._slack is None:
+        return {"is_running": False}
+    return BotContainer.get_slack().get_status()
 
 @app.post("/reload_slack_bot")
-async def reload_slack_bot(config: SlackBotConfig):
-    slack_bot_manager.stop_bot()
-    await asyncio.sleep(1)
-    slack_bot_manager.start_bot(config)
-    return {"success": True, "message": "Slack 机器人已重载"}
+async def reload_slack_bot(config_data: dict):
+    try:
+        from py.slack_bot_manager import SlackBotConfig
+        config = SlackBotConfig(**config_data)
+        manager = BotContainer.get_slack()
+        manager.stop_bot()
+        await asyncio.sleep(1)
+        manager.start_bot(config)
+        return {"success": True, "message": "Slack 机器人已重载"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
-from py.telegram_bot_manager import TelegramBotManager, TelegramBotConfig
-
-# 全局 Telegram 机器人管理器
-telegram_bot_manager = TelegramBotManager()
+# ==========================================
+# 6. Telegram 机器人全量路由
+# ==========================================
 
 @app.post("/start_telegram_bot")
-async def start_telegram_bot(config: TelegramBotConfig):
-    """
-    启动 Telegram 机器人（与飞书接口完全对称）
-    """
+async def start_telegram_bot(config_data: dict):
     try:
-        telegram_bot_manager.start_bot(config)
-        return {
-            "success": True,
-            "message": "Telegram 机器人已成功启动",
-            "environment": "thread-based"
-        }
+        from py.telegram_bot_manager import TelegramBotConfig
+        config = TelegramBotConfig(**config_data)
+        BotContainer.get_telegram().start_bot(config)
+        return {"success": True, "message": "Telegram 机器人已成功启动", "environment": "thread-based"}
     except Exception as e:
         logger.error(f"启动 Telegram 机器人失败: {e}")
-        return JSONResponse(
-            status_code=400,
-            content={
-                "success": False,
-                "message": f"启动失败: {str(e)}",
-                "error_type": "startup_error"
-            }
-        )
-
+        return JSONResponse(status_code=400, content={"success": False, "message": f"启动失败: {str(e)}", "error_type": "startup_error"})
 
 @app.post("/stop_telegram_bot")
 async def stop_telegram_bot():
-    """
-    停止 Telegram 机器人
-    """
     try:
-        telegram_bot_manager.stop_bot()
+        if BotContainer._telegram:
+            BotContainer.get_telegram().stop_bot()
         return {"success": True, "message": "Telegram 机器人已停止"}
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": str(e)}
-        )
-
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
 @app.get("/telegram_bot_status")
 async def telegram_bot_status():
-    """
-    获取 Telegram 机器人状态
-    """
-    status = telegram_bot_manager.get_status()
+    if BotContainer._telegram is None:
+        return {"is_running": False}
+    status = BotContainer.get_telegram().get_status()
     if status.get("startup_error") and not status.get("is_running"):
         status["error_message"] = f"启动失败: {status['startup_error']}"
     return status
 
-
 @app.post("/reload_telegram_bot")
-async def reload_telegram_bot(config: TelegramBotConfig):
-    """
-    重新加载 Telegram 机器人（先停后启）
-    """
+async def reload_telegram_bot(config_data: dict):
     try:
-        telegram_bot_manager.stop_bot()
-        await asyncio.sleep(1)  # 等待完全停止
-        telegram_bot_manager.start_bot(config)
-        return {
-            "success": True,
-            "message": "Telegram 机器人已重新加载",
-            "config_changed": True
-        }
+        from py.telegram_bot_manager import TelegramBotConfig
+        config = TelegramBotConfig(**config_data)
+        manager = BotContainer.get_telegram()
+        manager.stop_bot()
+        await asyncio.sleep(1)
+        manager.start_bot(config)
+        return {"success": True, "message": "Telegram 机器人已重新加载", "config_changed": True}
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": str(e)}
-        )
-
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
 @app.post("/add_workflow")
 async def add_workflow(file: UploadFile = File(...), workflow_data: str = Form(...)):
@@ -8732,6 +8746,49 @@ def get_internal_ip():
 def get_ip():
     ip = get_internal_ip()
     return {"ip": ip}
+
+class ManagerFactory:
+    _instances = {}
+
+    @classmethod
+    def get(cls, name, import_path, class_name):
+        if name not in cls._instances:
+            # 只有在第一次访问时才导入
+            import importlib
+            module = importlib.import_module(import_path)
+            mgr_cls = getattr(module, class_name)
+            cls._instances[name] = mgr_cls()
+        return cls._instances[name]
+
+    @classmethod
+    def is_created(cls, name):
+        """检查某个管理器是否已经初始化（不触发导入）"""
+        return name in cls._instances
+
+# --- 定义你的全局变量名为“动态属性” ---
+# 这样你代码里写 qq_bot_manager.xxx 时，才会触发真正的加载
+
+@property
+def qq_bot_manager(): return ManagerFactory.get("qq", "py.qq_bot_manager", "QQBotManager")
+@property
+def feishu_bot_manager(): return ManagerFactory.get("feishu", "py.feishu_bot_manager", "FeishuBotManager")
+@property
+def dingtalk_bot_manager(): return ManagerFactory.get("dingtalk", "py.dingtalk_bot_manager", "DingtalkBotManager")
+@property
+def discord_bot_manager(): return ManagerFactory.get("discord", "py.discord_bot_manager", "DiscordBotManager")
+@property
+def slack_bot_manager(): return ManagerFactory.get("slack", "py.slack_bot_manager", "SlackBotManager")
+@property
+def telegram_bot_manager(): return ManagerFactory.get("telegram", "py.telegram_bot_manager", "TelegramBotManager")
+
+# 辅助宏：快速获取实例（仅内部使用，确保不改动你的外部调用）
+def _get_mgr(name):
+    if name == "qq": return qq_bot_manager
+    if name == "feishu": return feishu_bot_manager
+    if name == "dingtalk": return dingtalk_bot_manager
+    if name == "discord": return discord_bot_manager
+    if name == "slack": return slack_bot_manager
+    if name == "telegram": return telegram_bot_manager
 
 async def sync_all_bots_behavior(settings_dict: dict):
     """
