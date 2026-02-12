@@ -347,7 +347,7 @@ import aiofiles
 import argparse
 from py.dify_openai_async import DifyOpenAIAsync
 
-from py.get_setting import EXT_DIR, convert_to_opus_simple, load_covs, load_settings, save_covs,save_settings,clean_temp_files_task,base_path,configure_host_port,UPLOAD_FILES_DIR,AGENT_DIR,MEMORY_CACHE_DIR,KB_DIR,DEFAULT_VRM_DIR,USER_DATA_DIR,LOG_DIR,TOOL_TEMP_DIR
+from py.get_setting import EXT_DIR, _copy_default_skills, convert_to_opus_simple, load_covs, load_settings, save_covs,save_settings,clean_temp_files_task,base_path,configure_host_port,UPLOAD_FILES_DIR,AGENT_DIR,MEMORY_CACHE_DIR,KB_DIR,DEFAULT_VRM_DIR,USER_DATA_DIR,LOG_DIR,TOOL_TEMP_DIR
 from py.llm_tool import get_image_base64,get_image_media_type
 timetamp = time.time()
 log_path = os.path.join(LOG_DIR, f"backend_{timetamp}.log")
@@ -480,6 +480,7 @@ configure_host_port(args.host, args.port)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await _copy_default_skills()
     # 1. 准备所有独立的初始化任务
     from py.get_setting import init_db, init_covs_db
     from tzlocal import get_localzone
@@ -980,7 +981,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
     
     # ==================== 3. 权限拦截逻辑 (Human-in-the-loop) ====================
     # 定义受控的敏感工具列表
-    # 这些工具在执行前需要检查权限配置 (.party/config.json 或 全局设置)
+    # 这些工具在执行前需要检查权限配置 (.agent/config.json 或 全局设置)
     SENSITIVE_TOOLS = [
         "docker_sandbox_async",
         "edit_file_tool",
@@ -1029,7 +1030,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         # 默认全部拦截
         
         # --- 规则 D: 项目级白名单覆盖 (Project Config Override) ---
-        # 如果以上规则未通过，检查 .party/config.json
+        # 如果以上规则未通过，检查 .agent/config.json
         # 如果用户之前点击过 "Allow Always"，这里会返回 True
         if not is_allowed and cwd:
             if is_tool_allowed_by_project_config(cwd, tool_name):
@@ -1231,7 +1232,7 @@ async def images_add_in_messages(request_messages: List[Dict], images: List[Dict
 
 async def read_todos_local(cwd: str) -> list:
     """读取本地待办事项（跨平台）"""
-    todo_file = Path(cwd) / ".party" / "ai_todos.json"
+    todo_file = Path(cwd) / ".agent" / "ai_todos.json"
     if not todo_file.exists():
         return []
     
@@ -1280,7 +1281,7 @@ def get_system_context() -> str:
 
 
 async def get_project_skills_summary(cwd: str) -> str:
-    skills_root = Path(cwd) / ".party" / "skills"
+    skills_root = Path(cwd) / ".agent" / "skills"
     if not skills_root.exists() or not skills_root.is_dir():
         return ""
 
@@ -1358,7 +1359,7 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
                 
                 proc = await asyncio.create_subprocess_exec(
                     "docker", "exec", container_name, 
-                    "cat", "/workspace/.party/ai_todos.json",
+                    "cat", "/workspace/.agent/ai_todos.json",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
@@ -1393,7 +1394,7 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
                     )
                 )
                 
-                todo_lines = ["\n\n当你完成一个事项后，请记得使用todo_write_tool更新项目待办事项，所有事项结束后，可以删除本事项文件\n\n📋 **当前项目待办事项**（.party/ai_todos.json）：\n"]
+                todo_lines = ["\n\n当你完成一个事项后，请记得使用todo_write_tool更新项目待办事项，所有事项结束后，可以删除本事项文件\n\n📋 **当前项目待办事项**（.agent/ai_todos.json）：\n"]
                 pending_count = 0
                 
                 for todo in todos_sorted:
@@ -4460,7 +4461,7 @@ async def execute_tool_manually(request: Request):
     
     # ==================== 核心逻辑：处理 "Always" ====================
     if approval_type == "always":
-        # 如果用户选择“不再询问”，则将该工具写入当前项目的 .party/config.json
+        # 如果用户选择“不再询问”，则将该工具写入当前项目的 .agent/config.json
         if cwd:
             try:
                 add_tool_to_project_config(cwd, tool_name)
