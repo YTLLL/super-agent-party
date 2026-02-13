@@ -20,6 +20,8 @@ import aiofiles.os
 import hashlib
 import anyio
 
+from py.get_setting import SKILLS_DIR
+
 # 尝试导入SDK，如果是在独立环境运行则忽略错误
 try:
     from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
@@ -342,9 +344,12 @@ def get_safe_container_name(cwd: str) -> str:
     path_hash = hashlib.md5(abs_path.encode()).hexdigest()[:12]
     return f"sandbox-{path_hash}"
 
-async def get_or_create_docker_sandbox(cwd: str, image_name: str = "docker/sandbox-templates:latest") -> str:
-    """获取或创建基于路径的持久化沙盒"""
+async def get_or_create_docker_sandbox(cwd: str, image_name: str = "docker/sandbox-templates:claude-code") -> str:
+    """获取或创建基于路径的持久化沙盒，并映射全局skills目录"""
     container_name = get_safe_container_name(cwd)
+    
+    # 获取主机的全局skills目录
+    host_skills_dir = SKILLS_DIR
     
     check_proc = await asyncio.create_subprocess_exec(
         "docker", "ps", "-a", "--filter", f"name=^/{container_name}$", "--format", "{{.Names}}|{{.Status}}",
@@ -359,13 +364,18 @@ async def get_or_create_docker_sandbox(cwd: str, image_name: str = "docker/sandb
         if "Up" in status:
             return container_name
         else:
+            # 启动已存在的容器
             await asyncio.create_subprocess_exec("docker", "start", container_name, stdout=asyncio.subprocess.PIPE)
             return container_name
     
+    # 创建新容器，映射主机的全局skills目录
+    # 注意：我们将主机skills目录映射到容器内的 /root/.agents/skills
+    # 这是标准Agent Skills CLI使用的路径
     create_cmd = [
         "docker", "run", "-d",
         "--name", container_name,
-        "-v", f"{cwd}:/workspace",
+        "-v", f"{cwd}:/workspace",  # 映射工作目录
+        "-v", f"{host_skills_dir}:/root/.agents/skills",  # 映射全局skills目录到容器内
         "-w", "/workspace",
         "--restart", "unless-stopped",
         image_name,
@@ -380,6 +390,23 @@ async def get_or_create_docker_sandbox(cwd: str, image_name: str = "docker/sandb
     stdout, stderr = await proc.communicate()
     
     if proc.returncode == 0:
+        # 容器创建成功，确保容器内的skills目录权限正确
+        try:
+            # 设置容器内skills目录的权限
+            chown_cmd = [
+                "docker", "exec", container_name,
+                "chown", "-R", "root:root", "/root/.agents/skills"
+            ]
+            chown_proc = await asyncio.create_subprocess_exec(
+                *chown_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await chown_proc.communicate()
+        except Exception:
+            # 权限设置失败不影响主要功能
+            pass
+        
         return container_name
     else:
         # 简单重试逻辑
@@ -387,6 +414,7 @@ async def get_or_create_docker_sandbox(cwd: str, image_name: str = "docker/sandb
             await asyncio.sleep(0.5)
             return await get_or_create_docker_sandbox(cwd, image_name)
         raise Exception(f"Failed to create sandbox: {stderr.decode()}")
+
 
 async def _exec_docker_cmd_simple(cwd: str, cmd_list: list) -> str:
     """内部辅助函数：在容器内执行简单命令并获取输出"""
@@ -536,7 +564,7 @@ async def todo_write_tool(action: str, id: str = None, content: str = None, prio
     try:
         real_cwd = await _get_current_cwd()
         container_name = await get_or_create_docker_sandbox(real_cwd)
-        todo_file = "/workspace/.party/ai_todos.json"
+        todo_file = "/workspace/.agent/ai_todos.json"
         
         try:
             data = await _exec_docker_cmd_simple(real_cwd, ["cat", todo_file])
@@ -607,7 +635,7 @@ async def todo_write_tool(action: str, id: str = None, content: str = None, prio
             tmp.write(json.dumps(todos, indent=2, ensure_ascii=False))
             tmp_path = tmp.name
         
-        await _exec_docker_cmd_simple(real_cwd, ["mkdir", "-p", "/workspace/.party"])
+        await _exec_docker_cmd_simple(real_cwd, ["mkdir", "-p", "/workspace/.agent"])
         dest = f"{container_name}:{todo_file}"
         proc = await asyncio.create_subprocess_exec("docker", "cp", tmp_path, dest, stdout=asyncio.subprocess.PIPE)
         await proc.wait()
@@ -1235,9 +1263,9 @@ async def edit_file_patch_tool_local(path: str, old_string: str, new_string: str
 async def todo_write_tool_local(action: str, id: str = None, content: str = None, priority: str = "medium", status: str = None) -> str:
     """本地环境任务管理"""
     try:
-        # 1. 获取当前工作目录并确保 .party 文件夹存在
+        # 1. 获取当前工作目录并确保 .agent 文件夹存在
         cwd = await _get_current_cwd()
-        party_dir = Path(cwd) / ".party"
+        party_dir = Path(cwd) / ".agent"
         if not party_dir.exists():
             await aiofiles.os.makedirs(party_dir, exist_ok=True)
         
@@ -1399,7 +1427,7 @@ async def qwen_code_async(prompt: str) -> str | AsyncIterator[str]:
 
 async def read_skill_tool_logic(cwd: str, skill_id: str, is_docker: bool = True) -> str:
     """内部通用逻辑：读取 Skill 文件夹结构和说明文档"""
-    skill_rel_path = f".party/skills/{skill_id}"
+    skill_rel_path = f".agent/skills/{skill_id}"
     
     # 1. 生成文件树命令/逻辑
     tree_str = ""
@@ -1421,7 +1449,7 @@ async def read_skill_tool_logic(cwd: str, skill_id: str, is_docker: bool = True)
             return f"[Error] Skill '{skill_id}' not found or inaccessible in Docker: {str(e)}"
     else:
         try:
-            base_path = Path(cwd) / ".party" / "skills" / skill_id
+            base_path = Path(cwd) / ".agent" / "skills" / skill_id
             if not base_path.exists(): return f"[Error] Skill '{skill_id}' folder does not exist."
             
             # 生成本地文件树
@@ -1493,7 +1521,7 @@ TOOLS_REGISTRY = {
     "read_skill": {
         "type": "function", "function": {
             "name": "read_skill_tool", 
-            "description": "Read full documentation and file tree for a project-specific skill from .party/skills/.",
+            "description": "Read full documentation and file tree for a project-specific skill from .agent/skills/.",
             "parameters": {"type": "object", "properties": {"skill_id": {"type": "string"}}, "required": ["skill_id"]}
         }
     },
@@ -1583,7 +1611,7 @@ LOCAL_TOOLS_REGISTRY = {
     "read_skill_local": {
         "type": "function", "function": {
             "name": "read_skill_tool_local", 
-            "description": "Read full documentation and file tree for a project-specific skill from .party/skills/ (Local).",
+            "description": "Read full documentation and file tree for a project-specific skill from .agent/skills/ (Local).",
             "parameters": {"type": "object", "properties": {"skill_id": {"type": "string"}}, "required": ["skill_id"]}
         }
     },

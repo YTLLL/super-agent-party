@@ -635,7 +635,21 @@ let vue_methods = {
     formatMessage(content, index) {
       if (!content) return '';
 
-      // ... (前面表格优化的代码保持不变)
+      // 目的是防止 markdown-it 因为最后一行缺少 '|' 而在 Table 和 Paragraph 之间反复横跳
+      let processedForRender = content.trimEnd(); 
+      
+      // 获取最后一行
+      const lines = content.split('\n');
+      const lastLine = lines[lines.length - 1].trim();
+
+      // 如果最后一行以 '|' 开头（看起来像是表格行）
+      // 并且它还不是分隔行（即不是 |---| 这种）
+      // 并且它没有以 '|' 结尾
+      if (lastLine.startsWith('|') && !lastLine.endsWith('|') && !/^[|\s-:]+$/.test(lastLine)) {
+        // 临时在渲染用的字符串末尾补上 ' |'，让解析器认为这一行结束了
+        // 注意：这不会修改 this.messages 里的真实数据，只影响本次渲染
+        processedForRender += ' |';
+      }
 
       // --- 预处理阶段 ---
       const parts = this.splitCodeAndText(content);
@@ -706,10 +720,45 @@ let vue_methods = {
         }
       }).join('');
 
-      // --- 渲染阶段及后续恢复保持不变 ---
-      // ... 
       let rendered = md.render(processedContent);
-      // ... (恢复 LaTeX, 处理链接等)
+      // --- 恢复阶段 ---
+      // 恢复 LaTeX
+      latexPlaceholders.forEach(({ placeholder, latex }) => {
+        rendered = rendered.replace(placeholder, latex);
+      });
+
+      // 处理未闭合代码块的转义 (如果有)
+      rendered = rendered.replace(/\\\`/g, '`').replace(/\\\$/g, '$');
+
+      // 处理思考中的状态 (Thinking...)
+      const currentMsg = this.messages[index];
+      // 只有当是最后一条消息、角色是助手、且正在输入时才显示“思考中”图标
+      if (index === this.messages.length - 1 && currentMsg?.role === 'assistant' && this.isTyping && currentMsg.content !== currentMsg.pure_content) {
+        // 注意：这里不要直接加在 rendered 字符串里，最好在模板中通过 v-if 控制，
+        // 但为了兼容您的逻辑，我们保留：
+        rendered = `<div class="thinking-header"><i class="fa-solid fa-lightbulb"></i> ${this.t('thinking')}</div>` + rendered;
+      }
+
+      // --- 后处理 (MathJax & Mermaid) ---
+      // 我们不再在 formatMessage 内部直接调用 MathJax，而是将其推入队列
+      this.$nextTick(() => {
+        this.queueMathJax(index);
+        this.initCopyButtons();
+        this.initPreviewButtons();
+        // Mermaid 也可以在这里懒加载
+      });
+
+      // 处理链接 (保持您原有的 DOM 操作逻辑，但建议用正则替换以提高性能)
+      // 使用正则替换 href，比创建 DOM 树快得多
+      rendered = rendered.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"([^>]*)>/g, (match, href, otherAttrs) => {
+        // 检查是否为脚注
+        if (otherAttrs.includes('footnote-ref') || otherAttrs.includes('footnote-backref') || href.startsWith('#')) {
+          return match; 
+        }
+        const formattedHref = this.formatFileUrl(href);
+        return `<a href="${formattedHref}" target="_blank"${otherAttrs}>`;
+      });
+
       return rendered;
     },
 
@@ -12405,38 +12454,6 @@ async togglePlugin(plugin) {
     this.nodeInstalled = installed;
   },
 
-  /* 一键安装 */
-  async installNode() {
-    this.nodeInstalling = true;
-    this.nodeProgress = 0;
-    try {
-      // 1. 发起安装
-      const res = await fetch('/api/node/install', { method: 'POST' });
-      const { task_id } = await res.json();
-
-      // 2. 轮询进度
-      this.nodeTimer = setInterval(async () => {
-        const progRes = await fetch(`/api/node/progress/${task_id}`);
-        const { percent, status } = await progRes.json();
-        this.nodeProgress = Math.round(percent);
-
-        if (status === 'finished') {
-          clearInterval(this.nodeTimer);
-          this.nodeInstalling = false;
-          this.nodeInstalled = true;
-          this.$message.success(this.t('installSuccess'));
-        } else if (status === 'error') {
-          clearInterval(this.nodeTimer);
-          this.nodeInstalling = false;
-          this.$message.error(this.t('installFail'));
-        }
-      }, 1000);
-    } catch (e) {
-      this.nodeInstalling = false;
-      this.$message.error(this.t('installFail'));
-    }
-  },
-
     /* ===== uv 相关 ===== */
   async probeUv() {
     const res = await fetch('/api/uv/probe');
@@ -12444,69 +12461,6 @@ async togglePlugin(plugin) {
     this.uvInstalled = installed;
   },
 
-  async installUv() {
-    this.uvInstalling = true;
-    this.uvProgress = 0;
-    try {
-      const res = await fetch('/api/uv/install', { method: 'POST' });
-      const { task_id } = await res.json();
-
-      this.uvTimer = setInterval(async () => {
-        const progRes = await fetch(`/api/uv/progress/${task_id}`);
-        const { percent, status } = await progRes.json();
-        this.uvProgress = Math.round(percent);
-
-        if (status === 'finished') {
-          clearInterval(this.uvTimer);
-          this.uvInstalling = false;
-          this.uvInstalled = true;
-          this.$message.success(this.t('installUvSuccess'));
-        } else if (status === 'error') {
-          clearInterval(this.uvTimer);
-          this.uvInstalling = false;
-          this.$message.error(this.t('installUvFail'));
-        }
-      }, 1000);
-    } catch (e) {
-      this.uvInstalling = false;
-      this.$message.error(this.t('installUvFail'));
-    }
-  },
-  /* ===== git ===== */
-  async probeGit() {
-    const res = await fetch('/api/git/probe');
-    const { installed } = await res.json();
-    this.gitInstalled = installed;
-  },
-
-  async installGit() {
-    this.gitInstalling = true;
-    this.gitProgress = 0;
-    try {
-      const res = await fetch('/api/git/install', { method: 'POST' });
-      const { task_id } = await res.json();
-
-      this.gitTimer = setInterval(async () => {
-        const progRes = await fetch(`/api/git/progress/${task_id}`);
-        const { percent, status } = await progRes.json();
-        this.gitProgress = Math.round(percent);
-
-        if (status === 'finished') {
-          clearInterval(this.gitTimer);
-          this.gitInstalling = false;
-          this.gitInstalled = true;
-          this.$message.success(this.t('installGitSuccess'));
-        } else if (status === 'error') {
-          clearInterval(this.gitTimer);
-          this.gitInstalling = false;
-          this.$message.error(this.t('installGitFail'));
-        }
-      }, 1000);
-    } catch (e) {
-      this.gitInstalling = false;
-      this.$message.error(this.t('installGitFail'));
-    }
-  },
   async openLogDialog() {
     this.showLogDialog = true;
     await this.fetchLogs();
@@ -14883,6 +14837,17 @@ async handleRefreshSkills() {
         return this.makeRange(0, 59).filter(s => s < this.minLimit.s);
       }
       return [];
+    },
+
+    async probeDocker() {
+      try {
+        const res = await fetch('/api/docker/probe');
+        const data = await res.json();
+        this.dockerInstalled = data.installed;
+      } catch (error) {
+        console.error("Docker 探测失败:", error);
+        this.dockerInstalled = false;
+      }
     },
 
 }

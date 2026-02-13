@@ -761,7 +761,7 @@ const app = Vue.createApp({
     }
     await this.probeNode();
     await this.probeUv(); 
-    await this.probeGit();
+    await this.probeDocker();
     this.checkMobile();
     this.loadSherpaStatus();
     this.minilmModelStatus();
@@ -963,7 +963,6 @@ const handleRemoteInstall = (data) => {
     this.stopExtensionsPolling();
     clearInterval(this.nodeTimer);
     clearInterval(this.uvTimer); 
-    clearInterval(this.gitTimer);
     if (isElectron) {
       delete window.stopQQBotHandler;
       delete window.stopFeishuBotHandler;

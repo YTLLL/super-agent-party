@@ -1940,10 +1940,8 @@ main();`,
     uvInstalling: false,
     uvProgress: 0,
     uvTimer: null,
-    gitInstalled: false,
-    gitInstalling: false,
-    gitProgress: 0,
-    gitTimer: null,
+    dockerInstalled: false, 
+    dockerInstalling: false,
     isReadInterruption: false,
     readSettings: {
       delay:2000
