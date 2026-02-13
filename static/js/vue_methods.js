@@ -635,7 +635,21 @@ let vue_methods = {
     formatMessage(content, index) {
       if (!content) return '';
 
-      // ... (前面表格优化的代码保持不变)
+      // 目的是防止 markdown-it 因为最后一行缺少 '|' 而在 Table 和 Paragraph 之间反复横跳
+      let processedForRender = content.trimEnd(); 
+      
+      // 获取最后一行
+      const lines = content.split('\n');
+      const lastLine = lines[lines.length - 1].trim();
+
+      // 如果最后一行以 '|' 开头（看起来像是表格行）
+      // 并且它还不是分隔行（即不是 |---| 这种）
+      // 并且它没有以 '|' 结尾
+      if (lastLine.startsWith('|') && !lastLine.endsWith('|') && !/^[|\s-:]+$/.test(lastLine)) {
+        // 临时在渲染用的字符串末尾补上 ' |'，让解析器认为这一行结束了
+        // 注意：这不会修改 this.messages 里的真实数据，只影响本次渲染
+        processedForRender += ' |';
+      }
 
       // --- 预处理阶段 ---
       const parts = this.splitCodeAndText(content);
@@ -706,10 +720,45 @@ let vue_methods = {
         }
       }).join('');
 
-      // --- 渲染阶段及后续恢复保持不变 ---
-      // ... 
       let rendered = md.render(processedContent);
-      // ... (恢复 LaTeX, 处理链接等)
+      // --- 恢复阶段 ---
+      // 恢复 LaTeX
+      latexPlaceholders.forEach(({ placeholder, latex }) => {
+        rendered = rendered.replace(placeholder, latex);
+      });
+
+      // 处理未闭合代码块的转义 (如果有)
+      rendered = rendered.replace(/\\\`/g, '`').replace(/\\\$/g, '$');
+
+      // 处理思考中的状态 (Thinking...)
+      const currentMsg = this.messages[index];
+      // 只有当是最后一条消息、角色是助手、且正在输入时才显示“思考中”图标
+      if (index === this.messages.length - 1 && currentMsg?.role === 'assistant' && this.isTyping && currentMsg.content !== currentMsg.pure_content) {
+        // 注意：这里不要直接加在 rendered 字符串里，最好在模板中通过 v-if 控制，
+        // 但为了兼容您的逻辑，我们保留：
+        rendered = `<div class="thinking-header"><i class="fa-solid fa-lightbulb"></i> ${this.t('thinking')}</div>` + rendered;
+      }
+
+      // --- 后处理 (MathJax & Mermaid) ---
+      // 我们不再在 formatMessage 内部直接调用 MathJax，而是将其推入队列
+      this.$nextTick(() => {
+        this.queueMathJax(index);
+        this.initCopyButtons();
+        this.initPreviewButtons();
+        // Mermaid 也可以在这里懒加载
+      });
+
+      // 处理链接 (保持您原有的 DOM 操作逻辑，但建议用正则替换以提高性能)
+      // 使用正则替换 href，比创建 DOM 树快得多
+      rendered = rendered.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"([^>]*)>/g, (match, href, otherAttrs) => {
+        // 检查是否为脚注
+        if (otherAttrs.includes('footnote-ref') || otherAttrs.includes('footnote-backref') || href.startsWith('#')) {
+          return match; 
+        }
+        const formattedHref = this.formatFileUrl(href);
+        return `<a href="${formattedHref}" target="_blank"${otherAttrs}>`;
+      });
+
       return rendered;
     },
 
