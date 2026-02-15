@@ -789,48 +789,68 @@ from typing import Tuple
 
 def validate_bash_command(command: str, cwd: str, mode: str = "default") -> Tuple[bool, str]:
     """
-    优化的安全策略：
-    - 允许重定向到 /dev/null
-    - 允许 cd 进入常见的容器内合法路径
-    - 仅在非 YOLO 模式下限制环境变量访问
+    安全校验策略（增强版）：
+    1. 严格禁止路径遍历（../）
+    2. 禁止访问敏感系统目录
+    3. 允许正常的文件操作和相对路径
     """
     
-    # ===== 第一层：硬性边界（修正后的正则）=====
-    escape_patterns = [
-        (r'\.\./\.\.', "Path traversal"),                           
-        # 允许 > /dev/null，拦截其他绝对路径写操作
-        (r'>\s*/(?!dev/null)[a-zA-Z/]+', "Write to system path"),   
-        # 允许 cd 进入 /workspace 或 /tmp，拦截其他根路径跳转
-        (r'cd\s+/(?!workspace|tmp)[^/]', "Chdir to system root"),   
+    # ===== 1. 路径遍历防御 (核心修复) =====
+    # 解析：
+    # (?:\s|^|/)  -> 前面必须是 空格、开头、或斜杠 (防止匹配到 valid..file 这种文件名)
+    # \.\.        -> 也就是 ".."
+    # (?:/|\s|$)  -> 后面必须是 斜杠、空格、或结尾 (防止匹配到 ..valid 这种文件名)
+    # 结果：能拦截 "../", "/..", " .. ", "ls .."，但不会误伤 "echo loading..."
+    traversal_pattern = r'(?:\s|^|/)\.\.(?:/|\s|$)'
+    
+    if re.search(traversal_pattern, command):
+        return False, "Path traversal detected (usage of '..' is blocked to keep agent in workspace)"
+
+    # ===== 2. 绝对路径与敏感目录防御 =====
+    # 常见敏感目录前缀
+    sensitive_roots = [
+        r'/etc', r'/var', r'/root', r'/bin', r'/sbin', r'/usr',  # Linux
+        r'C:\\Windows', r'C:\\Program Files', r'C:\\Users'       # Windows
     ]
     
-    for pattern, reason in escape_patterns:
-        if re.search(pattern, command, re.IGNORECASE):
-            return False, f"{reason} blocked: {pattern}"
-    
-    # ===== 第二层：毁灭性操作（保持严格）=====
+    # 检查是否直接操作了敏感路径
+    for root in sensitive_roots:
+        # 匹配 空格+路径 或 开头+路径
+        # 例如: "cat /etc/passwd" 或 "/etc/init.d/..."
+        if re.search(r'(?:\s|^)' + root, command, re.IGNORECASE):
+            return False, f"Access to system directory '{root}' is blocked"
+
+    # 针对 cd 命令的额外保护：禁止 cd /... (除非是 /workspace 或 /tmp)
+    # 拦截: cd /etc, cd /
+    # 放行: cd ., cd subfolder, cd /workspace
+    if re.search(r'\bcd\s+/(?!(workspace|tmp|dev/null))', command, re.IGNORECASE):
+            return False, "Changing directory to outside workspace is blocked"
+
+    # ===== 3. 毁灭性操作（保持原样）=====
     destructive_patterns = [
         (r'rm\s+-rf\s*/', "Recursive delete root"),                
         (r'mkfs\.[a-z]+', "Filesystem format"),                    
         (r'dd\s+if=.*of=/dev/[a-z]', "Direct device write"),       
-        (r'>?\s*/dev/(sda|hd|nvme|mmcblk)', "Block device access"), 
+        (r'>?\s*/dev/(sda|hd|nvme|mmcblk)', "Block device access"),
+        (r':\(\)\{\s*:\|:&?\s*\};\s*:', "Fork bomb"), # 新增 Fork bomb 防御
     ]
     
     for pattern, reason in destructive_patterns:
         if re.search(pattern, command, re.IGNORECASE):
             return False, f"Destructive operation blocked: {reason}"
     
-    # ===== 第三层：风险操作（仅在非 YOLO 模式下拦截）=====
+    # ===== 4. 风险操作（非 YOLO 模式拦截）=====
     if mode != "yolo":
         risk_patterns = [
-            (r'curl.*\|.*sh', "Remote pipe to shell"),
-            (r'wget.*\|.*sh', "Remote pipe to shell"), 
-            (r'~\s*/', "Home directory access"),
+            # 允许 wget/curl，但禁止直接管道给 shell 执行 (如 curl | sh)
+            (r'(curl|wget).*\|\s*(sh|bash|zsh|python|perl|php)', "Remote execution via pipe"),
+            # 禁止访问环境变量 HOME，防止泄露主机用户目录
             (r'\$\{?HOME\}?', "HOME env variable usage"),
+            (r'~\s*/', "Home directory access via ~"),
         ]
         for pattern, reason in risk_patterns:
-            if re.search(pattern, command, re.I):
-                return False, f"{reason} blocked in {mode} mode (use yolo to allow)"
+            if re.search(pattern, command, re.IGNORECASE):
+                return False, f"{reason} blocked in {mode} mode"
     
     return True, command
 
