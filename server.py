@@ -826,6 +826,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         jina_crawler_async,
         Crawl4Ai_search_async, 
         firecrawl_search_async,
+        simple_fetch_async,
     )
     from py.know_base import query_knowledge_base
     from py.agent_tool import agent_tool_call
@@ -907,6 +908,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "jina_crawler_async": jina_crawler_async,
         "Crawl4Ai_search_async": Crawl4Ai_search_async,
         "firecrawl_search_async": firecrawl_search_async,
+        "simple_fetch_async":simple_fetch_async,
         "agent_tool_call": agent_tool_call,
         "a2a_tool_call": a2a_tool_call,
         "custom_llm_tool": custom_llm_tool,
@@ -1970,6 +1972,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
         serper_tool,
         bochaai_tool,
         jina_crawler_tool, 
+        simple_fetch_tool,
         Crawl4Ai_tool,
         firecrawl_tool,
     )
@@ -2542,6 +2545,8 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                             tools.append(Crawl4Ai_tool)
                         elif settings['webSearch']['crawler'] == 'firecrawl':
                             tools.append(firecrawl_tool)
+                        elif settings['webSearch']['crawler'] == 'simpleRequest':
+                            tools.append(simple_fetch_tool)
                 if kb_list:
                     tools.append(kb_tool)
                 if settings['tools']['deepsearch']['enabled'] or enable_deep_research: 
@@ -3616,6 +3621,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
         serper_tool,
         bochaai_tool,
         jina_crawler_tool, 
+        simple_fetch_tool,
         Crawl4Ai_tool,
         firecrawl_tool,
     )
@@ -4019,6 +4025,8 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                     tools.append(Crawl4Ai_tool)
                 elif settings['webSearch']['crawler'] == 'firecrawl':
                     tools.append(firecrawl_tool)
+                elif settings['webSearch']['crawler'] == 'simpleRequest':
+                    tools.append(simple_fetch_tool)
         if kb_list:
             tools.append(kb_tool)
         if settings['tools']['deepsearch']['enabled'] or enable_deep_research: 
@@ -4522,6 +4530,7 @@ async def execute_tool_manually(request: Request):
         jina_crawler_async,
         Crawl4Ai_search_async, 
         firecrawl_search_async,
+        simple_fetch_async,
     )
     from py.know_base import query_knowledge_base
     from py.agent_tool import agent_tool_call
@@ -4603,6 +4612,7 @@ async def execute_tool_manually(request: Request):
         "jina_crawler_async": jina_crawler_async,
         "Crawl4Ai_search_async": Crawl4Ai_search_async,
         "firecrawl_search_async": firecrawl_search_async,
+        "simple_fetch_async":simple_fetch_async,
         "agent_tool_call": agent_tool_call,
         "a2a_tool_call": a2a_tool_call,
         "custom_llm_tool": custom_llm_tool,
