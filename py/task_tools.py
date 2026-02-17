@@ -27,7 +27,7 @@ create_subtask_tool = {
 - 每个子任务都是独立的对话上下文
 - 子任务无法访问主对话的历史记录（除非在description中明确说明）
 - 建议在description中提供完整的背景信息和明确的完成标准
-- 如果不是用户要求，子任务创建后你无需主动查询其进度，客户端UI会自动将当前进度和结果显示给用户""",
+- 如果不是用户要求，子任务创建后请不要主动查询其进度，客户端UI会自动将当前进度和结果显示给用户""",
         "parameters": {
             "type": "object",
             "properties": {
@@ -165,7 +165,7 @@ async def create_subtask(
         )
     )
     
-    return f"✅ 子任务已创建并开始执行\n\n任务ID: {task.task_id}\n标题: {task.title}\n\n可以使用 query_task_progress 工具查询进度。"
+    return f"✅ 子任务已创建并开始执行\n\n任务ID: {task.task_id}\n标题: {task.title}\n请不要主动查询任务进度，客户端UI会自动将当前进度和结果显示给用户"
 
 async def query_task_progress(
     workspace_dir: str,
