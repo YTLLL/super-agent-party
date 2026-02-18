@@ -902,7 +902,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                         :type="CLISettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'CLIButton')?.enabled&&!isCapsuleMode"
                         circle>
-                        <i class="fa-solid fa-terminal"></i>
+                        <i class="fa-solid fa-computer"></i>
                       </el-button>
                     </el-tooltip>
 
@@ -1057,6 +1057,23 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </el-tooltip>
 
 
+                    <el-tooltip :content="t('logoPage')" placement="top">
+                      <el-button
+                        plain
+                        class="icon-btn party-btn"
+                        style="border-radius: 24px;"
+                        @click="showLogoDialog = true"
+                      >
+                        <template #icon>
+                          <img
+                            :src="getVendorLogo('unknown')"
+                            class="model-vendor-logo"
+                            draggable="false"
+                          />
+                        </template>
+                      </el-button>
+                    </el-tooltip>
+
                     <el-tooltip :content="isSending ? t('stopGenerating') : t('sendMessage')" placement="top" class="send-btn-container">
                       <el-button
                         v-if="!isCapsuleMode"
@@ -1065,17 +1082,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                         class="icon-btn send-btn"
                         circle>
                         <i :class="isSending ? 'fa-solid fa-stop' : 'fa-solid fa-paper-plane'" aria-hidden="true"></i>
-                      </el-button>
-                    </el-tooltip>
-                    
-                    <el-tooltip :content="t('logoPage')" placement="top">
-                      <el-button
-                        plain
-                        class="icon-btn party-btn"
-                        style="border-radius: 24px;"
-                        @click="showLogoDialog = true"
-                      >
-                        <span>Super Agent Party</span>
                       </el-button>
                     </el-tooltip>
 
