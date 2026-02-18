@@ -1051,13 +1051,13 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </el-tooltip>
                     <!--展开收起按钮-->
                     <el-tooltip :content="t('moreButton')" placement="top">
-                      <el-button v-if="!isCapsuleMode" @click="showMoreButtonDialog = true" class="icon-btn collapse-btn" circle>
+                      <el-button v-if="!isCapsuleMode" @click="showMoreButtonDialog = true" class="icon-btn collapse-btn" type="default" circle>
                         <i class="fa-solid fa-ellipsis"></i>
                       </el-button>
                     </el-tooltip>
 
 
-                    <el-tooltip :content="isSending ? t('stopGenerating') : t('sendMessage')" placement="top">
+                    <el-tooltip :content="isSending ? t('stopGenerating') : t('sendMessage')" placement="top" class="send-btn-container">
                       <el-button
                         v-if="!isCapsuleMode"
                         @click="isSending ? stopGenerate() : sendMessage()"
@@ -1618,15 +1618,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item v-if="ttsSettings.newtts.length > 0 " :label="t('availableVoice')"></el-form-item>
-              <div class="knowledge-dialog-content">
-                <div v-for="(config, name) in ttsSettings.newtts" :key="name" class="knowledge-item">
-                  <el-switch v-model="config.enabled" @change="autoSaveSettings"></el-switch>
-                  <div class="knowledge-info">
-                    <div class="knowledge-name">{{ name }}</div>
-                  </div>
-                </div>
-              </div>
             </div>
           </el-dialog>
           <el-dialog

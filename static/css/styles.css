@@ -3584,7 +3584,7 @@ body {
 }
 
 .message.assistant .tts-controls {
-  background: var(--el-bg-color);
+  background: var(--el-bg-color-page);
 }
 
 .message.assistant .tts-controls .tts-status {
@@ -3741,13 +3741,18 @@ body {
 .model-info {
   border-radius: 16px!important;
   margin: 1px!important;
-  background-color: var(--el-input-bg-color);
+  background-color: var(--el-bg-color-page);
   color: var(--el-text-color);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .model-info:hover {
   transform: scale(1.01);
+}
+
+.model-info .el-alert{
+  background-color: var(--el-bg-color-page)!important;
+  color: var(--el-primary-color)!important;
 }
 
 .event-button-group {
