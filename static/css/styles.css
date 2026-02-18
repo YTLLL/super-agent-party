@@ -3409,9 +3409,6 @@ body {
   .video-item {
     min-width: 0px!important;
   }
-  .el-dialog {
-    width: 250px !important;
-  }
   .page .logo-container{
     width: 100% !important;
     padding-left: 1px!important;
@@ -8877,4 +8874,36 @@ hr.footnotes-sep {
 .unified-input-wrapper .send-btn {
   /* 如果你想让发送按钮依然保持在最右边 */
   margin-left: auto !important;
+}
+
+/* 容器基本样式 */
+.input-container-wrapper {
+  position: relative;
+  border: 1px solid transparent;
+  transition: all 0.3s;
+  border-radius: 8px;
+}
+
+/* 拖拽时的视觉效果 */
+.input-container-wrapper.is-dragging {
+  border: 2px dashed var(--el-color-primary);
+  background-color: rgba(var(--el-color-primary-rgb), 0.05);
+}
+
+/* 拖拽遮罩（可选） */
+.drop-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(128, 128, 128, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none; /* 确保不干扰拖拽事件 */
+  color: var(--el-text-color-primary);
+  font-size: 14px;
 }

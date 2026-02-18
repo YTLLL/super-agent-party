@@ -1638,10 +1638,11 @@ app.whenReady().then(async () => {
     });
     // 文件对话框处理器
     ipcMain.handle('open-file-dialog', async (options) => {
+      const allAllowed = [...ALLOWED_EXTENSIONS, ...ALLOWED_IMAGE_EXTENSIONS];
       const result = await dialog.showOpenDialog({
         properties: ['openFile', 'multiSelections'],
         filters: [
-          { name: locales[currentLanguage].supportedFiles, extensions: ALLOWED_EXTENSIONS },
+          { name: locales[currentLanguage].supportedFiles, extensions: allAllowed },
           { name: locales[currentLanguage].allFiles, extensions: ['*'] }
         ]
       })

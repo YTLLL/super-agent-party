@@ -730,23 +730,12 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                     <el-tooltip :content="t('uploadFile')" placement="top">
                       <el-button
-                        @click="sendFiles"
+                        @click="browseAllFiles" 
                         class="icon-btn file-btn"
-                        :type="hasFiles ? 'primary' : 'default'"
-                        v-if="MoreButtonDict.find(b => b.name === 'fileButton')?.enabled&&!isCapsuleMode"
+                        :type="(hasFiles || hasImages) ? 'primary' : 'default'"
+                        v-if="MoreButtonDict.find(b => b.name === 'fileButton')?.enabled && !isCapsuleMode"
                         circle>
                         <i class="fa-solid fa-paperclip"></i>
-                      </el-button>
-                    </el-tooltip>
-
-                    <el-tooltip :content="t('uploadImage')" placement="top">
-                      <el-button
-                        @click="sendImages"
-                        class="icon-btn image-btn"
-                        :type="hasImages ? 'primary' : 'default'"
-                        v-if="MoreButtonDict.find(b => b.name === 'imageButton')?.enabled&&!isCapsuleMode"
-                        circle>
-                        <i class="fa-solid fa-image"></i>
                       </el-button>
                     </el-tooltip>
 
@@ -1122,19 +1111,32 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </div>
                   </div>
 
-                  <!-- 2. 输入框 -->
-                  <!-- 注意：这里的 class 是 input-box-transparent -->
-                  <el-input
-                    v-model="userInput"
-                    type="textarea"
-                    :rows="isMobile?(isInputExpanded ? 8 : 3):(isInputExpanded ? 16 : 4)"
-                    :placeholder="t('inputMessage')"
-                    resize="none"
-                    @keydown="isInputting=true;handleKeyDown($event)" 
-                    @keyup="isInputting=false"
-                    @paste.native="handleInputPaste"
-                    class="input-box-transparent">
-                  </el-input>
+                  <!-- 1. 外层套一个 wrapper，绑定拖拽事件 -->
+                  <div 
+                    class="input-container-wrapper"
+                    :class="{ 'is-dragging': isDragging }"
+                    @dragover.prevent="isDragging = true"
+                    @dragleave.prevent="isDragging = false"
+                    @drop.prevent="handleInputDrop"
+                  >
+                    <el-input
+                      v-model="userInput"
+                      type="textarea"
+                      :rows="isMobile?(isInputExpanded ? 8 : 3):(isInputExpanded ? 16 : 4)"
+                      :placeholder="t('inputMessage')"
+                      resize="none"
+                      @keydown="isInputting=true;handleKeyDown($event)" 
+                      @keyup="isInputting=false"
+                      @paste.native="handleInputPaste"
+                      class="input-box-transparent">
+                    </el-input>
+                    
+                    <!-- 拖拽时的遮罩提示（可选，提升体验） -->
+                    <div v-if="isDragging" class="drop-overlay">
+                      <el-icon><Upload /></el-icon>
+                      <span>{{ t('dropToUpload') }}</span>
+                    </div>
+                  </div>
                   
                 </div> <!-- 结束 unified-input-wrapper -->
               </div>

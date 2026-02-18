@@ -168,6 +168,8 @@ const IMAGE_MIME_WHITELIST = [
   'image/bmp'
 ];
 
+
+const ALL_ALLOWED_EXTENSIONS = [...new Set([...ALLOWED_EXTENSIONS, ...ALLOWED_IMAGE_EXTENSIONS])];
 let vue_methods = {
   handleUpdateAction() {
     if (this.updateDownloaded) {
@@ -3089,6 +3091,49 @@ let vue_methods = {
       this.autoSaveSettings();
       this.sendMessagesToExtension(); // 发送消息到插件
     },
+
+
+  async browseAllFiles() {
+    if (!this.isElectron) {
+      // 浏览器环境
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.multiple = true
+      // 合并接受的文件类型
+      input.accept = ALL_ALLOWED_EXTENSIONS.map(ext => `.${ext}`).join(',')
+      
+      input.onchange = (e) => {
+        const files = Array.from(e.target.files)
+        // 统一验证：只要在合并后的列表中即可
+        const validFiles = files.filter(file => {
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          return ALL_ALLOWED_EXTENSIONS.includes(ext);
+        })
+        this.handleFiles(validFiles)
+      }
+      input.click()
+    } else {
+      // Electron 环境
+      // 假设你的 electronAPI.openFileDialog 支持多选并返回路径
+      const result = await window.electronAPI.openFileDialog(); 
+      if (!result.canceled) {
+        const files = await Promise.all(
+          result.filePaths
+            .filter(path => {
+              const ext = path.split('.').pop()?.toLowerCase() || '';
+              return ALL_ALLOWED_EXTENSIONS.includes(ext);
+            })
+            .map(async path => {
+              const buffer = await window.electronAPI.readFile(path);
+              const blob = new Blob([buffer]);
+              return new File([blob], path.split(/[\\/]/).pop());
+            })
+        );
+        this.handleFiles(files);
+      }
+    }
+  },
+
     async sendFiles() {
       this.showUploadDialog = true;
       // 设置文件上传专用处理
@@ -3106,6 +3151,7 @@ let vue_methods = {
         this.browseDocuments();
       }
     },
+    
     // 专门处理图片选择
     async browseImages() {
       if (!this.isElectron) {
@@ -3225,26 +3271,57 @@ let vue_methods = {
       const ext = (file.name.split('.').pop() || '').toLowerCase()
       return ALLOWED_IMAGE_EXTENSIONS.includes(ext) || IMAGE_MIME_WHITELIST.some(mime => file.type.includes(mime))
     },
+
+  // 拖拽释放处理
+  async handleInputDrop(event) {
+    this.isDragging = false;
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length > 0) {
+      await this.handleFiles(files);
+    }
+  },
+
+  // 粘贴处理 (同时也支持截图粘贴)
+  handleInputPaste(event) {
+    const items = event.clipboardData.items;
+    const files = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file') {
+        files.push(items[i].getAsFile());
+      }
+    }
+    if (files.length > 0) {
+      this.handleFiles(files);
+    }
+  },
+
     // 统一处理文件
     async handleFiles(files) {
-      const allowedExtensions = this.currentUploadType === 'image' ? ALLOWED_IMAGE_EXTENSIONS : ALLOWED_EXTENSIONS;
+      // 1. 合并所有允许的后缀，用于初步过滤
+      const allAllowed = [...ALLOWED_IMAGE_EXTENSIONS, ...ALLOWED_EXTENSIONS];
       
-      const validFiles = files.filter(file => {
+      // 2. 遍历处理每一个选中的文件
+      files.forEach(file => {
         try {
-          // 安全获取文件扩展名
           const filename = file.name || (file.path && file.path.split(/[\\/]/).pop()) || '';
           const ext = filename.split('.').pop()?.toLowerCase() || '';
-          return allowedExtensions.includes(ext);
+
+          // 检查是否在允许名单内
+          if (ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
+            // 如果是图片，按图片逻辑添加
+            this.addFiles([file], 'image');
+          } else if (ALLOWED_EXTENSIONS.includes(ext)) {
+            // 如果是文档，按文件逻辑添加
+            this.addFiles([file], 'file');
+          } else {
+            // 不支持的类型
+            console.warn(`不支持的文件类型: ${ext}`);
+            // 可以选加：this.showErrorAlert('file'); 
+          }
         } catch (e) {
-          console.error('文件处理错误:', e);
-          return false;
+          console.error('文件分拣错误:', e);
         }
       });
-      if (validFiles.length > 0) {
-        this.addFiles(validFiles, this.currentUploadType);
-      } else {
-        this.showErrorAlert(this.currentUploadType);
-      }
     },
     // 统一处理文件
     async handleReadFiles(files) {
