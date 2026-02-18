@@ -10705,7 +10705,7 @@ stopTTSActivities() {
     if (this.isCapsuleMode && !this.isMac) {
       window.electronAPI.windowAction('maximize') // 恢复默认大小
     } else{
-      window.electronAPI.toggleWindowSize(220, 75);
+      window.electronAPI.toggleWindowSize(220, 85);
     }
     this.sidePanelOpen = false;
     this.isCapsuleMode = !this.isCapsuleMode;

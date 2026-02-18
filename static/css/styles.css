@@ -8593,3 +8593,250 @@ hr.footnotes-sep {
     font-family: inherit;
     font-size: 13px;
 }
+
+/* 1. 取消消息列表外层框 */
+.messages-container {
+  background-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* 2. 浮动输入区域整体 */
+.input-container {
+  position: relative;
+  padding: 0 8px 8px 8px;
+}
+
+/* 3. unified-input-wrapper 增强成卡片感 */
+.unified-input-wrapper {
+  background-color: var(--el-bg-color) !important;
+  border: 1px solid var(--el-border-color) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0,0,0,0.06) !important;
+}
+
+/* 4. 工具栏按钮组（现在移入输入框内）*/
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 8px 12px 4px 12px;
+  gap: 2px;
+  /* border-bottom: 1px solid var(--el-border-color-lighter);  <-- 删除或注释掉这一行 */
+  border-bottom: none !important; /* 确保彻底移除线 */
+}
+
+/* 5. 图标按钮缩小，更紧凑 */
+.button-group .el-button.is-circle {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+/* 针对浏览器侧边栏的特殊适配 */
+.browser-copilot-sidebar .messages-container {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 侧边栏容器背景 */
+.browser-copilot-sidebar {
+    background-color: var(--el-bg-color-page) !important;
+}
+
+/* 确保侧边栏内的输入框卡片感依然存在 */
+.browser-copilot-sidebar .unified-input-wrapper {
+    background-color: var(--el-bg-color) !important; /* 卡片本身是白色/深灰 */
+    margin: 0 4px; /* 侧边栏较窄，给边缘留一点点呼吸空间 */
+}
+
+/* 移除侧边栏输入框容器可能存在的额外边框 */
+.browser-copilot-sidebar .chat-area > div:last-child {
+    border-top: none !important;
+}
+
+/* --- 输入框容器优化 --- */
+.input-container {
+  /* 顶部完全不留空，左右留极窄间距，底部留出呼吸空间 */
+  padding: 0 4px 6px 4px !important; 
+  position: relative;
+  background: transparent !important;
+  z-index: 10;
+}
+
+/* --- 移动端适配：间距压缩到极致 --- */
+@media (max-width: 768px) {
+  .input-container {
+    padding: 0 2px 4px 2px !important; /* 手机端几乎贴边 */
+  }
+  
+  .unified-input-wrapper {
+    border-radius: 12px !important; /* 手机端圆角稍微减小，增加内部空间 */
+  }
+}
+
+/* --- 输入框卡片：增加顶部悬浮感 --- */
+.unified-input-wrapper {
+  background-color: var(--el-bg-color) !important;
+  /* 增加一个向上的淡淡阴影，使其看起来像是盖在消息列表上面的 */
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.03), 
+              0 4px 24px rgba(0, 0, 0, 0.1) !important;
+  border-bottom: none !important; /* 底部不需要边框，贴近屏幕边缘 */
+}
+
+/* --- 消息列表：底部留白调整 --- */
+.messages-container {
+  /* 确保消息列表底部有足够的填充，防止最后一条消息被输入框完全挡死 */
+  padding-bottom: 20px !important; 
+}
+
+/* 1. 消除消息区域与输入区域之间的物理间距 */
+.chat-area {
+    gap: 0 !important; /* 关键：彻底去掉中间的空隙 */
+}
+
+/* 2. 消息容器处理 */
+.messages-container {
+    flex: 1;
+    /* 增加底部填充，确保最后一条消息在滚动到底时，文字不会被浮动的输入框挡住 */
+    padding-bottom: 30px !important; 
+}
+
+/* 3. 输入框容器：彻底去掉顶部间距，压缩左右间距 */
+.input-container {
+    margin: 0 !important;
+    padding: 0 4px 8px 4px !important; /* 顶部0，左右4px贴边，底部8px呼吸 */
+    position: relative;
+    z-index: 10;
+}
+
+/* --- 输入框包裹器圆角升级 --- */
+.unified-input-wrapper {
+  background-color: var(--el-bg-color) !important;
+  /* 将圆角从 12px/16px 提升到 24px */
+  border-radius: 24px !important; 
+  
+  border: 1px solid var(--el-border-color) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.05), 
+              0 10px 30px rgba(0, 0, 0, 0.1) !important;
+  overflow: hidden; /* 必须加上这个，确保内部的输入框不会超出圆角边缘 */
+}
+
+/* --- 内部输入框适配 --- */
+.input-box-transparent .el-textarea__inner {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  /* 底部圆角要和外层保持一致，防止点击时的 focus 状态出现直角 */
+  border-radius: 0 0 24px 24px !important; 
+  padding: 8px 16px 16px 16px !important; /* 增加左右内边距，配合大圆角 */
+}
+
+/* --- 移动端适配 --- */
+@media (max-width: 768px) {
+  .unified-input-wrapper {
+    border-radius: 20px !important; /* 手机端稍微小一点点，更协调 */
+  }
+  .input-box-transparent .el-textarea__inner {
+    border-radius: 0 0 20px 20px !important;
+    padding: 8px 12px 12px 12px !important;
+  }
+}
+
+/* 5. 移动端极致贴边 */
+@media (max-width: 768px) {
+    .input-container {
+        padding: 0 2px 4px 2px !important; /* 手机端左右仅留 2px，最大化宽度 */
+    }
+    .unified-input-wrapper {
+        border-radius: 12px !important; /* 稍微减小圆角，让视野更方正 */
+    }
+}
+
+/* --- 修复按钮组对齐问题 --- */
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start; /* 默认左对齐 */
+  align-items: center;
+  gap: 8px; /* 使用 gap 统一控制横向和纵向间距 */
+  padding: 8px 12px;
+  border-bottom: none !important; /* 移除下边框 */
+}
+
+.send-btn {
+  margin-left: auto !important;
+}
+
+/* 关键修复：强制重置 Element UI 默认的按钮间距 */
+.button-group .el-button {
+  margin: 0 !important; /* 彻底移除默认的 margin-left: 12px */
+}
+
+/* 移动端间距微调 */
+@media (max-width: 768px) {
+  .button-group {
+    gap: 8px!important; 
+    padding: 6px 8px!important; 
+  }
+}
+
+/* --- 1. 基础：移除所有按钮的边框和阴影（精准锁定） --- */
+.unified-input-wrapper .el-button {
+  border: none !important;
+  box-shadow: none !important;
+  transition: all 0.2s ease !important;
+}
+
+/* --- 2. 针对 Default (普通图标) 按钮：设置透明底色 --- */
+.unified-input-wrapper .el-button--default {
+  background-color: transparent !important;
+}
+
+/* --- 3. 针对 Danger (删除) 和 Primary (发送/启用) 按钮：保留并加强底色 --- */
+/* 这里不再强制透明，而是确保它们使用 Element 主题色 */
+.unified-input-wrapper .el-button--danger {
+  background-color: var(--el-color-danger) !important;
+  color: #ffffff !important;
+}
+
+.unified-input-wrapper .el-button--primary {
+  background-color: var(--el-color-primary) !important;
+  color: #ffffff !important;
+}
+
+/* --- 4. 悬停效果适配 --- */
+
+/* 普通透明按钮的悬停：使用半透明霜化感 */
+.unified-input-wrapper .el-button--default:hover {
+  background-color: rgba(150, 150, 150, 0.15) !important;
+}
+
+/* 状态色按钮（红/蓝）的悬停：使用亮度滤镜，不改底色 */
+.unified-input-wrapper .el-button--primary:hover,
+.unified-input-wrapper .el-button--danger:hover {
+  filter: brightness(1.15) !important; /* 整体提亮，不影响原本色相 */
+  transform: translateY(-1px);
+}
+
+/* --- 5. 深色主题适配 (Dark / Midnight / Neon) --- */
+/* 确保在深色背景下，透明按钮的图标颜色足够亮 */
+[data-theme="dark"] .unified-input-wrapper .el-button--default,
+[data-theme="midnight"] .unified-input-wrapper .el-button--default,
+[data-theme="neon"] .unified-input-wrapper .el-button--default {
+  color: var(--el-text-color-regular) !important;
+}
+
+/* 深色模式下普通按钮悬停：更明显的白霜感 */
+[data-theme="dark"] .unified-input-wrapper .el-button--default:hover,
+[data-theme="midnight"] .unified-input-wrapper .el-button--default:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Neon 主题特殊悬停控制 */
+[data-theme="neon"] .unified-input-wrapper .el-button--default:hover {
+  background-color: rgba(255, 45, 149, 0.15) !important;
+  color: #ff2d95 !important;
+}
