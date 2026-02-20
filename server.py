@@ -1458,7 +1458,82 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
             system_context = get_system_context()
             content_append(request.messages, 'system', system_context)
         # =====================================
-        
+        elif engine == "ds":
+            # 在 Docker 环境下，注入系统环境信息
+            system_context = """【环境信息】操作系统：Linux | Shell：bash
+
+⚠️ 重要提示：
+1. 当前为 Docker 环境，请使用 Linux 命令和工具链
+2. 执行 docker_sandbox_async 时，命令必须符合 Linux 的语法规范
+3. 路径分隔符：Unix 使用正斜杠(/)
+4. 请尽量使用相对路径，避免使用绝对路径，以免在跨平台时出现问题
+
+### ✅ **已安装的主要开发工具**
+
+#### **编程语言和运行时**
+1. **Python**
+   - Python 3.13.7
+   - pip 25.1.1
+   - uv 0.9.26
+
+2. **Node.js**
+   - Node.js v20.19.4
+   - npm 9.2.0
+   - npx 9.2.0
+
+3. **Go**
+   - Go 1.24.4
+
+4. **Perl**
+   - Perl 已安装
+
+#### **版本控制和协作工具**
+1. **Git**
+   - git 2.51.0
+   - **GitHub CLI (gh)** 2.46.0
+
+#### **包管理和构建工具**
+1. **Python 包管理**
+   - pip / pip3
+   - uv
+
+2. **Node.js 包管理**
+   - npm / npx
+
+3. **系统包管理**
+   - apt-get / dpkg
+
+#### **文本处理和命令行工具**
+1. **文本处理**
+   - jq
+   - awk / sed / grep
+   - cat / less / more / head / tail
+
+2. **文件操作**
+   - tar / unzip
+   - rsync
+   - 所有基本 Unix 命令（ls, cp, mv, rm, mkdir, chmod 等）
+
+3. **系统工具**
+   - bash shell
+   - make
+   - which / whereis
+
+#### **网络工具**
+1. **HTTP 客户端**
+   - curl 8.14.1
+
+2. **安全工具**
+   - openssl
+   - gpg
+
+#### **系统监控**
+1. **进程和资源监控**
+   - top / ps
+   - free / df / du
+"""
+            content_append(request.messages, 'system', system_context)
+
         todos = []
         
         try:
