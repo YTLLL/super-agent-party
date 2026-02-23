@@ -956,7 +956,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-button>
                     </el-tooltip>
 
-                    <el-tooltip :content="t('uploadFile')" placement="top">
+                    <el-tooltip :content="t('uploadFileorImage')" placement="top">
                       <el-button
                         @click="browseAllFiles" 
                         class="icon-btn file-btn"
@@ -1862,26 +1862,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <el-button type="primary" @click="saveEdit">{{ editType === 'user' ? t('modifyAndSend'):t('save') }}</el-button>
             </template>
           </el-dialog>
-            <!-- 文件上传对话框 -->
-            <el-dialog
-              v-model="showUploadDialog"
-              :title="currentUploadType==='file' ? t('uploadFile') : t('uploadImage')"
-              width="80%"
-              :before-close="() => showUploadDialog = false">
-
-              <div class="upload-container">
-                <!-- 可点击的拖拽区域 -->
-                <div
-                  class="drop-zone"
-                  @dragover.prevent
-                  @drop.prevent="handleDrop"
-                  @click="browseFiles"
-                >
-                  <el-icon :size="50"><upload /></el-icon>
-                  <p>{{ t('clickOrDrop') }}</p>
-                </div>
-              </div>
-            </el-dialog>
             <el-dialog
               v-model="showKnowledgeDialog"
               :title="t('knowledgeBaseSelection')"
@@ -14417,7 +14397,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                               </el-button>
                             </el-tooltip>
 
-                            <el-tooltip :content="t('uploadFile')" placement="top">
+                            <el-tooltip :content="t('uploadFileorImage')" placement="top">
                               <el-button
                                 @click="browseAllFiles" 
                                 class="icon-btn file-btn"
