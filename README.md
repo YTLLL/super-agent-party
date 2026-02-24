@@ -57,21 +57,21 @@
 ### Windows portable package (Recommended! Installation-free source version, support one-click synchronization to the latest version of the warehouse, no need to wait for the desktop version to be packaged)
 
   👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.8/super-agent-party-win-v0.3.8.7z)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.8/super-agent-party-win-v0.3.8.7z)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.8-hot-fix/super-agent-party-win-v0.3.8.7z)
 
 ⭐ Note!  You can double-click `一键更新(update).bat` to update the software, or you can double-click `一键启动(start).bat` to start the software.The operating system must be **Windows 10/11, Windows Server 2025**, or a later version!
 
 ### Windows Desktop Installation
 
   👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.8/Super-Agent-Party-Setup-0.3.8.exe)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.8/Super-Agent-Party-Setup-0.3.8.exe)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.8-hot-fix/Super-Agent-Party-Setup-0.3.8.exe)
 
 ⭐ Note! Choose to install only for the current user during installation, otherwise, administrator privileges will be required to start.The operating system must be **Windows 10/11, Windows Server 2025**, or a later version!
 
 ### macOS portable package (Currently only M chips are supported, developer-oriented, no-install source version, one-click sync to latest repo, no need to wait for desktop build)
 
   👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.8/super-agent-party-mac-v0.3.8.7z)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.8/super-agent-party-mac-v0.3.8.7z)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.8-hot-fix/super-agent-party-mac-v0.3.8.7z)
 
 ⭐ Note! You can update the software in Terminal with `one-click update(update).sh` or launch it with `one-click start(start).sh`. Remember to grant permissions before use!
 
@@ -85,7 +85,7 @@
 ### MacOS Desktop Installation (Currently only M chips are supported.)
 
   👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.8/Super-Agent-Party-0.3.8-Mac.dmg)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.8/Super-Agent-Party-0.3.8-Mac.dmg)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.8-hot-fix/Super-Agent-Party-0.3.8-Mac.dmg)
 
 ⭐Attention! After downloading, drag the app file of the dmg file into the `/Applications` directory, then open end point, execute the following command and enter the root password to remove the attached Quarantine attribute from the network download:
 
