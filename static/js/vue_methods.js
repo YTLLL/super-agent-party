@@ -1903,6 +1903,12 @@ let vue_methods = {
         console.log(messagesPayload);
         let currentMsg;
 
+        if(this.extensionsSystemPromptsDict){
+            const combinedPrompt = Object.values(this.extensionsSystemPromptsDict).filter(Boolean).join('\n\n');
+            if (messagesPayload[0].role === 'system') messagesPayload[0].content += '\n\n' + combinedPrompt;
+            else messagesPayload.unshift({ role: 'system', content: combinedPrompt });
+        }
+
         // === 【修复 1】: 是恢复模式则复用最后一条消息，否则创建新消息 ===
         if (isResume && this.messages.length > 0) {
             currentMsg = this.messages[this.messages.length - 1];
@@ -11697,7 +11703,7 @@ clearSegments() {
       this.sidePanelURL = '';
       return;
     }
-
+    
     /* 1. 先尝试 Node 模式 */
     try {
       const r = await fetch(`/api/extensions/${extension.id}/start-node`, { method: 'POST' });
@@ -11719,6 +11725,7 @@ clearSegments() {
     this.currentExtension = extension;
     this.sidePanelURL = `/ext/${extension.id}/index.html`;
     showNotification(`${this.t('loadExtension(static)')}: ${extension.name}`, 'success');
+    this.extensionsSystemPromptsDict[extension.id] = extension.systemPrompt || ""; // 更新提示词
   },
   
   // 切换到默认视图
