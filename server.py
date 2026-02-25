@@ -1689,28 +1689,31 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
 
     newttsList = []
     Narrator_label = "Narrator"
-    if settings['ttsSettings']['newtts'] and settings['ttsSettings']['enabled'] and settings['memorySettings']['is_memory'] and not request.is_app_bot  and not request.is_sub_agent:
-        # 遍历settings['ttsSettings']['newtts']，获取所有包含enabled: true的key
-        for key in settings['ttsSettings']['newtts']:
-            if settings['ttsSettings']['newtts'][key]['enabled']:
-                newttsList.append(key)
-        if newttsList:
-            finalttsList = ["<silence>"]
-            # 用 name 去匹配音色列表（假设音色配置用的也是 name）
-            if selectedMemoryName in newttsList:
-                finalttsList.append("<"+selectedMemoryName+">")
-            if "Narrator" in newttsList:
-                finalttsList.append("<Narrator>")
-                Narrator_label = "Narrator"
-            if "旁白" in newttsList:
-                finalttsList.append("<旁白>")
-                Narrator_label = "旁白"
+    if settings['ttsSettings']['enabled']  and not request.is_sub_agent:
+        if settings['ttsSettings']['newtts'] and settings['memorySettings']['is_memory']  and not request.is_app_bot:
+            # 遍历settings['ttsSettings']['newtts']，获取所有包含enabled: true的key
+            for key in settings['ttsSettings']['newtts']:
+                if settings['ttsSettings']['newtts'][key]['enabled']:
+                    newttsList.append(key)
+            if newttsList:
+                finalttsList = ["<silence>"]
+                # 用 name 去匹配音色列表（假设音色配置用的也是 name）
+                if selectedMemoryName in newttsList:
+                    finalttsList.append("<"+selectedMemoryName+">")
+                if "Narrator" in newttsList:
+                    finalttsList.append("<Narrator>")
+                    Narrator_label = "Narrator"
+                if "旁白" in newttsList:
+                    finalttsList.append("<旁白>")
+                    Narrator_label = "旁白"
 
-            finalttsList = json.dumps(finalttsList, ensure_ascii=False, indent=4)
-            print("可用音色：",finalttsList)
-            
-            # 修复：示例中的角色名也用 selectedMemoryName
-            newtts_messages = f"""
+                finalttsList = json.dumps(finalttsList, ensure_ascii=False, indent=4)
+                print("可用音色：",finalttsList)
+                
+                # 修复：示例中的角色名也用 selectedMemoryName
+                newtts_messages = f"""
+你生成的内容都会被TTS模型转换成语音。
+
 你可以使用以下音色：
 
 {finalttsList}
@@ -1729,8 +1732,18 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
 
 如果没有什么需要静音的文字，也没有必要强行使用<silence></silence>标签，因为这样会导致语音合成速度变慢！
 
+<silence></silence>标签最好用于图片的markdown语法、网页链接等不适合语音合成的部分，并且<silence></silence>标签必须另起一行，并且独占一行！<silence></silence>标签与图片的markdown语法之间不能有空格和回车，否则会导致解析失败！
+
 注意！你最好只使用你正在扮演的角色音色和旁白音色，不要使用其他角色音色，除非你明确知道你在做什么！\n\n"""
-            content_prepend(request.messages, 'system', newtts_messages)
+                
+                content_prepend(request.messages, 'system', newtts_messages)
+        else:
+            tts_messages = f"""你生成的内容都会被TTS模型转换成语音。<silence></silence>表示静音，被<silence></silence>标签括起来的部分不会进入语音合成。\n\n
+
+如果没有什么需要静音的文字，也没有必要强行使用<silence></silence>标签，因为这样会导致语音合成速度变慢！
+
+<silence></silence>标签最好用于图片的markdown语法、网页链接等不适合语音合成的部分，并且<silence></silence>标签必须另起一行，并且独占一行！<silence></silence>标签与图片的markdown语法之间不能有空格和回车，否则会导致解析失败！"""
+            content_prepend(request.messages, 'system', tts_messages)
     if settings['vision']['desktopVision'] and not request.is_app_bot  and not request.is_sub_agent:
         desktop_message = "\n\n用户与你对话时，如果发了图片给你，有可能是给你发当前的桌面截图。\n\n"
         content_append(request.messages, 'system', desktop_message)
