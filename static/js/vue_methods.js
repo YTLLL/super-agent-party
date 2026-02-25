@@ -1808,7 +1808,6 @@ let vue_methods = {
         let tts_buffer = '';
         let isCodeBlock = false;
         this.cur_voice = 'default';
-        let max_rounds = this.settings.max_rounds || 0;
         
         const toolCallStack = [];
         // 内部函数：准备发送给 API 的消息历史
@@ -1899,7 +1898,7 @@ let vue_methods = {
             return sanitized;
         };
 
-        let messagesPayload = max_rounds === 0 ? prepareMessages(this.messages) : prepareMessages(this.messages.slice(-max_rounds));
+        let messagesPayload = prepareMessages(this.messages);
         console.log(messagesPayload);
         let currentMsg;
 

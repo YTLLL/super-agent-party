@@ -2125,6 +2125,35 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
     DRS_STAGE = 1 # 1: 明确用户需求阶段 2: 工具调用阶段 3: 生成结果阶段
     if len(request.messages) > 2:
         DRS_STAGE = 2
+    max_rounds = settings.get("max_rounds", 0)
+
+    if max_rounds > 0 and request.messages:
+        # 兼容获取 role 的辅助方法（支持 dict 或 Pydantic 对象）
+        def get_role(msg):
+            return msg.get("role") if isinstance(msg, dict) else msg.role
+
+        system_messages = []
+        chat_messages = request.messages
+
+        # 1. 仅判断第一条是不是 system（中间的不管）
+        if get_role(chat_messages[0]) == "system":
+            system_messages = [chat_messages[0]]
+            chat_messages = chat_messages[1:]
+
+        retain_count = max_rounds + 1 
+
+        # 2. 截断对话历史
+        if len(chat_messages) > retain_count:
+            chat_messages = chat_messages[-retain_count:]
+            
+            # 3. 终极边界处理：永远以 user 开始
+            # 只要第一条不是 user（比如是 assistant 或 tool），就一直丢弃
+            while chat_messages and get_role(chat_messages[0]) != "user":
+                chat_messages = chat_messages[1:]
+                
+        # 4. 重新拼合 messages
+        request.messages = system_messages + chat_messages
+
     images = await images_in_messages(request.messages,fastapi_base_url)
     request.messages = await message_without_images(request.messages)
     from py.load_files import get_files_content,file_tool,image_tool
@@ -3881,6 +3910,36 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
     DRS_STAGE = 1 # 1: 明确用户需求阶段 2: 工具调用阶段 3: 生成结果阶段
     if len(request.messages) > 2:
         DRS_STAGE = 2
+
+    max_rounds = settings.get("max_rounds", 0)
+
+    if max_rounds > 0 and request.messages:
+        # 兼容获取 role 的辅助方法（支持 dict 或 Pydantic 对象）
+        def get_role(msg):
+            return msg.get("role") if isinstance(msg, dict) else msg.role
+
+        system_messages = []
+        chat_messages = request.messages
+
+        # 1. 仅判断第一条是不是 system（中间的不管）
+        if get_role(chat_messages[0]) == "system":
+            system_messages = [chat_messages[0]]
+            chat_messages = chat_messages[1:]
+
+        retain_count = max_rounds + 1 
+
+        # 2. 截断对话历史
+        if len(chat_messages) > retain_count:
+            chat_messages = chat_messages[-retain_count:]
+            
+            # 3. 终极边界处理：永远以 user 开始
+            # 只要第一条不是 user（比如是 assistant 或 tool），就一直丢弃
+            while chat_messages and get_role(chat_messages[0]) != "user":
+                chat_messages = chat_messages[1:]
+                
+        # 4. 重新拼合 messages
+        request.messages = system_messages + chat_messages
+
     from py.load_files import get_files_content,file_tool,image_tool
     from py.web_search import (
         DDGsearch_async, 
