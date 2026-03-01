@@ -988,3 +988,60 @@ simple_fetch_tool = {
         },
     },
 }
+
+async def markdown_new_async(original_url):
+    """
+    通过 markdown.new 服务将网页转换为 Markdown 格式
+    """
+    
+    def sync_crawler():
+        # 拼接 markdown.new 的服务地址
+        detail_url = "https://markdown.new/"
+        url = f"{detail_url}{original_url}"
+        
+        try:
+            # 添加一个基础的 User-Agent 防屏蔽
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            
+            # 发起请求
+            response = requests.get(url, headers=headers, timeout=60)
+            
+            if response.status_code == 200:
+                # markdown.new 默认直接返回纯文本的 markdown 内容
+                return response.text
+            else:
+                return f"获取{original_url}网页信息失败，状态码：{response.status_code}"
+                
+        except requests.RequestException as e:
+            return f"获取{original_url}网页信息失败，错误信息：{str(e)}"
+
+    try:
+        # 检查 robots.txt 合规性（保持与你原有逻辑一致）
+        if not await check_robots_txt(original_url):
+            raise PermissionError(f"合规拒绝: 目标网站禁止抓取")
+            
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, sync_crawler)
+    except Exception as e:
+        print(f"Async execution error in markdown_new: {e}")
+        return str(e)
+    
+markdown_new_tool = {
+    "type": "function",
+    "function": {
+        "name": "markdown_new_async",
+        "description": "通过 markdown.new 服务获取指定URL的网页内容，并自动转换为结构化的 Markdown 文本。此工具非常轻量高效，适用于外网链接。请勿传入本机地址或内网地址（会无法访问）。回答时需在末尾以[网页标题](链接地址)格式标注来源（链接中避免空格）。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "original_url": {
+                    "type": "string",
+                    "description": "需要爬取的原始URL地址。必须是完整的 http 或 https 开头的网址。",
+                },
+            },
+            "required": ["original_url"],
+        },
+    },
+}

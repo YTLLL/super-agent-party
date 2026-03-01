@@ -827,6 +827,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         Crawl4Ai_search_async, 
         firecrawl_search_async,
         simple_fetch_async,
+        markdown_new_async,
     )
     from py.know_base import query_knowledge_base
     from py.agent_tool import agent_tool_call
@@ -920,6 +921,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "Crawl4Ai_search_async": Crawl4Ai_search_async,
         "firecrawl_search_async": firecrawl_search_async,
         "simple_fetch_async":simple_fetch_async,
+        "markdown_new_async":markdown_new_async,
         "agent_tool_call": agent_tool_call,
         "a2a_tool_call": a2a_tool_call,
         "custom_llm_tool": custom_llm_tool,
@@ -2180,6 +2182,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
         simple_fetch_tool,
         Crawl4Ai_tool,
         firecrawl_tool,
+        markdown_new_tool,
     )
     from py.know_base import kb_tool,query_knowledge_base,rerank_knowledge_base
     from py.agent_tool import get_agent_tool
@@ -2856,6 +2859,8 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                             tools.append(firecrawl_tool)
                         elif settings['webSearch']['crawler'] == 'simpleRequest':
                             tools.append(simple_fetch_tool)
+                        elif settings['webSearch']['crawler'] == 'mdnew':
+                            tools.append(markdown_new_tool)
                 if kb_list:
                     tools.append(kb_tool)
                 if settings['tools']['deepsearch']['enabled'] or enable_deep_research: 
@@ -3994,6 +3999,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
         simple_fetch_tool,
         Crawl4Ai_tool,
         firecrawl_tool,
+        markdown_new_tool,
     )
     from py.know_base import kb_tool,query_knowledge_base,rerank_knowledge_base
     from py.agent_tool import get_agent_tool
@@ -4397,6 +4403,8 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                     tools.append(firecrawl_tool)
                 elif settings['webSearch']['crawler'] == 'simpleRequest':
                     tools.append(simple_fetch_tool)
+                elif settings['webSearch']['crawler'] == 'mdnew':
+                    tools.append(markdown_new_tool)
         if kb_list:
             tools.append(kb_tool)
         if settings['tools']['deepsearch']['enabled'] or enable_deep_research: 
@@ -4905,6 +4913,7 @@ async def execute_tool_manually(request: Request):
         Crawl4Ai_search_async, 
         firecrawl_search_async,
         simple_fetch_async,
+        markdown_new_async,
     )
     from py.know_base import query_knowledge_base
     from py.agent_tool import agent_tool_call
@@ -4998,6 +5007,7 @@ async def execute_tool_manually(request: Request):
         "Crawl4Ai_search_async": Crawl4Ai_search_async,
         "firecrawl_search_async": firecrawl_search_async,
         "simple_fetch_async":simple_fetch_async,
+        "markdown_new_async":markdown_new_async,
         "agent_tool_call": agent_tool_call,
         "a2a_tool_call": a2a_tool_call,
         "custom_llm_tool": custom_llm_tool,
