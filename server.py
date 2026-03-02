@@ -2,6 +2,7 @@
 # ==========================================
 # 第一步：在加载任何沉重库之前，先搞定端口
 # ==========================================
+import signal
 import sys
 import os
 import argparse
@@ -347,7 +348,7 @@ import aiofiles
 import argparse
 from py.dify_openai_async import DifyOpenAIAsync
 
-from py.get_setting import EXT_DIR, SKILLS_DIR, _copy_default_skills, convert_to_opus_simple, load_covs, load_settings, save_covs,save_settings,clean_temp_files_task,base_path,configure_host_port,UPLOAD_FILES_DIR,AGENT_DIR,MEMORY_CACHE_DIR,KB_DIR,DEFAULT_VRM_DIR,USER_DATA_DIR,LOG_DIR,TOOL_TEMP_DIR
+from py.get_setting import EXT_DIR, IS_DOCKER, SKILLS_DIR, _copy_default_skills, convert_to_opus_simple, load_covs, load_settings, save_covs,save_settings,clean_temp_files_task,base_path,configure_host_port,UPLOAD_FILES_DIR,AGENT_DIR,MEMORY_CACHE_DIR,KB_DIR,DEFAULT_VRM_DIR,USER_DATA_DIR,LOG_DIR,TOOL_TEMP_DIR
 from py.llm_tool import get_image_base64,get_image_media_type
 timetamp = time.time()
 log_path = os.path.join(LOG_DIR, f"backend_{timetamp}.log")
@@ -477,6 +478,8 @@ def content_new(message, role, content):
     message.append({'role': role, 'content': content})
 
 configure_host_port(args.host, args.port)
+
+from py.node_runner import node_mgr
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -684,6 +687,18 @@ async def lifespan(app: FastAPI):
         # 直接广播空配置
         asyncio.create_task(broadcast_settings_update(settings or {}))
     yield
+    # 所有任务结束后，清理
+    # --- 关闭时运行的代码 (Shutdown) ---
+    print("System shutting down, cleaning up Node processes...")
+    # 遍历所有已启动的扩展并关闭它们
+    ext_ids = list(node_mgr.exts.keys())
+    for ext_id in ext_ids:
+        try:
+            print(f"Stopping extension: {ext_id}")
+            await node_mgr.stop(ext_id)
+        except Exception as e:
+            print(f"Error stopping {ext_id}: {e}")
+    print("All Node processes terminated.")
 
 # WebSocket端点增加连接管理
 active_connections = []
@@ -9600,6 +9615,21 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                 except Exception:
                     pass
+
+@app.post("/sys/shutdown")
+async def shutdown_server():
+    """
+    接收到此请求后，向自己发送 SIGTERM 信号，
+    这将触发 FastAPI 的 lifespan 关闭流程（清理 Node 进程）。
+    """
+    if IS_DOCKER:
+        return {"message": "Not allowed in Docker mode."}
+
+    print("Received shutdown request via API...")
+    # 获取当前进程 ID 并发送终止信号
+    # Windows 和 Linux/Mac 都支持 SIGTERM
+    os.kill(os.getpid(), signal.SIGTERM)
+    return {"message": "Shutting down..."}
 
 from py.uv_api import router as uv_router
 app.include_router(uv_router)
