@@ -137,9 +137,9 @@ We provide two mainstream Linux installation package formats for your convenienc
 
 ### Lite client that matches your Docker version, turning Docker into a desktop app
 
-👉 [SAP-lite-Windows-exe](https://github.com/heshengtao/desktop-for-sap/releases/download/v0.1.1/super-agent-party-lite-Setup-0.1.1.exe)
+👉 [SAP-lite-Windows-exe](https://github.com/heshengtao/desktop-for-sap/releases/download/v0.1.2/super-agent-party-lite-Setup-0.1.2.exe)
 
-👉 [SAP-lite-MacOS-dmg](https://github.com/heshengtao/desktop-for-sap/releases/download/v0.1.1/super-agent-party-lite-0.1.1-Mac.dmg)
+👉 [SAP-lite-MacOS-dmg](https://github.com/heshengtao/desktop-for-sap/releases/download/v0.1.2/super-agent-party-lite-0.1.2-Mac.dmg)
 
 ### Source Code Deployment
 
