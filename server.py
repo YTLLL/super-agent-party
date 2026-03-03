@@ -1773,8 +1773,8 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
         desktop_message = "\n\n用户与你对话时，如果发了图片给你，有可能是给你发当前的桌面截图。\n\n"
         content_append(request.messages, 'system', desktop_message)
     if settings['tools']['time']['enabled'] and settings['tools']['time']['triggerMode'] == 'beforeThinking':
-        time_message = f"消息发送时间：{local_timezone}  {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\n\n"
-        content_prepend(request.messages, 'user', time_message)
+        time_message = f"\n\n最后一条消息发送时间：{local_timezone}  {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\n\n"
+        content_prepend(request.messages, 'system', time_message)
     if settings['tools']['inference']['enabled']:
         inference_message = "回答用户前请先思考推理，再回答问题，你的思考推理的过程必须放在<think>与</think>之间。\n\n"
         content_prepend(request.messages, 'user', f"{inference_message}\n\n用户：")
