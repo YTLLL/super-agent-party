@@ -14,24 +14,7 @@ APP_NAME = "Super-Agent-Party"
 HOST = None
 PORT = None
 
-# 使用一次性检测
-def _detect_docker():
-    if os.environ.get("IS_DOCKER", "").lower() == "true":
-        return True
-    try:
-        if os.path.exists('/.dockerenv'):
-            return True
-        cgroup_path = '/proc/self/cgroup'
-        if os.path.exists(cgroup_path):
-            with open(cgroup_path, 'rt', encoding='utf-8') as f:
-                content = f.read()
-                if 'docker' in content or 'container' in content:
-                    return True
-    except Exception:
-        pass
-    return False
-
-IS_DOCKER = _detect_docker()
+IS_DOCKER = os.environ.get("IS_DOCKER", "").lower() in ("1", "true")
 
 def in_docker():
     return IS_DOCKER

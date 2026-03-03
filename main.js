@@ -443,7 +443,9 @@ async function startBackend() {
   return new Promise((resolve, reject) => {
     try {
       console.log('🔍 准备启动后端进程...');
-
+      const npmCliPath = isDev 
+        ? path.join(__dirname, 'node_modules', 'npm', 'bin', 'npm-cli.js')
+        : path.join(process.resourcesPath, 'npm', 'bin', 'npm-cli.js');
       const spawnOptions = {
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: false,
@@ -452,6 +454,8 @@ async function startBackend() {
           NODE_ENV: isDev ? 'development' : 'production',
           PYTHONIOENCODING: 'utf-8',
           PYTHONUNBUFFERED: '1', // 强制 Python 实时刷新缓冲区
+          ELECTRON_NODE_EXEC: process.execPath, 
+          ELECTRON_NPM_CLI: npmCliPath,
         }
       };
 
