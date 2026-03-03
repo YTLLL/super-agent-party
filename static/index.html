@@ -1416,6 +1416,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                               <el-dropdown-item @click="ccSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
                               <el-dropdown-item @click="ccSettings.permissionMode='acceptEdits'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
                               <el-dropdown-item @click="ccSettings.permissionMode='bypassPermissions'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                              <el-dropdown-item @click="ccSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
                             </template>
                             <!-- Qwen Code (QC) 选项 -->
                             <template v-else-if="CLISettings.engine === 'qc'">
@@ -1423,6 +1424,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                               <el-dropdown-item @click="qcSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
                               <el-dropdown-item @click="qcSettings.permissionMode='auto-edit'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
                               <el-dropdown-item @click="qcSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                              <el-dropdown-item @click="qcSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
                             </template>
                           </el-dropdown-menu>
                         </template>
@@ -7720,6 +7722,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <el-option :label="t('defaultPermissionMode')" value="default" ></el-option>
                             <el-option :label="t('acceptEdits')" value="acceptEdits" ></el-option>
                             <el-option :label="t('danger')+t('bypassPermissions')" value="bypassPermissions" ></el-option>
+                            <el-option :label="t('danger')+t('coworkPermissionMode')" value="cowork" ></el-option>
                           </el-select>
                         </el-form-item>
                         <el-form-item required :label="t('enabledCCconfig')" class="form-item-align" label-position="left">
@@ -7812,6 +7815,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <el-option :label="t('defaultPermissionMode')" value="default" ></el-option>
                             <el-option :label="t('acceptEdits')" value="auto-edit" ></el-option>
                             <el-option :label="t('danger')+t('bypassPermissions')" value="yolo" ></el-option>
+                            <el-option :label="t('danger')+t('coworkPermissionMode')" value="cowork" ></el-option>
                           </el-select>
                         </el-form-item>
                         <el-form-item required :label="t('enabledCCconfig')" class="form-item-align" label-position="left">

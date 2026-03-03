@@ -1459,10 +1459,13 @@ async def claude_code_async(prompt) -> str | AsyncIterator[str]:
         extra_config = {k: str(v) if v else "" for k, v in extra_config.items()}
 
     async def _stream():
+        permission_mode=ccSettings.get("permissionMode", "default")
+        if permission_mode == "cowork":
+            permission_mode = "bypassPermissions"
         options = ClaudeAgentOptions(
             cwd=cwd,
             continue_conversation=True,
-            permission_mode=ccSettings.get("permissionMode", "default"),
+            permission_mode=permission_mode,
             env={**os.environ, **extra_config}
         )
         async for message in query(prompt=prompt, options=options):
@@ -1488,8 +1491,11 @@ async def qwen_code_async(prompt: str) -> str | AsyncIterator[str]:
 
     async def _stream():
         try:
+            permission_mode=qcSettings.get("permissionMode", "default")
+            if permission_mode == "cowork":
+                permission_mode = "yolo"
             process = await asyncio.create_subprocess_exec(
-                executable, "-p", prompt, "--approval-mode", qcSettings.get("permissionMode", "default"),
+                executable, "-p", prompt, "--approval-mode", permission_mode,
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                 cwd=cwd, env={**os.environ, **extra_config}
             )
