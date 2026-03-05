@@ -11723,7 +11723,7 @@ clearSegments() {
       return;
     }
     
-    /* 1. 先尝试 Node 模式 */
+    /* 1. 尝试 Node 模式 */
     try {
       const r = await fetch(`/api/extensions/${extension.id}/start-node`, { method: 'POST' });
       const res = await r.json();
@@ -11734,10 +11734,19 @@ clearSegments() {
         this.sidePanelURL = `/api/extensions/${extension.id}/node/`;
         showNotification(`${this.t('loadExtension(node)')}: ${extension.name}`, 'success');
         return;
+      } else if (res.mode === 'error') {
+        // ❌ Node 服务启动失败！必须拦截并展示错误，不能往下走
+        showNotification(`插件服务启动失败: ${res.message}`, 'error');
+        console.error("【Node Extension 报错】:", res.message);
+        return; 
       }
-      // res.mode === 'static' 继续走下面兜底
+      
+      // 只有 res.mode === 'static'，才允许跳出 if，去走下面的静态路由兜底
     } catch (e) {
-      // 任何异常也继续兜底
+      // 网络断开或解析异常，也建议拦截
+      showNotification(`请求插件服务异常: ${e.message}`, 'error');
+      console.error(e);
+      return; 
     }
 
     /* 2. 回退静态路由 */
