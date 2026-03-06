@@ -6931,6 +6931,14 @@ handleCreateSlackSeparator(val) {
             this.userInputBuffer = '';
           }
           
+          if (this.isPttMode || this.waitingForPttResult) {
+            console.log("PTT 识别完成，自动发送:", data.text);
+            this.sendMessage(); 
+            this.userInput = ''; // 发送后清空
+            this.waitingForPttResult = false; // 重置标记
+            return;
+          }
+
           // 根据交互方式处理
           if (this.asrSettings.interactionMethod == "auto") {
             if (this.ttsSettings.enabledInterruption) {
@@ -7315,6 +7323,202 @@ handleCreateSlackSeparator(val) {
           }));
         };
     },
+  // 1. 按下：开始录音
+  async handlePttPress(event) {
+    // 【修复核心】手动阻止默认事件，解决 _withMods 报错
+    if (event && event.preventDefault) {
+      // 允许触摸滚动，但阻止长按弹出菜单等怪异行为
+      if (event.type !== 'touchstart') {
+        event.preventDefault();
+      }
+    }
+
+    if (this.isPttRecording || this.isProcessingPtt) return;
+    
+    this.isPttRecording = true;
+    this.audioChunks = []; // 重置数据桶
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.pttStream = stream;
+
+      let options = { mimeType: 'audio/webm' };
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        options = { mimeType: 'audio/mp4' }; // Safari 兼容
+      }
+      
+      this.pttMediaRecorder = new MediaRecorder(stream, options);
+
+      this.pttMediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          this.audioChunks.push(e.data);
+        }
+      };
+
+      this.pttMediaRecorder.start();
+      
+      if (navigator.vibrate) navigator.vibrate(50);
+
+    } catch (error) {
+      console.error("PTT Start Error:", error);
+      showNotification(this.t('micPermissionDenied'), 'error');
+      this.isPttRecording = false;
+    }
+  },
+
+  // 2. 松开：停止录音 -> 转码 -> 发送
+  async handlePttRelease(event) {
+    // 【修复核心】手动阻止默认事件
+    if (event && event.preventDefault && event.type !== 'touchend') {
+       event.preventDefault();
+    }
+
+    if (!this.isPttRecording || !this.pttMediaRecorder) return;
+
+    this.isPttRecording = false;
+    this.isProcessingPtt = true;
+
+    // 停止录制
+    if(this.pttMediaRecorder.state !== 'inactive') {
+        this.pttMediaRecorder.stop();
+    }
+    
+    // 关闭麦克风红点
+    if (this.pttStream) {
+      this.pttStream.getTracks().forEach(track => track.stop());
+      this.pttStream = null;
+    }
+    
+    if (navigator.vibrate) navigator.vibrate(30);
+
+    // 等待录制彻底结束
+    await new Promise(resolve => {
+      this.pttMediaRecorder.onstop = () => resolve();
+    });
+
+    // 处理音频
+    await this.processAndSendPttAudio();
+    
+    this.isProcessingPtt = false;
+    this.pttMediaRecorder = null;
+  },
+
+  // 3. 处理音频逻辑
+  async processAndSendPttAudio() {
+    if (this.audioChunks.length === 0) return;
+
+    try {
+      // 合并录音片段
+      const mimeType = this.pttMediaRecorder ? this.pttMediaRecorder.mimeType : 'audio/webm';
+      const rawBlob = new Blob(this.audioChunks, { type: mimeType });
+
+      // ★ 核心转换：将 WebM/MP4 转为 16000Hz WAV
+      // 这是后端 ASR 通常能识别的最稳妥格式
+      const wavBlob = await this.convertBlobToWav(rawBlob, 16000);
+
+      // 发送
+      await this.sendPttToBackend(wavBlob);
+
+    } catch (error) {
+      console.error("PTT Process Error:", error);
+    }
+  },
+
+  // 4. 发送给后端 (复用 WebSocket)
+  async sendPttToBackend(wavBlob) {
+    // 确保连接
+    if (!this.asrWs || this.asrWs.readyState !== WebSocket.OPEN) {
+      try {
+        await this.initASRWebSocket();
+        await new Promise(r => setTimeout(r, 500));
+      } catch (e) {
+        showNotification("无法连接语音服务器", 'error');
+        return;
+      }
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(wavBlob);
+    reader.onloadend = () => {
+      const base64data = reader.result.split(',')[1];
+      const reqId = uuid.v4();
+
+      // 发送完整音频包
+      this.asrWs.send(JSON.stringify({
+        type: 'audio_complete', 
+        id: reqId,
+        audio: base64data,
+        format: 'wav',
+        sample_rate: 16000
+      }));
+      
+      // 标记我们在等待 PTT 结果
+      this.waitingForPttResult = true;
+    };
+  },
+
+  // 5. 音频格式转换工具 (必须包含)
+  async convertBlobToWav(blob, targetSampleRate = 16000) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    // 离线重采样
+    const offlineCtx = new OfflineAudioContext(1, audioBuffer.duration * targetSampleRate, targetSampleRate);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineCtx.destination);
+    source.start();
+    
+    const renderedBuffer = await offlineCtx.startRendering();
+    
+    return this.bufferToWav(renderedBuffer);
+  },
+
+  // 6. Buffer 转 WAV 封装 (必须包含)
+  bufferToWav(abuffer) {
+    const numOfChan = abuffer.numberOfChannels;
+    const length = abuffer.length * numOfChan * 2 + 44;
+    const buffer = new ArrayBuffer(length);
+    const view = new DataView(buffer);
+    const channels = [];
+    let i, sample, offset = 0, pos = 0;
+
+    // 写入 WAV 头
+    setUint32(0x46464952); // "RIFF"
+    setUint32(length - 8); // file length - 8
+    setUint32(0x45564157); // "WAVE"
+    setUint32(0x20746d66); // "fmt " chunk
+    setUint32(16); // length = 16
+    setUint16(1); // PCM (uncompressed)
+    setUint16(numOfChan);
+    setUint32(abuffer.sampleRate);
+    setUint32(abuffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
+    setUint16(numOfChan * 2); // block-align
+    setUint16(16); // 16-bit
+
+    setUint32(0x61746164); // "data" - chunk
+    setUint32(length - pos - 4); // chunk length
+
+    for (i = 0; i < abuffer.numberOfChannels; i++)
+      channels.push(abuffer.getChannelData(i));
+
+    while (pos < abuffer.length) {
+      for (i = 0; i < numOfChan; i++) {
+        sample = Math.max(-1, Math.min(1, channels[i][pos]));
+        sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+        view.setInt16(44 + offset, sample, true);
+        offset += 2;
+      }
+      pos++;
+    }
+
+    function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
+    function setUint32(data) { view.setUint32(pos, data, true); pos += 4; } // 注意这里修正了 pos+=4
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  },
+
 
     // WAV转换函数保持不变
     async audioToWav(audioData) {
@@ -8162,6 +8366,7 @@ handleCreateSlackSeparator(val) {
     
     if (selectedAudio && selectedAudio.text) {
       this.ttsSettings.gsvPromptText = selectedAudio.text;
+      this.newTTSConfig.gsvPromptText = selectedAudio.text;
     }
     
     // 自动保存设置
@@ -10770,6 +10975,7 @@ stopTTSActivities() {
   },
   toggleAssistantMode() {
     this.activeMenu = 'home';
+    this.isPttMode = false;
     console.log('切换助手模式，当前状态:', this.isAssistantMode);
 
     if (this.isAssistantMode && !this.isMac) {
@@ -10848,6 +11054,7 @@ stopTTSActivities() {
   },
   async toggleCapsuleMode() {
     this.activeMenu = 'home';
+    this.isPttMode = false;
     if (this.isCapsuleMode && !this.isMac) {
       window.electronAPI.windowAction('maximize') // 恢复默认大小
     } else{

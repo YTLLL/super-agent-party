@@ -2579,7 +2579,7 @@ function addcontrolPanel() {
 
         // 图标容器
         const iconContainer = document.createElement('div');
-        iconContainer.innerHTML = '<el-icon class="logo-icon"><img src="./source/icon.png" /></el-icon>';
+        iconContainer.innerHTML = '<i class="fa-solid fa-arrows-up-down-left-right"></i>';
         iconContainer.style.cssText = `
             position: relative;
             z-index: 2;

@@ -371,7 +371,7 @@ function updateElement(el, rawMarkdown, formatFn) {
       <!-- 添加移动端菜单按钮 -->
       <el-button 
       class="top-bar-btn"
-       v-if="!isAssistantMode&&isMobile" 
+       v-if="isMobile" 
        @click="isCollapse = sidebarVisible;sidebarVisible = !sidebarVisible"
        text
        :title="isCollapse ? t('expandAside') : t('collapseAside')">
@@ -1329,7 +1329,10 @@ function updateElement(el, rawMarkdown, formatFn) {
                     @dragleave.prevent="isDragging = false"
                     @drop.prevent="handleInputDrop"
                   >
+                    <!-- 模式切换：使用 v-show 切换键盘输入与按住说话 -->
+                    <!-- 键盘输入区 -->
                     <el-input
+                      v-show="!isPttMode"
                       v-model="userInput"
                       type="textarea"
                       :rows="isMobile?(isInputExpanded ? 8 : 3):(isInputExpanded ? 16 : 4)"
@@ -1340,9 +1343,39 @@ function updateElement(el, rawMarkdown, formatFn) {
                       @paste.native="handleInputPaste"
                       class="input-box-transparent">
                     </el-input>
-                    
-                    <div class="input-status-bar" v-if="!isAssistantMode && !isMobile">
+
+                    <!-- 按住说话区 (无缝融合版) -->
+                      <div v-show="isPttMode" class="ptt-seamless-wrapper">
+                        <div 
+                          class="ptt-seamless-area" 
+                          :class="{ 'is-recording': isPttRecording }"
+                          @touchstart="handlePttPress($event)"
+                          @touchend="handlePttRelease($event)"
+                          @touchcancel="handlePttRelease($event)"
+                          @mousedown="handlePttPress($event)"
+                          @mouseup="handlePttRelease($event)"
+                          @mouseleave="handlePttRelease($event)"
+                          @contextmenu.prevent  
+                        >
+                          <!-- 录音时的波纹动画图标 (可选) -->
+                          <div v-if="isPttRecording" class="recording-wave">
+                            <span></span><span></span><span></span><span></span><span></span>
+                          </div>
+                          
+                          <!-- 文字提示 (国际化) -->
+                          <span class="ptt-text">
+                            {{ isPttRecording ? t('releaseToSend') : (isProcessingPtt ? t('converting') : t('holdToTalk')) }}
+                          </span>
+                        </div>
+                      </div>
+              
+                    <div class="input-status-bar">
                       
+                      <!-- ✨ 2. 语音/键盘切换按钮：始终显示（或者你可以加 v-if="isMobile" 只让手机显示） -->
+                      <div class="voice-toggle-btn" @click="isPttMode = !isPttMode" v-if="isMobile">
+                        <i :class="isPttMode ? 'fa-solid fa-keyboard' : 'fa-solid fa-microphone'"></i>
+                      </div>
+
                       <!-- 模型指示器 -->
                       <el-tooltip :content="t('clickToSwitchModel')" placement="top" :show-after="500">
                         <div class="status-pill" @click="showModelDialog = true">
@@ -1350,85 +1383,89 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <span class="pill-text">{{ settings?.model !== '' ? settings.model : t('noModelSelected') }}</span>
                         </div>
                       </el-tooltip>
-                      
-                      <!-- 扩展指示器 -->
-                      <el-tooltip :content="t('clickToSwitchExtensions')" placement="top" :show-after="500">
-                        <div class="status-pill" v-if="currentViewName" @click="openExtensionsDialog">
-                          <i class="fa-solid fa-puzzle-piece"></i>
-                          <span class="pill-text">{{ currentViewName }}</span>
-                        </div>
-                      </el-tooltip>
 
-                      <!-- 3. 工作区目录指示器 (仅 CLI 启用时显示) -->
-                      <el-tooltip :content="t('workspace')" placement="top" :show-after="500">
-                        <div class="status-pill" v-if="CLISettings.enabled" @click="browseDirectory">
-                          <i class="fa-solid fa-folder-open"></i>
-                          <span class="pill-text">{{ CLISettings.cc_path ? CLISettings.cc_path.split(/[/\\]/).filter(Boolean).pop() : t('pleaseSelectWorkspaceFirst') }}</span>
-                        </div>
-                      </el-tooltip>
-
-                      <!-- 4. CLI 权限模式指示器 (仅 CLI 启用时显示) -->
-                      <el-dropdown 
-                        v-if="CLISettings.enabled" 
-                        placement="top" 
-                        trigger="click"
-                        class="status-pill-dropdown"
-                      >
-                        <!-- ⚠️ 关键修复：让 status-pill 直接作为下拉组件的触发器 -->
-                        <div class="status-pill">
-                          <el-tooltip :content="t('permissionMode')" placement="top" :show-after="500">
-                            <!-- 将内容包裹在一个 span 中，使得 tooltip 正常工作 -->
-                            <span style="display: inline-flex; align-items: center; gap: 6px;">
-                              <i class="fa-solid fa-shield-halved"></i>
-                              <span class="pill-text">
-                                {{ 
-                                  CLISettings.engine === 'local' ? localEnvSettings.permissionMode :
-                                  CLISettings.engine === 'ds' ? dsSettings.permissionMode :
-                                  CLISettings.engine === 'cc' ? ccSettings.permissionMode :
-                                  CLISettings.engine === 'qc' ? qcSettings.permissionMode : 'unknown'
-                                }}
-                              </span>
-                            </span>
+                      <!-- ✨ 3. 将原有的桌面端状态胶囊包裹在一个 template 中，并在这里加 !isMobile 限制 -->
+                      <template  v-if="!isAssistantMode && !isMobile">
+                          
+                          <!-- 扩展指示器 -->
+                          <el-tooltip :content="t('clickToSwitchExtensions')" placement="top" :show-after="500">
+                            <div class="status-pill" v-if="currentViewName" @click="openExtensionsDialog">
+                              <i class="fa-solid fa-puzzle-piece"></i>
+                              <span class="pill-text">{{ currentViewName }}</span>
+                            </div>
                           </el-tooltip>
-                        </div>
-                        
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <!-- 本地环境 (Local) 选项 -->
-                            <template v-if="CLISettings.engine === 'local'">
-                              <el-dropdown-item @click="localEnvSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                              <el-dropdown-item @click="localEnvSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                              <el-dropdown-item @click="localEnvSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                              <el-dropdown-item @click="localEnvSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
-                              <el-dropdown-item @click="localEnvSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+
+                          <!-- 3. 工作区目录指示器 (仅 CLI 启用时显示) -->
+                          <el-tooltip :content="t('workspace')" placement="top" :show-after="500">
+                            <div class="status-pill" v-if="CLISettings.enabled" @click="browseDirectory">
+                              <i class="fa-solid fa-folder-open"></i>
+                              <span class="pill-text">{{ CLISettings.cc_path ? CLISettings.cc_path.split(/[/\\]/).filter(Boolean).pop() : t('pleaseSelectWorkspaceFirst') }}</span>
+                            </div>
+                          </el-tooltip>
+
+                          <!-- 4. CLI 权限模式指示器 (仅 CLI 启用时显示) -->
+                          <el-dropdown 
+                            v-if="CLISettings.enabled" 
+                            placement="top" 
+                            trigger="click"
+                            class="status-pill-dropdown"
+                          >
+                            <!-- ⚠️ 关键修复：让 status-pill 直接作为下拉组件的触发器 -->
+                            <div class="status-pill">
+                              <el-tooltip :content="t('permissionMode')" placement="top" :show-after="500">
+                                <!-- 将内容包裹在一个 span 中，使得 tooltip 正常工作 -->
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                  <i class="fa-solid fa-shield-halved"></i>
+                                  <span class="pill-text">
+                                    {{ 
+                                      CLISettings.engine === 'local' ? localEnvSettings.permissionMode :
+                                      CLISettings.engine === 'ds' ? dsSettings.permissionMode :
+                                      CLISettings.engine === 'cc' ? ccSettings.permissionMode :
+                                      CLISettings.engine === 'qc' ? qcSettings.permissionMode : 'unknown'
+                                    }}
+                                  </span>
+                                </span>
+                              </el-tooltip>
+                            </div>
+                            
+                            <template #dropdown>
+                              <el-dropdown-menu>
+                                <!-- 本地环境 (Local) 选项 -->
+                                <template v-if="CLISettings.engine === 'local'">
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+                                </template>
+                                <!-- Docker Sandbox (DS) 选项 -->
+                                <template v-else-if="CLISettings.engine === 'ds'">
+                                  <el-dropdown-item @click="dsSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="dsSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="dsSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="dsSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('bypassPermissions') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="dsSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('coworkPermissionMode') }}</el-dropdown-item>
+                                </template>
+                                <!-- Claude Code (CC) 选项 -->
+                                <template v-else-if="CLISettings.engine === 'cc'">
+                                  <el-dropdown-item @click="ccSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="ccSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="ccSettings.permissionMode='acceptEdits'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="ccSettings.permissionMode='bypassPermissions'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="ccSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+                                </template>
+                                <!-- Qwen Code (QC) 选项 -->
+                                <template v-else-if="CLISettings.engine === 'qc'">
+                                  <el-dropdown-item @click="qcSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="qcSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="qcSettings.permissionMode='auto-edit'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="qcSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="qcSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+                                </template>
+                              </el-dropdown-menu>
                             </template>
-                            <!-- Docker Sandbox (DS) 选项 -->
-                            <template v-else-if="CLISettings.engine === 'ds'">
-                              <el-dropdown-item @click="dsSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                              <el-dropdown-item @click="dsSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                              <el-dropdown-item @click="dsSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                              <el-dropdown-item @click="dsSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('bypassPermissions') }}</el-dropdown-item>
-                              <el-dropdown-item @click="dsSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('coworkPermissionMode') }}</el-dropdown-item>
-                            </template>
-                            <!-- Claude Code (CC) 选项 -->
-                            <template v-else-if="CLISettings.engine === 'cc'">
-                              <el-dropdown-item @click="ccSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                              <el-dropdown-item @click="ccSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                              <el-dropdown-item @click="ccSettings.permissionMode='acceptEdits'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                              <el-dropdown-item @click="ccSettings.permissionMode='bypassPermissions'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
-                              <el-dropdown-item @click="ccSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
-                            </template>
-                            <!-- Qwen Code (QC) 选项 -->
-                            <template v-else-if="CLISettings.engine === 'qc'">
-                              <el-dropdown-item @click="qcSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                              <el-dropdown-item @click="qcSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                              <el-dropdown-item @click="qcSettings.permissionMode='auto-edit'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                              <el-dropdown-item @click="qcSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
-                              <el-dropdown-item @click="qcSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
-                            </template>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
+                          </el-dropdown>
+                      </template>
 
                     </div>
 

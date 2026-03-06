@@ -9383,3 +9383,140 @@ hr.footnotes-sep {
   background: #2d1b5b !important;
   border-color: #6a45d1 !important;
 }
+
+/* =========================================
+   移动端输入框悬浮优化 & 按住说话 (PTT) 模式
+   ========================================= */
+
+/* 1. 移动端输入框悬浮效果 (覆盖之前的极致贴边) */
+@media (max-width: 768px) {
+  .input-container {
+    /* 左右留出 12px，底部留出 15px，形成呼吸悬浮感 */
+    padding: 0 12px 15px 12px !important; 
+  }
+  .unified-input-wrapper {
+    /* 恢复较大圆角，增强实体感 */
+    border-radius: 20px !important; 
+    /* 强化悬浮投影，将其与聊天背景彻底剥离 */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 
+                0 4px 12px rgba(0, 0, 0, 0.08) !important;
+    border: 1px solid var(--el-border-color-lighter) !important;
+  }
+  
+  /* 确保底部的状态栏边距适配悬浮卡片 */
+  .input-status-bar {
+    padding: 0 12px 10px 12px !important;
+  }
+}
+
+/* 2. 左下角：语音 / 键盘 切换按钮 */
+.voice-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--el-text-color-regular);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  margin-right: 4px; /* 与右侧的模型胶囊稍微隔开 */
+}
+
+.voice-toggle-btn:hover {
+  background-color: rgba(128, 128, 128, 0.1);
+  color: var(--el-color-primary);
+}
+
+.voice-toggle-btn:active {
+  transform: scale(0.9);
+}
+
+.voice-toggle-btn i {
+  font-size: 16px;
+}
+
+/* =========================================
+   无缝按住说话模式 (Seamless PTT)
+   ========================================= */
+
+/* 1. 外层容器：占满输入框原本的位置 */
+.ptt-seamless-wrapper {
+  width: 100%;
+  height: 100%;
+  min-height: 48px; /* 保持和输入框差不多的高度 */
+  display: flex;
+  flex-direction: column;
+}
+
+/* 2. 点击区域：完全透明，无边框，融为一体 */
+.ptt-seamless-area {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  cursor: pointer;
+  
+  /* 字体样式 */
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--el-text-color-secondary); /* 默认灰色，像 placeholder */
+  letter-spacing: 1px;
+  
+  /* 关键：去背景、去边框 */
+  background: transparent;
+  border: none;
+  border-radius: inherit; /* 跟随父级圆角 */
+  
+  /* 防止触摸时选中文本 */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  
+  transition: all 0.2s ease;
+}
+
+/* 3. 按下状态：背景微变，文字变色 */
+.ptt-seamless-area.is-recording {
+  /* 背景变成淡淡的主色调，而不是深色按钮 */
+  background-color: var(--el-color-primary-light-9); 
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+/* 4. (可选) 简单的声波动画条，增加录音时的动感 */
+.recording-wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 20px;
+  margin-bottom: 4px;
+}
+
+.recording-wave span {
+  width: 3px;
+  height: 100%;
+  background-color: var(--el-color-primary);
+  border-radius: 2px;
+  animation: wave-stretch 0.8s ease-in-out infinite;
+}
+
+.recording-wave span:nth-child(1) { animation-delay: 0.0s; height: 40%; }
+.recording-wave span:nth-child(2) { animation-delay: 0.1s; height: 70%; }
+.recording-wave span:nth-child(3) { animation-delay: 0.2s; height: 100%; }
+.recording-wave span:nth-child(4) { animation-delay: 0.1s; height: 70%; }
+.recording-wave span:nth-child(5) { animation-delay: 0.0s; height: 40%; }
+
+@keyframes wave-stretch {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+  50% { transform: scaleY(1.0); opacity: 1; }
+}
+
+/* 适配暗黑模式 */
+[data-theme="dark"] .ptt-seamless-area.is-recording {
+  background-color: rgba(var(--el-color-primary-rgb), 0.15);
+}

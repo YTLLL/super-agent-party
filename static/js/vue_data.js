@@ -2024,4 +2024,6 @@ main();`,
     selectedTaskTitle: '',
     viewingTaskDetail: null,
     isDragging: false, // 新增状态
+    isPttMode: false,      // 控制输入框是否在【按住说话】模式
+    isPttRecording: false, // 控制是否正在录制
 };
