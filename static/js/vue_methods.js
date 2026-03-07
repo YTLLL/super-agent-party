@@ -8358,20 +8358,26 @@ handleCreateSlackSeparator(val) {
   },
   
   // 处理参考音频路径改变
-  handleRefAudioPathChange(value) {
+  handleRefAudioPathChange(value, option) {
     // 当选择新的参考音频时，更新对应的提示文本
     const selectedAudio = this.ttsSettings.gsvAudioOptions.find(
       audio => audio.path === value
     );
     
     if (selectedAudio && selectedAudio.text) {
-      this.ttsSettings.gsvPromptText = selectedAudio.text;
-      this.newTTSConfig.gsvPromptText = selectedAudio.text;
+      if (option == 'role') {
+        this.newTTSConfig.gsvPromptText = selectedAudio.text;
+      }
+      else if (option == 'model') {
+        this.ttsSettings.gsvPromptText = selectedAudio.text;
+      }
+      
     }
     
     // 自动保存设置
     this.autoSaveSettings();
   },
+
 
     // 删除音频选项
   async deleteAudioOption(path) {
