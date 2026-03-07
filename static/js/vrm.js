@@ -4088,6 +4088,15 @@ function handleTTSMessage(message) {
 
         case 'omniStreaming':
             if (windowName === 'default') {
+                if (!isOmniMode || (data.text && data.text.length < fullTargetText.length)) {
+                    fullTargetText = "";
+                    currentVisibleCount = 0;
+                    displayStartIndex = 0;
+                    omniNextStartTime = 0;
+                    stopTypewriterLoop();
+                    clearSubtitle();
+                }
+
                 isOmniMode = true;
                 isAudioStreaming = true; // 标记正在接收流
                 if (data.text) fullTargetText = data.text;

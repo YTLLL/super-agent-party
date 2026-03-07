@@ -1653,6 +1653,10 @@ let vue_methods = {
             this.TTSrunning = false;
         }
 
+        if (typeof this.sendTTSStatusToVRM === 'function') {
+            this.sendTTSStatusToVRM('ttsStarted', {});
+        }
+
         // --- 桌面截图逻辑 (Electron) ---
         if (vue_data.isElectron && this.visionSettings?.desktopVision) {
             if (this.visionSettings.enableWakeWord && this.visionSettings.wakeWord) {
