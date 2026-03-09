@@ -1653,6 +1653,10 @@ let vue_methods = {
             this.TTSrunning = false;
         }
 
+        if (typeof this.sendTTSStatusToVRM === 'function') {
+            this.sendTTSStatusToVRM('ttsStarted', {});
+        }
+
         // --- 桌面截图逻辑 (Electron) ---
         if (vue_data.isElectron && this.visionSettings?.desktopVision) {
             if (this.visionSettings.enableWakeWord && this.visionSettings.wakeWord) {
@@ -2035,7 +2039,7 @@ let vue_methods = {
                         // 2. 处理工具 Loading 状态 (保持原样)
                         if (delta.tool_progress) {
                             const progress = delta.tool_progress;
-                            let toolCallId = progress.tool_call_id; // 优先使用后端提供的 ID
+                            let toolCallId = progress.tool_call_id || progress.id; 
                             
                             // 【修复】使用栈管理，替代原来的 toolCallIdMap[progress.name]
                             if (!toolCallId) {
@@ -2193,15 +2197,29 @@ let vue_methods = {
                             } 
                             // === 普通流式工具逻辑 ===
                             else if (tool.type === 'tool_result_stream' && tool.title === "tool_result_stream") {
-                                // ... (保持原样)
-                                const blockEndTag = '</div>';
-                                let lastBlockEndIndex = currentMsg.content.lastIndexOf(blockEndTag);
-                                if (lastBlockEndIndex > -1) {
-                                    const contentToAppend = '<br>' + escapeHtml(tool.content).replace(/\n/g, '<br>');
-                                    currentMsg.content = currentMsg.content.substring(0, lastBlockEndIndex) + contentToAppend + currentMsg.content.substring(lastBlockEndIndex);
+                                const preIdMatch = `id="pre-result-${toolCallId}"`;
+                                let preStartIndex = currentMsg.content.lastIndexOf(preIdMatch);
+                                
+                                if (preStartIndex > -1) {
+                                    let nextPreEndIndex = currentMsg.content.indexOf('</pre>', preStartIndex);
+                                    if (nextPreEndIndex > -1) {
+                                        // 【修复点 2】：<pre> 内部自带换行，不要执行 replace(/\n/g, '<br>')
+                                        const contentToAppend = escapeHtml(tool.content);
+                                        currentMsg.content = currentMsg.content.substring(0, nextPreEndIndex) + contentToAppend + currentMsg.content.substring(nextPreEndIndex);
+                                    }
                                 } else {
-                                    currentMsg.content += ' ' + escapeHtml(tool.content).replace(/\n/g, '<br>');
+                                    // 兜底方案：如果找不到对应的 id，就找最后一个 </pre>
+                                    const blockEndTag = '</pre>';
+                                    let lastBlockEndIndex = currentMsg.content.lastIndexOf(blockEndTag);
+                                    if (lastBlockEndIndex > -1) {
+                                        const contentToAppend = escapeHtml(tool.content);
+                                        currentMsg.content = currentMsg.content.substring(0, lastBlockEndIndex) + contentToAppend + currentMsg.content.substring(lastBlockEndIndex);
+                                    } else {
+                                        currentMsg.content += ' ' + escapeHtml(tool.content);
+                                    }
                                 }
+                                
+                                // 更新后端上下文信息
                                 const lastToolIndex = currentMsg.backend_content.length - 1;
                                 for (let i = lastToolIndex; i >= 0; i--) {
                                     if (currentMsg.backend_content[i].role === 'tool' && currentMsg.backend_content[i].tool_call_id === toolCallId) {
@@ -2210,34 +2228,42 @@ let vue_methods = {
                                     }
                                 }
                             } else {
-                                // ... (标准 Call/Result/Error 逻辑 - 保持原样)
+                                // === 标准 Call/Result/Error 逻辑 ===
                                 if (this.isThinkOpen) { currentMsg.content += '</div>\n\n'; this.isThinkOpen = false; }
+                                
                                 let className = (tool.type === 'error') ? 'highlight-block-error' : 'highlight-block';
-                                let uiTitle = "";
-                                if (tool.type === 'call') {
-                                    uiTitle = `${this.t('call')}${tool.title}${this.t('tool')}`;
-                                } else if (tool.type === 'tool_result' || tool.type === 'tool_result_stream') {
-                                    const displayName = delta.async_tool_id || (tool.title !== 'tool_result_stream' ? tool.title : 'Tool');
-                                    uiTitle = `${displayName}${this.t('tool_result')}`;
-                                } else if (tool.type === 'error') {
-                                    uiTitle = tool.title || 'Error'; 
-                                }else {
-                                 
-                                    uiTitle = tool.title || ''; 
-                                }
+                                
+                                // 【修复点 3】：防止 type="call" 的事件重复生成已经在 tool_progress 中画过的 UI 框
+                                const blockId = tool.type === 'call' ? `tool-call-${toolCallId}` : `tool-result-${toolCallId}`;
+                                const isCallAlreadyRendered = (tool.type === 'call' && currentMsg.content.includes(`id="${blockId}"`));
 
-                                let html = `\n<div class="${className}">`;
-                                html += `<div style="font-weight: bold; margin-bottom: 5px;">${uiTitle}</div>`;
-                                if (tool.content) { 
+                                // 只有当它没被渲染过时，我们才追加新的 HTML
+                                if (!isCallAlreadyRendered) {
+                                    let uiTitle = "";
                                     if (tool.type === 'call') {
-                                         html += escapeHtml(tool.content).replace(/\n/g, '<br>'); 
+                                        uiTitle = `${this.t('call')}${tool.title}${this.t('tool')}`;
+                                    } else if (tool.type === 'tool_result' || tool.type === 'tool_result_stream') {
+                                        const displayName = delta.async_tool_id || (tool.title !== 'tool_result_stream' ? tool.title : 'Tool');
+                                        uiTitle = `${displayName}${this.t('tool_result')}`;
+                                    } else if (tool.type === 'error') {
+                                        uiTitle = tool.title || 'Error'; 
                                     } else {
-                                        html += `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${escapeHtml(tool.content)}</pre>`;
+                                        uiTitle = tool.title || ''; 
                                     }
-                                }
-                                html += '</div>\n\n';
-                                currentMsg.content += html;
 
+                                    let html = `\n<div class="${className}" id="${blockId}">`;
+                                    html += `<div style="font-weight: bold; margin-bottom: 5px;">${uiTitle}</div>`;
+                                    if (tool.content) { 
+                                        if (tool.type === 'call') {
+                                            html += `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${escapeHtml(tool.content)}</pre>`;
+                                        } else {
+                                            // 【修复点 4】：为结果生成的 <pre> 附加上专属的 ID，让流式拼接时能够精准瞄准它
+                                            html += `<pre id="pre-result-${toolCallId}" style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${escapeHtml(tool.content)}</pre>`;
+                                        }
+                                    }
+                                    html += '</div>\n\n';
+                                    currentMsg.content += html;
+                                }
                                 if (tool.type === 'call') {
                                     let last = currentMsg.backend_content[currentMsg.backend_content.length - 1];
                                     if (last.role === 'assistant') {
