@@ -1498,7 +1498,22 @@ function startChunkAnimation(chunkId, chunkState) {
             const expression = chunkState.expression;
             let limit = 1.0;
             if (expression && ['happy', 'surprised'].includes(expression)) {
-                limit = 0.7; 
+                limit = 0.5; 
+            }
+
+            if (expression) {
+                // 常见的情绪列表（排除了 blink，以免干扰自动眨眼，除非明确需要）
+                const EMOTIONS = ['surprised', 'happy', 'angry', 'sad', 'neutral', 'relaxed'];
+                
+                // 如果当前指令是情绪表情，则将其设为 1.0，并将其他情绪归 0.0（防止表情混合变成鬼脸）
+                if (EMOTIONS.includes(expression)) {
+                    EMOTIONS.forEach(exp => {
+                        currentVrm.expressionManager.setValue(exp, exp === expression ? 1.0 : 0.0);
+                    });
+                } else {
+                    // 如果是 blink 等特定表情，直接应用
+                    currentVrm.expressionManager.setValue(expression, 1.0);
+                }
             }
 
             ['aa', 'ih', 'ou', 'ee', 'oh'].forEach(v => {

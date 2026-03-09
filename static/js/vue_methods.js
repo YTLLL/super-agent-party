@@ -7830,7 +7830,7 @@ handleCreateSlackSeparator(val) {
         chunk_expressions = (chunk.match(tagReg) || []).map(t => t.slice(1, -1)); 
         chunk_text = chunk.replace(tagReg, '').trim();
       }
-      console.log(`Processing TTS chunk ${index}:`, chunk_text ,"\nvoice:" ,voice);
+      console.log(`Processing TTS chunk ${index}:`, chunk_text ,"\nvoice:" ,voice,"\nchunk_expressions:", chunk_expressions);
       
       try {
         if (voice=='silence'){
