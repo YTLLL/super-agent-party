@@ -476,6 +476,16 @@ let vue_methods = {
       this.inAutoMode = false; // 重置自动模式状态
       this.scrollToBottom();
       this.sendMessagesToExtension(); // 发送消息到插件
+      this.$nextTick(() => {
+          setTimeout(() => {
+              if (window.MathJax) {
+                  const els = document.querySelectorAll('.stream-content');
+                  window.MathJax.typesetClear([...els]); // 先清除旧渲染
+                  window.MathJax.typesetPromise([...els]).catch(() => {});
+              }
+          }, 200);
+      });
+
       this.autoSaveSettings();
     },
     switchToagents() {
@@ -2352,7 +2362,17 @@ let vue_methods = {
             }
             
             currentMsg.generationFinished = true;
-            
+                        
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    if (window.MathJax) {
+                        // 找到所有消息容器一次性渲染
+                        const els = document.querySelectorAll('.stream-content');
+                        window.MathJax.typesetPromise([...els]).catch(() => {});
+                    }
+                }, 100);
+            });
+
             if (this.ttsSettings.enabled) {
                 if (this.audioStartTime > this.audioCtx.currentTime) {
                     const remainingTime = (this.audioStartTime - this.audioCtx.currentTime) * 1000;

@@ -1626,23 +1626,25 @@ const handleRemoteInstall = (data) => {
   methods: {
     ...vue_methods,
   },
-  directives: {
+directives: {
     morph: {
       mounted(el, binding, vnode) {
-        // 获取组件实例 context
         const vm = binding.instance; 
         el._update = (content) => {
-           // 使用 morphdom 的逻辑 (参考上文 script 中的 updateElement)
-           // 这里的 formatFn 我们直接调用组件的 methods
-           const html = vm.formatMessage(content, -1); // 传入内容进行渲染
-           
-           // ... 执行 morphdom(el, html_wrapper) ...
-           // (将上文 step 2 的 updateElement 逻辑复制到这里)
-           
-           // 简单版实现：
+           const html = vm.formatMessage(content, -1);
            const wrapper = document.createElement('div');
            wrapper.innerHTML = html;
-           morphdom(el, wrapper, { childrenOnly: true });
+           morphdom(el, wrapper, { 
+               childrenOnly: true,
+               onBeforeElUpdated: (fromEl, toEl) => {
+                   // 只保护 MathJax 自身的标签，不保护父元素
+                   const tag = fromEl.tagName || '';
+                   if (tag.startsWith('MJX-') || fromEl.classList.contains('MathJax')) return false;
+                   if (fromEl.tagName === 'PRE' && fromEl.isEqualNode(toEl)) return false;
+                   return true;
+               }
+           });
+           // 流式输出期间不调用 MathJax，避免和 morphdom 打架
         };
         el._update(binding.value);
       },
@@ -1652,7 +1654,7 @@ const handleRemoteInstall = (data) => {
         }
       }
     }
-  },
+},
   created() {
       if (this.browserTabs.length > 0) {
           this.currentTabId = this.browserTabs[0].id;
