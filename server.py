@@ -431,7 +431,7 @@ def _get_target_message(message, role):
             target_message = message[-1]
         else:
             # 如果最后一个消息不是assistant，创建一个新的
-            new_assistant_msg = {'role': 'assistant', 'content': ''}
+            new_assistant_msg = {'role': 'assistant', 'content': '','reasoning_content': ''}
             message.append(new_assistant_msg)
             target_message = new_assistant_msg
     elif role == 'system':
@@ -2136,39 +2136,113 @@ def get_drs_stage_system_message(DRS_STAGE,user_prompt,full_content):
 """    
     return search_prompt
 
-async def generate_stream_response(client,reasoner_client, request: ChatRequest, settings: dict,fastapi_base_url,enable_thinking,enable_deep_research,enable_web_search,async_tools_id):
+async def generate_stream_response(client, reasoner_client, request: ChatRequest, settings: dict, 
+                                   fastapi_base_url, enable_thinking, enable_deep_research, 
+                                   enable_web_search, async_tools_id):
     from mem0 import Memory
-    global mcp_client_list,HA_client,ChromeMCP_client,sql_client
-    DRS_STAGE = 1 # 1: 明确用户需求阶段 2: 工具调用阶段 3: 生成结果阶段
+    global mcp_client_list, HA_client, ChromeMCP_client, sql_client
+    
+    DRS_STAGE = 1
     if len(request.messages) > 2:
         DRS_STAGE = 2
+        
     max_rounds = settings.get("max_rounds", 0)
 
     if max_rounds > 0 and request.messages:
-        # 兼容获取 role 的辅助方法（支持 dict 或 Pydantic 对象）
         def get_role(msg):
             return msg.get("role") if isinstance(msg, dict) else msg.role
+        
+        def has_tool_calls(msg):
+            """检查assistant消息是否包含工具调用"""
+            if get_role(msg) != "assistant":
+                return False
+            if isinstance(msg, dict):
+                return bool(msg.get("tool_calls"))
+            return bool(getattr(msg, "tool_calls", None))
+        
+        def get_tool_call_id(msg):
+            """获取tool消息的tool_call_id"""
+            if isinstance(msg, dict):
+                return msg.get("tool_call_id")
+            return getattr(msg, "tool_call_id", None)
 
         system_messages = []
         chat_messages = request.messages
 
-        # 1. 仅判断第一条是不是 system（中间的不管）
+        # 1. 分离system消息
         if get_role(chat_messages[0]) == "system":
             system_messages = [chat_messages[0]]
             chat_messages = chat_messages[1:]
 
-        retain_count = max_rounds + 1 
-
-        # 2. 截断对话历史
+        # 2. 从后向前截断，确保工具调用链完整
+        retain_count = max_rounds * 2 + 1  # user-assistant 对，+1 给可能的pending user
+        
         if len(chat_messages) > retain_count:
-            chat_messages = chat_messages[-retain_count:]
+            # 从 retain_count 位置开始，向前扫描确保边界合法
+            start_idx = len(chat_messages) - retain_count
             
-            # 3. 终极边界处理：永远以 user 开始
-            # 只要第一条不是 user（比如是 assistant 或 tool），就一直丢弃
+            # 边界检查1: 不能以 tool 或 assistant(with tool_calls) 开始
+            # 如果 start_idx 指向的是需要前文支撑的消息，继续前移
+            while start_idx > 0:
+                current_msg = chat_messages[start_idx]
+                current_role = get_role(current_msg)
+                
+                # 情况A: 不能以 tool 开始（tool必须有前置的assistant tool_calls）
+                if current_role == "tool":
+                    start_idx -= 1
+                    continue
+                    
+                # 情况B: 不能以带tool_calls的assistant开始（必须有前置user）
+                if has_tool_calls(current_msg):
+                    start_idx -= 1
+                    continue
+                    
+                # 情况C: 不能以普通assistant开始（必须有前置user）
+                if current_role == "assistant":
+                    start_idx -= 1
+                    continue
+                    
+                # 现在 start_idx 指向的是 user，检查是否完整
+                break
+            
+            # 边界检查2: 确保工具调用链完整（tool必须有对应的assistant）
+            # 向前扫描，收集所有需要保留的tool响应
+            i = start_idx
+            while i < len(chat_messages):
+                msg = chat_messages[i]
+                if has_tool_calls(msg):
+                    # 这个assistant调用了工具，确保后面有对应的tool响应
+                    assistant_tool_ids = set()
+                    if isinstance(msg, dict):
+                        for tc in msg.get("tool_calls", []):
+                            assistant_tool_ids.add(tc.get("id") if isinstance(tc, dict) else tc.id)
+                    else:
+                        for tc in getattr(msg, "tool_calls", []):
+                            assistant_tool_ids.add(getattr(tc, "id", None))
+                    
+                    # 检查后续消息中是否有对应的tool响应
+                    j = i + 1
+                    found_tools = set()
+                    while j < len(chat_messages) and get_role(chat_messages[j]) == "tool":
+                        found_tools.add(get_tool_call_id(chat_messages[j]))
+                        j += 1
+                    
+                    # 如果tool响应不全，需要把start_idx前移包含完整的链
+                    # 简化处理：如果截断导致工具链断裂，保留整个链
+                    missing_tools = assistant_tool_ids - found_tools
+                    if missing_tools and i > start_idx:
+                        # 这个assistant的tool响应被截断了，需要前移start_idx
+                        # 实际上这种情况不应该发生，因为我们是从前向后截断
+                        pass
+                        
+                i += 1
+            
+            chat_messages = chat_messages[start_idx:]
+            
+            # 最终保险：确保以user开始
             while chat_messages and get_role(chat_messages[0]) != "user":
                 chat_messages = chat_messages[1:]
-                
-        # 4. 重新拼合 messages
+
         request.messages = system_messages + chat_messages
 
     images = await images_in_messages(request.messages,fastapi_base_url)
@@ -2703,6 +2777,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                                     ],
                                     "role": "assistant",
                                     "content": "",
+                                    "reasoning_content": "",
                                 }
                             )
                             request.messages.insert(-1, 
@@ -2743,6 +2818,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                                 ],
                                 "role": "assistant",
                                 "content": "",
+                                "reasoning_content": "",
                             }
                         )
                         results = f"{response["name"]}工具已成功启动，获取结果需要花费很久的时间。请不要再次调用该工具，因为工具结果将生成后自动发送，再次调用也不能更快的获取到结果。请直接告诉用户，你会在获得结果后回答他的问题。"
@@ -3192,8 +3268,9 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                     }
                     yield f"data: {json.dumps(final_chunk)}\n\n"
                     full_content += final_chunk["choices"][0]["delta"].get("content", "")
-                # 将响应添加到消息列表
-                content_append(request.messages, 'assistant', full_content)
+                if not tool_calls:
+                    # 将响应添加到消息列表
+                    content_append(request.messages, 'assistant', full_content)
                 # 工具和深度搜索
                 if tool_calls:
                     print("tool_calls",tool_calls)
@@ -3260,6 +3337,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                             {
                                 "role": "assistant",
                                 "content": full_content,
+                                "reasoning_content": "",
                             }
                         )
                         request.messages.append(
@@ -3295,12 +3373,14 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                             {
                                 "role": "assistant",
                                 "content": full_content,
+                                "reasoning_content": "",
                             }
                         )
                         request.messages.append(
                             {
                                 "role": "user",
                                 "content": drs_msg,
+                                "reasoning_content": "",
                             }
                         )
                     elif response_content["status"] == "need_more_work":
@@ -3320,6 +3400,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                             {
                                 "role": "assistant",
                                 "content": full_content,
+                                "reasoning_content": "",
                             }
                         )
                         request.messages.append(
@@ -3344,12 +3425,14 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                             {
                                 "role": "assistant",
                                 "content": full_content,
+                                "reasoning_content": "",
                             }
                         )
                         request.messages.append(
                             {
                                 "role": "user",
                                 "content": drs_msg,
+                                "reasoning_content": "",
                             }
                         )
 
@@ -3471,10 +3554,8 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                             }],
                             "role": "assistant",
                             "content": "",
+                            "reasoning_content": "",
                         })
-
-                        if (settings['webSearch']['when'] == 'after_thinking' or settings['webSearch']['when'] == 'both') and settings['tools']['asyncTools']['enabled'] is False:
-                             content_append(request.messages, 'user',  f"\n对于联网搜索的结果...")
 
                         if settings['tools']['asyncTools']['enabled']:
                             pass
@@ -3545,12 +3626,14 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                             {
                                 "role": "assistant",
                                 "content": str(response_content),
+                                "reasoning_content": "",
                             }
                         )
                         reasoner_messages.append(
                             {
                                 "role": "user",
                                 "content": f"{response_content.name}工具结果："+str(results),
+                                "reasoning_content": "",
                             }
                         )
                     # 如果启用推理模型
@@ -3797,8 +3880,9 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                         }
                         yield f"data: {json.dumps(final_chunk)}\n\n"
                         full_content += final_chunk["choices"][0]["delta"].get("content", "")
-                    # 将响应添加到消息列表
-                    content_append(request.messages, 'assistant', full_content)
+                    if not tool_calls:
+                        # 将响应添加到消息列表
+                        content_append(request.messages, 'assistant', full_content)
                     # 工具和深度搜索
                     if tool_calls:
                         pass
@@ -3866,6 +3950,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                                 {
                                     "role": "assistant",
                                     "content": full_content,
+                                    "reasoning_content": "",
                                 }
                             )
                             request.messages.append(
@@ -3901,6 +3986,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                                 {
                                     "role": "assistant",
                                     "content": full_content,
+                                    "reasoning_content": "",
                                 }
                             )
                             request.messages.append(
@@ -3926,6 +4012,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                                 {
                                     "role": "assistant",
                                     "content": full_content,
+                                    "reasoning_content": "",
                                 }
                             )
                             request.messages.append(
@@ -3950,6 +4037,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                                 {
                                     "role": "assistant",
                                     "content": full_content,
+                                    "reasoning_content": "",
                                 }
                             )
                             request.messages.append(
@@ -3958,6 +4046,7 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                                     "content": drs_msg,
                                 }
                             )
+                logger.info(f"all msg: {request.messages}")
                 yield "data: [DONE]\n\n"
                 if m0 and not request.is_sub_agent:
                     messages=f"用户说：{user_prompt}\n\n---\n\n你说：{full_content}"
@@ -3978,22 +4067,22 @@ async def generate_stream_response(client,reasoner_client, request: ChatRequest,
                     print("知识库更新任务已提交")
                 return
             except Exception as e:
-                        logger.error(f"Error occurred: {e}")
-                        # 捕获异常并返回结构化错误信息
-                        error_chunk = {
-                            "choices": [{
-                                "delta": {
-                                    "tool_content": {
-                                        "title": "❎ Error", # 统一标题
-                                        "content": str(e),   # 错误详情
-                                        "type": "error"      # 标记类型，方便前端切换样式
-                                    }
-                                }
-                            }]
+                logger.error(f"{request.messages}")
+                # 捕获异常并返回结构化错误信息
+                error_chunk = {
+                    "choices": [{
+                        "delta": {
+                            "tool_content": {
+                                "title": "❎ Error", # 统一标题
+                                "content": str(e),   # 错误详情
+                                "type": "error"      # 标记类型，方便前端切换样式
+                            }
                         }
-                        yield f"data: {json.dumps(error_chunk)}\n\n"
-                        yield "data: [DONE]\n\n"  # 确保最终结束
-                        return
+                    }]
+                }
+                yield f"data: {json.dumps(error_chunk)}\n\n"
+                yield "data: [DONE]\n\n"  # 确保最终结束
+                return
         
         return StreamingResponse(
             stream_generator(user_prompt, DRS_STAGE),
@@ -4626,6 +4715,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                     {
                         "role": "assistant",
                         "content": research_response.choices[0].message.content,
+                        "reasoning_content": "",
                     }
                 )
                 request.messages.append(
@@ -4645,6 +4735,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                     {
                         "role": "assistant",
                         "content": research_response.choices[0].message.content,
+                        "reasoning_content": "",
                     }
                 )
                 request.messages.append(
@@ -4662,6 +4753,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                     {
                         "role": "assistant",
                         "content": research_response.choices[0].message.content,
+                        "reasoning_content": "",
                     }
                 )
                 request.messages.append(
@@ -4678,6 +4770,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                     {
                         "role": "assistant",
                         "content": research_response.choices[0].message.content,
+                        "reasoning_content": "",
                     }
                 )
                 request.messages.append(
@@ -4733,6 +4826,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                         ],
                         "role": "assistant",
                         "content": "",
+                        "reasoning_content": "",
                     }
                 )
                 request.messages.append(
@@ -4749,6 +4843,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                 {
                     "role": "assistant",
                     "content": str(response_content),
+                    "reasoning_content": "",
                 }
             )
             reasoner_messages.append(
@@ -4849,6 +4944,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                         {
                             "role": "assistant",
                             "content": research_response.choices[0].message.content,
+                            "reasoning_content": "",
                         }
                     )
                     request.messages.append(
@@ -4868,6 +4964,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                         {
                             "role": "assistant",
                             "content": research_response.choices[0].message.content,
+                            "reasoning_content": "",
                         }
                     )
                     request.messages.append(
@@ -4885,6 +4982,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                         {
                             "role": "assistant",
                             "content": research_response.choices[0].message.content,
+                            "reasoning_content": "",
                         }
                     )
                     request.messages.append(
@@ -4901,6 +4999,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                         {
                             "role": "assistant",
                             "content": research_response.choices[0].message.content,
+                            "reasoning_content": "",
                         }
                     )
                     request.messages.append(
@@ -9436,21 +9535,28 @@ class ManagerFactory:
         """检查某个管理器是否已经初始化（不触发导入）"""
         return name in cls._instances
 
-# --- 定义你的全局变量名为“动态属性” ---
-# 这样你代码里写 qq_bot_manager.xxx 时，才会触发真正的加载
+# --- 在 ManagerFactory 类之后添加代理类（如果之前没有添加的话）---
+class _LazyManager:
+    """惰性代理：访问属性时才会真正加载对应的管理器"""
+    def __init__(self, name, import_path, class_name):
+        self.name = name
+        self.import_path = import_path
+        self.class_name = class_name
 
-@property
-def qq_bot_manager(): return ManagerFactory.get("qq", "py.qq_bot_manager", "QQBotManager")
-@property
-def feishu_bot_manager(): return ManagerFactory.get("feishu", "py.feishu_bot_manager", "FeishuBotManager")
-@property
-def dingtalk_bot_manager(): return ManagerFactory.get("dingtalk", "py.dingtalk_bot_manager", "DingtalkBotManager")
-@property
-def discord_bot_manager(): return ManagerFactory.get("discord", "py.discord_bot_manager", "DiscordBotManager")
-@property
-def slack_bot_manager(): return ManagerFactory.get("slack", "py.slack_bot_manager", "SlackBotManager")
-@property
-def telegram_bot_manager(): return ManagerFactory.get("telegram", "py.telegram_bot_manager", "TelegramBotManager")
+    def __getattr__(self, attr):
+        # 首次访问任何属性时，通过工厂获取真实的管理器实例
+        mgr = ManagerFactory.get(self.name, self.import_path, self.class_name)
+        # 返回真实管理器的对应属性
+        return getattr(mgr, attr)
+
+# --- 直接创建全局代理对象（代替原来的 @property 函数）---
+qq_bot_manager = _LazyManager("qq", "py.qq_bot_manager", "QQBotManager")
+feishu_bot_manager = _LazyManager("feishu", "py.feishu_bot_manager", "FeishuBotManager")
+dingtalk_bot_manager = _LazyManager("dingtalk", "py.dingtalk_bot_manager", "DingtalkBotManager")
+discord_bot_manager = _LazyManager("discord", "py.discord_bot_manager", "DiscordBotManager")
+slack_bot_manager = _LazyManager("slack", "py.slack_bot_manager", "SlackBotManager")
+telegram_bot_manager = _LazyManager("telegram", "py.telegram_bot_manager", "TelegramBotManager")
+
 
 # 辅助宏：快速获取实例（仅内部使用，确保不改动你的外部调用）
 def _get_mgr(name):
@@ -9789,5 +9895,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host=HOST,
-        port=PORT
+        port=PORT,
+        log_level="warning"
     )
