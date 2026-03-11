@@ -103,7 +103,7 @@ let vue_data = {
       base_url: '',
       api_key: '',
       temperature: 0.7,  // 默认温度值
-      max_tokens: 4096,    // 默认最大输出长度
+      max_tokens: 8192,    // 默认最大输出长度
       max_rounds: 0,    // 默认最大轮数
       selectedProvider: null,
       top_p: 1,
