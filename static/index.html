@@ -912,14 +912,14 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </el-button>
                     </el-tooltip>
 
-                    <el-tooltip :content="t('clearChat')" placement="top">
+                    <el-tooltip :content="t('newChat')" placement="top">
                       <el-button
                         v-if="!isCapsuleMode"
                         @click="clearMessages"
                         class="icon-btn clear-btn"
-                        type="danger"
+                        type="primary"
                         circle>
-                        <i class="fa-solid fa-trash"></i>
+                        <i class="fa-solid fa-comment-medical"></i>
                       </el-button>
                     </el-tooltip>
 
@@ -1870,37 +1870,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
           </el-dialog>
-          <el-dialog
-            v-model="showEditDialog"
-            :title="editType === 'system' ? t('editSystemPrompt') : t('editMessage')"
-            width="80%">
-            <el-form-item v-if="editType === 'system'" :label="t('selectSystemPrompt')" class="form-item-align" label-position="left">
-              <el-select 
-                v-model="selectSystemPromptId" 
-                :placeholder="t('selectSystemPromptPlaceholder')"
-                class="full-width-input"
-                @change="changeSystemPrompt"
-                >
-                <el-option
-                  v-for="prompt in SystemPromptsList"
-                  :key="prompt.id"
-                  :label="prompt.name"
-                  :value="prompt.id"
-                />
-              </el-select>
-            </el-form-item>
-            <el-input
-              v-model="editContent"
-              type="textarea"
-              :rows="18"
-              :placeholder="t('enterContent')"
-            ></el-input>
-            <template #footer>
-              <el-button @click="showEditDialog = false">{{ t('cancel') }}</el-button>
-              <el-button @click="switchToSystemPrompts" v-if="editType === 'system'">{{ t('addSystemPrompt') }}</el-button>
-              <el-button type="primary" @click="saveEdit">{{ editType === 'user' ? t('modifyAndSend'):t('save') }}</el-button>
-            </template>
-          </el-dialog>
             <el-dialog
               v-model="showKnowledgeDialog"
               :title="t('knowledgeBaseSelection')"
@@ -2141,6 +2110,38 @@ function updateElement(el, rawMarkdown, formatFn) {
             </div>
           </el-dialog>
         </div>
+
+          <el-dialog
+            v-model="showEditDialog"
+            :title="editType === 'system' ? t('editSystemPrompt') : t('editMessage')"
+            width="80%">
+            <el-form-item v-if="editType === 'system'" :label="t('selectSystemPrompt')" class="form-item-align" label-position="left">
+              <el-select 
+                v-model="selectSystemPromptId" 
+                :placeholder="t('selectSystemPromptPlaceholder')"
+                class="full-width-input"
+                @change="changeSystemPrompt"
+                >
+                <el-option
+                  v-for="prompt in SystemPromptsList"
+                  :key="prompt.id"
+                  :label="prompt.name"
+                  :value="prompt.id"
+                />
+              </el-select>
+            </el-form-item>
+            <el-input
+              v-model="editContent"
+              type="textarea"
+              :rows="18"
+              :placeholder="t('enterContent')"
+            ></el-input>
+            <template #footer>
+              <el-button @click="showEditDialog = false">{{ t('cancel') }}</el-button>
+              <el-button @click="switchToSystemPrompts" v-if="editType === 'system'">{{ t('addSystemPrompt') }}</el-button>
+              <el-button type="primary" @click="saveEdit">{{ editType === 'user' ? t('modifyAndSend'):t('save') }}</el-button>
+            </template>
+          </el-dialog>
 
         <el-dialog
           v-model="showHistoryDialog"
@@ -14512,14 +14513,14 @@ function updateElement(el, rawMarkdown, formatFn) {
                         <div class="button-group">
                             
                             <!-- 常用功能按钮复用 -->
-                            <el-tooltip :content="t('clearChat')" placement="top">
+                            <el-tooltip :content="t('newChat')" placement="top">
                               <el-button
                                 v-if="!isCapsuleMode"
                                 @click="clearMessages"
                                 class="icon-btn clear-btn"
-                                type="danger"
+                                type="primary"
                                 circle>
-                                <i class="fa-solid fa-trash"></i>
+                                <i class="fa-solid fa-comment-medical"></i>
                               </el-button>
                             </el-tooltip>
 

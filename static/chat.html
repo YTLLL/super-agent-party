@@ -655,14 +655,14 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </el-button>
                     </el-tooltip>
 
-                    <el-tooltip :content="t('clearChat')" placement="top">
+                    <el-tooltip :content="t('newChat')" placement="top">
                       <el-button
                         v-if="!isCapsuleMode"
                         @click="clearMessages"
                         class="icon-btn clear-btn"
-                        type="danger"
+                        type="primary"
                         circle>
-                        <i class="fa-solid fa-trash"></i>
+                        <i class="fa-solid fa-comment-medical"></i>
                       </el-button>
                     </el-tooltip>
 
