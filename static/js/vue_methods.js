@@ -219,7 +219,29 @@ let vue_methods = {
   async deleteMessage(index) {
     this.stopGenerate();
     this.messages.splice(index, 1);
+    if (this.conversationId === null) {
+        this.conversationId = uuid.v4();
+        const newConv = {
+            id: this.conversationId,
+            title: this.generateConversationTitle(messagesPayload),
+            mainAgent: this.mainAgent,
+            timestamp: Date.now(),
+            messages: this.messages,
+            fileLinks: this.fileLinks,
+            system_prompt: this.system_prompt,
+        };
+        this.conversations.unshift(newConv);
+    } else {
+        const conv = this.conversations.find(conv => conv.id === this.conversationId);
+        if (conv) {
+            conv.messages = this.messages;
+            conv.timestamp = Date.now();
+            conv.fileLinks = this.fileLinks;
+        }
+    }
     await this.autoSaveSettings();
+    await this.saveConversations();
+    console.log("delete message");
   },
 
   openEditDialog(type, content, index = null) {
@@ -453,6 +475,7 @@ let vue_methods = {
     async loadConversation(convId) {
       const conversation = this.conversations.find(c => c.id === convId);
       if (conversation) {
+        console.log("convid:"+convId);
         this.conversationId = convId;
         this.messages = [...conversation.messages];
         this.fileLinks = conversation.fileLinks;
