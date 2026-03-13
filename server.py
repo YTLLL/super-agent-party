@@ -2968,7 +2968,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     )
                     
                     user_prompt = ""
-                    import uuid
                     # 生成一个唯一的 ID，用于让前端锁定同一个 UI 块进行内容更新
                     deepsearch_id = f"ds_{uuid.uuid4().hex[:8]}"
                     
@@ -3498,26 +3497,9 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                     "name":response_content.name,
                                     "parameters":data_list[0]
                                 }
-                            results = f"{response_content.name}工具已成功启动..." # 保持原样
+                            results = f"{response_content.name}tool has been successfully launched. It will take some time to run, and the results will be provided in the next round of conversation." # 保持原样
                         else:
                             results = await dispatch_tool(response_content.name, data_list[0], settings)
-                        
-                        if isinstance(results, str) and '"type": "approval_required"' in results:
-                            # 审批逻辑：必须带上 tool_call_id
-                            approval_chunk = {
-                                "choices": [{
-                                    "delta": {
-                                        "tool_call_id": tool_calls[0].id, # 关键：带上 ID
-                                        "tool_content": {
-                                            "title": response_content.name,
-                                            "content": results,
-                                            "type": "tool_approval"
-                                        }
-                                    }
-                                }]
-                            }
-                            yield f"data: {json.dumps(approval_chunk)}\n\n"
-                            return 
 
                         if results is None:
                             # 保持原样，但建议加上 ID
@@ -3557,62 +3539,59 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             "reasoning_content": "",
                         })
 
-                        if settings['tools']['asyncTools']['enabled']:
-                            pass
-                        else:
-                            # 【修复 2】发送结果时，务必带上 tool_call_id
-                            if not isinstance(results, AsyncIterator):
-                                result_chunk = {
-                                    "choices": [{
-                                        "delta": {
-                                            "tool_call_id": tool_calls[0].id, # 关键：匹配之前的 Call ID
-                                            "tool_content": {
-                                                "title": response_content.name,
-                                                "content": str(results),
-                                                "type": "tool_result"
+                        # 【修复 2】发送结果时，务必带上 tool_call_id
+                        if not isinstance(results, AsyncIterator):
+                            result_chunk = {
+                                "choices": [{
+                                    "delta": {
+                                        "tool_call_id": tool_calls[0].id, # 关键：匹配之前的 Call ID
+                                        "tool_content": {
+                                            "title": response_content.name,
+                                            "content": str(results),
+                                            "type": "tool_result"
+                                        }
+                                    }
+                                }]
+                            }
+                            yield f"data: {json.dumps(result_chunk)}\n\n"
+                        else:  
+                            # 流式工具结果处理 (AsyncIterator)
+                            buffer = []
+                            first = True
+                            async for chunk in results:
+                                buffer.append(chunk)
+                                if first:
+                                    # 第一帧带 title
+                                    stream_chunk = {
+                                        "choices": [{
+                                            "delta": {
+                                                "tool_call_id": tool_calls[0].id, # 关键
+                                                "tool_content": {
+                                                    "title": response_content.name,
+                                                    "content": chunk,
+                                                    "type": "tool_result_stream"
+                                                }
                                             }
-                                        }
-                                    }]
-                                }
-                                yield f"data: {json.dumps(result_chunk)}\n\n"
-                            else:  
-                                # 流式工具结果处理 (AsyncIterator)
-                                buffer = []
-                                first = True
-                                async for chunk in results:
-                                    buffer.append(chunk)
-                                    if first:
-                                        # 第一帧带 title
-                                        stream_chunk = {
-                                            "choices": [{
-                                                "delta": {
-                                                    "tool_call_id": tool_calls[0].id, # 关键
-                                                    "tool_content": {
-                                                        "title": response_content.name,
-                                                        "content": chunk,
-                                                        "type": "tool_result_stream"
-                                                    }
+                                        }]
+                                    }
+                                    yield f"data: {json.dumps(stream_chunk)}\n\n"
+                                    first = False
+                                else:
+                                    # 后续帧
+                                    stream_chunk = {
+                                        "choices": [{
+                                            "delta": {
+                                                "tool_call_id": tool_calls[0].id, # 关键
+                                                "tool_content": {
+                                                    "title": "tool_result_stream",
+                                                    "content": chunk,
+                                                    "type": "tool_result_stream"
                                                 }
-                                            }]
-                                        }
-                                        yield f"data: {json.dumps(stream_chunk)}\n\n"
-                                        first = False
-                                    else:
-                                        # 后续帧
-                                        stream_chunk = {
-                                            "choices": [{
-                                                "delta": {
-                                                    "tool_call_id": tool_calls[0].id, # 关键
-                                                    "tool_content": {
-                                                        "title": "tool_result_stream",
-                                                        "content": chunk,
-                                                        "type": "tool_result_stream"
-                                                    }
-                                                }
-                                            }]
-                                        }
-                                        yield f"data: {json.dumps(stream_chunk)}\n\n"
-                                results = "".join(buffer)
+                                            }
+                                        }]
+                                    }
+                                    yield f"data: {json.dumps(stream_chunk)}\n\n"
+                            results = "".join(buffer)
 
                         request.messages.append(
                             {

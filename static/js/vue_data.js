@@ -302,7 +302,7 @@ let vue_data = {
       enabled: false,
       engine: 'tavily',
       crawler: 'jina',
-      when: 'before_thinking',
+      when: 'after_thinking',
       duckduckgo_max_results: 10, // 默认值
       searxng_url: `http://127.0.0.1:8080`,
       searxng_max_results: 10, // 默认值
@@ -426,7 +426,7 @@ let vue_data = {
     },
     knowledgeBases: [],
     KBSettings: {
-      when: 'before_thinking',
+      when: 'after_thinking',
       is_rerank: false,
       selectedProvider: null,
       model: '',
