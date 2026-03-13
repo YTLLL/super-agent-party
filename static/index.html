@@ -1656,7 +1656,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                             <el-tag size="small" :type="getTaskStatusType(task.status)">{{ task.status }}</el-tag>
                                         </div>
 
-                                        <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ task.description }}</div>
+                                        <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ task.description }}</div>
 
                                         <div class="task-progress-bar" v-if="task.status === 'running'" style="margin-bottom: 10px;">
                                             <el-progress :percentage="task.progress" :stroke-width="4" :show-text="false" status="success"></el-progress>
@@ -4324,7 +4324,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <div class="kb-meta">
                         <!-- 描述信息概览 -->
                         <div class="kb-meta-item">
-                          <span style="font-size: 12px; color: #909399; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                          <span style="font-size: 12px; color: #909399; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
                             {{ getBehaviorSummary(b) }}
                           </span>
                         </div>
