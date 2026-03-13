@@ -1069,7 +1069,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                     <el-tooltip :content="t('webSearch')" placement="top">
                       <el-button
-                        @click="webSearchSettings.enabled = !webSearchSettings.enabled; autoSaveSettings()"
+                        @click="webSearchSettings.enabled = !webSearchSettings.enabled; handleWebSearchToggle(webSearchSettings.enabled)"
                         class="icon-btn web-search-btn"
                         :type="webSearchSettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'webSearchButton')?.enabled&&!isCapsuleMode"
@@ -1102,7 +1102,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                     <el-tooltip :content="t('interpreter')" placement="top">
                       <el-button
-                        @click="codeSettings.enabled = !codeSettings.enabled; autoSaveSettings()"
+                        @click="codeSettings.enabled = !codeSettings.enabled; handleInterpreterToggle(codeSettings.enabled)"
                         class="icon-btn web-search-btn"
                         :type="codeSettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'codeButton')?.enabled&&!isCapsuleMode"
@@ -1114,7 +1114,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <el-tooltip :content="t('CLItool')" placement="top">
                       <el-button
                         :disabled="!isElectron"
-                        @click="CLISettings.enabled = !CLISettings.enabled; autoSaveSettings()"
+                        @click="CLISettings.enabled = !CLISettings.enabled; handleEnableToggle(CLISettings.enabled)"
                         class="icon-btn web-search-btn"
                         :type="CLISettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'CLIButton')?.enabled&&!isCapsuleMode"
@@ -5057,6 +5057,256 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <div class="extra-params">
                         <div
                           v-for="(param, index) in settings.extra_params"
+                          :key="index"
+                          class="param-row"
+                        >
+                          <el-input
+                            v-model="param.name"
+                            :placeholder="t('paramName')"
+                            class="param-input"
+                            @input="autoSaveSettings"
+                          ></el-input>
+                      
+                          <el-select
+                            v-model="param.type"
+                            :placeholder="t('paramType')"
+                            @change="updateParamType(index)"
+                            class="type-select"
+                          >
+                            <el-option
+                              v-for="type in paramTypes"
+                              :key="type.value"
+                              :label="t(type.label)"
+                              :value="type.value"
+                            ></el-option>
+                          </el-select>
+                      
+                          <!-- 动态输入组件 -->
+                          <div class="value-input">
+                            <el-input
+                              v-if="param.type === 'string'"
+                              v-model="param.value"
+                              :placeholder="t('paramValue')"
+                              @input="autoSaveSettings"
+                            ></el-input>
+                          
+                            <el-input-number
+                              v-if="param.type === 'integer'"
+                              v-model="param.value"
+                              :step="1"         
+                              :precision="0"   
+                              @input="autoSaveSettings"
+                            ></el-input-number>
+                          
+                            <el-input-number
+                              v-if="param.type === 'float'"
+                              v-model="param.value"
+                              :step="0.5"      
+                              :precision="2"    
+                              @input="autoSaveSettings"
+                            ></el-input-number>
+      
+                            <el-switch 
+                              v-if="param.type === 'boolean'" 
+                              v-model="param.value" 
+                              @change="autoSaveSettings"
+                            ></el-switch>
+                          </div>
+                      
+                          <el-button
+                            @click="removeParam(index)"
+                            type="danger"
+                            circle
+                            size="small"
+                            class="remove-btn"
+                          >
+                            <i class="fa-solid fa-trash"></i>
+                          </el-button>
+                        </div>
+                      </div>
+                      <el-alert
+                        type="info"
+                        :closable="false"
+                        class="mb-2"
+                      >
+                        <template #default>
+                          <div class="alert-content">
+                            {{ t('extraParamsNotice') }}
+                          </div>
+                        </template>
+                      </el-alert>
+                    </div>
+                  </div>
+                </el-form>
+              </div>
+              <!-- 快速应答模型界面 -->
+              <div v-show="subMenu === 'fast'" class="page">
+                <el-form :model="fastSettings" class="settings-form" label-position="top">
+                  <div class="tool-item">
+                    <!-- 基础配置（仅供应商） -->
+                    <div class="tool-header">
+                      <div class="header-left">
+                        <span>
+                          <el-icon>
+                            <i class="fa-solid fa-microchip"></i>
+                          </el-icon>
+                          {{ t('fastModelConfiguration') }}
+                        </span>
+                      </div>
+                      <el-switch v-model="fastSettings.enabled" @click.stop @change="autoSaveSettings"/>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item :label="t('provider')" class="form-item-align">
+                        <el-select
+                          v-model="fastSettings.selectedProvider"
+                          :placeholder="t('selectProvider')"
+                          filterable
+                          @change="selectMainProvider"
+                          @visible-change="handleMainProviderVisibleChange"
+                          class="full-width-input"
+                        >
+                          <el-option
+                            v-for="provider in modelProviders"
+                            :key="provider.id"
+                            :label="provider.vendor+' - '+provider.modelId"
+                            :value="provider.id"
+                          >
+                            <div class="provider-option">
+                              <img 
+                                :src="getVendorLogo(provider.vendor)" 
+                                class="mini-vendor-logo"
+                              />
+                              <span class="model-id">{{ provider.modelId }}</span>
+                            </div>
+                          </el-option>
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item :label="t('enableOmniTTS')" class="form-item-align" label-position="left">
+                        <el-switch 
+                          v-model="fastSettings.enableOmniTTS" 
+                          @change="autoSaveSettings"
+                        ></el-switch>
+                      </el-form-item>
+                      <el-form-item v-if="fastSettings.enableOmniTTS" :label="t('enabledInterruption')" class="form-item-align" label-position="left">
+                        <el-switch 
+                          v-model="ttsSettings.enabledInterruption" 
+                          @change="autoSaveSettings"
+                        ></el-switch>
+                      </el-form-item>
+                      <el-form-item v-if="fastSettings.enableOmniTTS" :label="t('omniVoice')" class="form-item-align" label-position="left">
+                        <el-input
+                          v-model="fastSettings.omniVoice"
+                          :placeholder="t('omniVoicePlaceholder')"
+                        ></el-input>
+                      </el-form-item>
+                    </div>
+                      <el-alert
+                        type="info"
+                        :closable="false"
+                        class="mb-2"
+                      >
+                        <template #default>
+                          <div class="alert-content">
+                            {{ t('firstTimeUse') }}
+                            <el-link
+                              type="primary"
+                              :underline="false"
+                              class="font-medium"
+                              @click="switchToApiBox"
+                            >
+                              <el-icon class="mr-1">
+                                <i class="fa-solid fa-key"></i>
+                              </el-icon>{{ t('keyBoxInterface') }}
+                            </el-link>
+                            {{ t('addProviderReturnSelect') }}
+                            {{ t('mainmodelnotice') }}
+                          </div>
+                        </template>
+                      </el-alert>
+                  </div>
+                  <!-- 新增高级配置 -->
+                  <div class="tool-item">
+                    <div class="tool-header">
+                      <div class="header-left">
+                        <span>
+                          <el-icon>
+                            <i class="fa-solid fa-chevron-right"></i>
+                          </el-icon>
+                          {{ t('advancedConfiguration') }}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="tool-content">
+                      <el-form-item :label="t('temperature')" class="form-item-align">
+                        <el-slider
+                          v-model="fastSettings.temperature"
+                          :min="0"
+                          :max="1"
+                          :step="0.01"
+                          show-input
+                          @input="autoSaveSettings"
+                        />
+                      </el-form-item>
+                      <el-form-item :label="'top_p'" class="form-item-align">
+                        <el-slider
+                          v-model="fastSettings.top_p"
+                          :min="0"
+                          :max="1"
+                          :step="0.01"
+                          show-input
+                          @input="autoSaveSettings"
+                        />
+                      </el-form-item>
+                      <el-form-item :label="t('outputLength')" class="form-item-align">
+                        <el-slider
+                          v-model="fastSettings.max_tokens"
+                          :min="0"
+                          :max="128000"
+                          :step="1024"
+                          show-input
+                          @input="autoSaveSettings"
+                        />
+                      </el-form-item>
+                      <el-form-item :label="t('conversationRounds')" class="form-item-align">
+                        <el-slider
+                          v-model="fastSettings.max_rounds"
+                          :min="0"
+                          :max="1000"
+                          :step="1"
+                          show-input
+                          @input="autoSaveSettings"
+                        />
+                      </el-form-item>
+                      <el-form-item :label="t('reasoningEffort')" class="form-item-align">
+                        <el-select
+                          v-model="fastSettings.reasoning_effort"
+                          :placeholder="t('reasoningEffort')"
+                          @change="autoSaveSettings"
+                          class="reasoning-effort-select"
+                        >
+                          <el-option
+                            v-for="effort in reasoningEfforts"
+                            :key="effort.value"
+                            :label="t(effort.label)"
+                            :value="effort.value"
+                          ></el-option>
+                        </el-select>
+                      </el-form-item>
+                      <div class="param-header">
+                        <span>{{ t('extraParams') }}</span>
+                        <el-button 
+                          @click="addParam"
+                          type="primary"
+                          circle
+                          size="small"
+                          class="header-add-btn"
+                        >
+                          <i class="fa-solid fa-plus"></i>
+                        </el-button>
+                      </div>
+                      <div class="extra-params">
+                        <div
+                          v-for="(param, index) in fastSettings.extra_params"
                           :key="index"
                           class="param-row"
                         >

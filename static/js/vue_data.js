@@ -112,6 +112,21 @@ let vue_data = {
       omniVoice: 'Cherry', // omniTTS的语音
       extra_params: [], // 额外参数
     },
+    fastSettings: {
+      enabled: false, // 默认不启用
+      model: '',
+      base_url: '',
+      api_key: '',
+      temperature: 0.7,  // 默认温度值
+      max_tokens: 8192,    // 默认最大输出长度
+      max_rounds: 0,    // 默认最大轮数
+      selectedProvider: null,
+      top_p: 1,
+      reasoning_effort: null,
+      enableOmniTTS: false,// 是否启用omniTTS
+      omniVoice: 'Cherry', // omniTTS的语音
+      extra_params: [], // 额外参数
+    },
     reasonerSettings: {
       enabled: false, // 默认不启用
       model: '',
@@ -1241,6 +1256,7 @@ let vue_data = {
     modelTiles: [
       { id: 'service', title: 'modelService', icon: 'fa-solid fa-cloud' },
       { id: 'main', title: 'mainModel', icon: 'fa-solid fa-microchip' },
+      { id: 'fast', title: 'fastModel', icon: 'fa-solid fa-gauge-high' },
       { id: 'reasoner', title: 'reasonerModel', icon: 'fa-solid fa-atom' },
       { id: 'vision', title: 'visionModel' , icon: 'fa-solid fa-camera'},
       { id: 'text2img', title: 'imgModel', icon: 'fa-solid fa-pencil' },

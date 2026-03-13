@@ -2139,210 +2139,212 @@ def get_drs_stage_system_message(DRS_STAGE,user_prompt,full_content):
 async def generate_stream_response(client, reasoner_client, request: ChatRequest, settings: dict, 
                                    fastapi_base_url, enable_thinking, enable_deep_research, 
                                    enable_web_search, async_tools_id):
-    from mem0 import Memory
-    global mcp_client_list, HA_client, ChromeMCP_client, sql_client
-    
-    DRS_STAGE = 1
-    if len(request.messages) > 2:
-        DRS_STAGE = 2
+    try:
+        from mem0 import Memory
+        global mcp_client_list, HA_client, ChromeMCP_client, sql_client
         
-    max_rounds = settings.get("max_rounds", 0)
-
-    if max_rounds > 0 and request.messages:
-        def get_role(msg):
-            return msg.get("role") if isinstance(msg, dict) else msg.role
-        
-        def has_tool_calls(msg):
-            """检查assistant消息是否包含工具调用"""
-            if get_role(msg) != "assistant":
-                return False
-            if isinstance(msg, dict):
-                return bool(msg.get("tool_calls"))
-            return bool(getattr(msg, "tool_calls", None))
-        
-        def get_tool_call_id(msg):
-            """获取tool消息的tool_call_id"""
-            if isinstance(msg, dict):
-                return msg.get("tool_call_id")
-            return getattr(msg, "tool_call_id", None)
-
-        system_messages = []
-        chat_messages = request.messages
-
-        # 1. 分离system消息
-        if get_role(chat_messages[0]) == "system":
-            system_messages = [chat_messages[0]]
-            chat_messages = chat_messages[1:]
-
-        # 2. 从后向前截断，确保工具调用链完整
-        retain_count = max_rounds * 2 + 1  # user-assistant 对，+1 给可能的pending user
-        
-        if len(chat_messages) > retain_count:
-            # 从 retain_count 位置开始，向前扫描确保边界合法
-            start_idx = len(chat_messages) - retain_count
+        DRS_STAGE = 1
+        if len(request.messages) > 2:
+            DRS_STAGE = 2
             
-            # 边界检查1: 不能以 tool 或 assistant(with tool_calls) 开始
-            # 如果 start_idx 指向的是需要前文支撑的消息，继续前移
-            while start_idx > 0:
-                current_msg = chat_messages[start_idx]
-                current_role = get_role(current_msg)
-                
-                # 情况A: 不能以 tool 开始（tool必须有前置的assistant tool_calls）
-                if current_role == "tool":
-                    start_idx -= 1
-                    continue
-                    
-                # 情况B: 不能以带tool_calls的assistant开始（必须有前置user）
-                if has_tool_calls(current_msg):
-                    start_idx -= 1
-                    continue
-                    
-                # 情况C: 不能以普通assistant开始（必须有前置user）
-                if current_role == "assistant":
-                    start_idx -= 1
-                    continue
-                    
-                # 现在 start_idx 指向的是 user，检查是否完整
-                break
+        max_rounds = settings.get("max_rounds", 0)
+
+        if max_rounds > 0 and request.messages:
+            def get_role(msg):
+                return msg.get("role") if isinstance(msg, dict) else msg.role
             
-            # 边界检查2: 确保工具调用链完整（tool必须有对应的assistant）
-            # 向前扫描，收集所有需要保留的tool响应
-            i = start_idx
-            while i < len(chat_messages):
-                msg = chat_messages[i]
-                if has_tool_calls(msg):
-                    # 这个assistant调用了工具，确保后面有对应的tool响应
-                    assistant_tool_ids = set()
-                    if isinstance(msg, dict):
-                        for tc in msg.get("tool_calls", []):
-                            assistant_tool_ids.add(tc.get("id") if isinstance(tc, dict) else tc.id)
-                    else:
-                        for tc in getattr(msg, "tool_calls", []):
-                            assistant_tool_ids.add(getattr(tc, "id", None))
-                    
-                    # 检查后续消息中是否有对应的tool响应
-                    j = i + 1
-                    found_tools = set()
-                    while j < len(chat_messages) and get_role(chat_messages[j]) == "tool":
-                        found_tools.add(get_tool_call_id(chat_messages[j]))
-                        j += 1
-                    
-                    # 如果tool响应不全，需要把start_idx前移包含完整的链
-                    # 简化处理：如果截断导致工具链断裂，保留整个链
-                    missing_tools = assistant_tool_ids - found_tools
-                    if missing_tools and i > start_idx:
-                        # 这个assistant的tool响应被截断了，需要前移start_idx
-                        # 实际上这种情况不应该发生，因为我们是从前向后截断
-                        pass
-                        
-                i += 1
+            def has_tool_calls(msg):
+                """检查assistant消息是否包含工具调用"""
+                if get_role(msg) != "assistant":
+                    return False
+                if isinstance(msg, dict):
+                    return bool(msg.get("tool_calls"))
+                return bool(getattr(msg, "tool_calls", None))
             
-            chat_messages = chat_messages[start_idx:]
-            
-            # 最终保险：确保以user开始
-            while chat_messages and get_role(chat_messages[0]) != "user":
+            def get_tool_call_id(msg):
+                """获取tool消息的tool_call_id"""
+                if isinstance(msg, dict):
+                    return msg.get("tool_call_id")
+                return getattr(msg, "tool_call_id", None)
+
+            system_messages = []
+            chat_messages = request.messages
+
+            # 1. 分离system消息
+            if get_role(chat_messages[0]) == "system":
+                system_messages = [chat_messages[0]]
                 chat_messages = chat_messages[1:]
 
-        request.messages = system_messages + chat_messages
+            # 2. 从后向前截断，确保工具调用链完整
+            retain_count = max_rounds * 2 + 1  # user-assistant 对，+1 给可能的pending user
+            
+            if len(chat_messages) > retain_count:
+                # 从 retain_count 位置开始，向前扫描确保边界合法
+                start_idx = len(chat_messages) - retain_count
+                
+                # 边界检查1: 不能以 tool 或 assistant(with tool_calls) 开始
+                # 如果 start_idx 指向的是需要前文支撑的消息，继续前移
+                while start_idx > 0:
+                    current_msg = chat_messages[start_idx]
+                    current_role = get_role(current_msg)
+                    
+                    # 情况A: 不能以 tool 开始（tool必须有前置的assistant tool_calls）
+                    if current_role == "tool":
+                        start_idx -= 1
+                        continue
+                        
+                    # 情况B: 不能以带tool_calls的assistant开始（必须有前置user）
+                    if has_tool_calls(current_msg):
+                        start_idx -= 1
+                        continue
+                        
+                    # 情况C: 不能以普通assistant开始（必须有前置user）
+                    if current_role == "assistant":
+                        start_idx -= 1
+                        continue
+                        
+                    # 现在 start_idx 指向的是 user，检查是否完整
+                    break
+                
+                # 边界检查2: 确保工具调用链完整（tool必须有对应的assistant）
+                # 向前扫描，收集所有需要保留的tool响应
+                i = start_idx
+                while i < len(chat_messages):
+                    msg = chat_messages[i]
+                    if has_tool_calls(msg):
+                        # 这个assistant调用了工具，确保后面有对应的tool响应
+                        assistant_tool_ids = set()
+                        if isinstance(msg, dict):
+                            for tc in msg.get("tool_calls", []):
+                                assistant_tool_ids.add(tc.get("id") if isinstance(tc, dict) else tc.id)
+                        else:
+                            for tc in getattr(msg, "tool_calls", []):
+                                assistant_tool_ids.add(getattr(tc, "id", None))
+                        
+                        # 检查后续消息中是否有对应的tool响应
+                        j = i + 1
+                        found_tools = set()
+                        while j < len(chat_messages) and get_role(chat_messages[j]) == "tool":
+                            found_tools.add(get_tool_call_id(chat_messages[j]))
+                            j += 1
+                        
+                        # 如果tool响应不全，需要把start_idx前移包含完整的链
+                        # 简化处理：如果截断导致工具链断裂，保留整个链
+                        missing_tools = assistant_tool_ids - found_tools
+                        if missing_tools and i > start_idx:
+                            # 这个assistant的tool响应被截断了，需要前移start_idx
+                            # 实际上这种情况不应该发生，因为我们是从前向后截断
+                            pass
+                            
+                    i += 1
+                
+                chat_messages = chat_messages[start_idx:]
+                
+                # 最终保险：确保以user开始
+                while chat_messages and get_role(chat_messages[0]) != "user":
+                    chat_messages = chat_messages[1:]
 
-    images = await images_in_messages(request.messages,fastapi_base_url)
-    request.messages = await message_without_images(request.messages)
-    from py.load_files import get_files_content,file_tool,image_tool
-    from py.web_search import (
-        DDGsearch_async, 
-        searxng_async, 
-        Tavily_search_async,
-        Bing_search_async,
-        Google_search_async,
-        Brave_search_async,
-        Exa_search_async,
-        Serper_search_async,
-        bochaai_search_async,
-        duckduckgo_tool, 
-        searxng_tool, 
-        tavily_tool, 
-        bing_tool,
-        google_tool,
-        brave_tool,
-        exa_tool,
-        serper_tool,
-        bochaai_tool,
-        jina_crawler_tool, 
-        simple_fetch_tool,
-        Crawl4Ai_tool,
-        firecrawl_tool,
-        markdown_new_tool,
-    )
-    from py.know_base import kb_tool,query_knowledge_base,rerank_knowledge_base
-    from py.agent_tool import get_agent_tool
-    from py.a2a_tool import get_a2a_tool
-    from py.llm_tool import get_llm_tool
-    from py.pollinations import pollinations_image_tool,openai_image_tool,openai_chat_image_tool
-    from py.code_interpreter import e2b_code_tool,local_run_code_tool
-    from py.utility_tools import (
-        time_tool, 
-        weather_tool,
-        location_tool,
-        timer_weather_tool,
-        wikipedia_summary_tool,
-        wikipedia_section_tool,
-        arxiv_tool 
-    ) 
-    from py.autoBehavior import auto_behavior_tool
-    from py.cli_tool import claude_code_tool,qwen_code_tool,get_tools_for_mode,get_local_tools_for_mode
-    from py.cdp_tool import all_cdp_tools
-    from py.random_topic import random_topics_tools
+            request.messages = system_messages + chat_messages
 
-    from py.task_tools import (
-        create_subtask_tool,
-        query_tasks_tool,
-        cancel_subtask_tool,
-        finish_task_tool,
-    )
+        images = await images_in_messages(request.messages,fastapi_base_url)
+        request.messages = await message_without_images(request.messages)
+        from py.load_files import get_files_content,file_tool,image_tool
+        from py.web_search import (
+            DDGsearch_async, 
+            searxng_async, 
+            Tavily_search_async,
+            Bing_search_async,
+            Google_search_async,
+            Brave_search_async,
+            Exa_search_async,
+            Serper_search_async,
+            bochaai_search_async,
+            duckduckgo_tool, 
+            searxng_tool, 
+            tavily_tool, 
+            bing_tool,
+            google_tool,
+            brave_tool,
+            exa_tool,
+            serper_tool,
+            bochaai_tool,
+            jina_crawler_tool, 
+            simple_fetch_tool,
+            Crawl4Ai_tool,
+            firecrawl_tool,
+            markdown_new_tool,
+        )
+        from py.know_base import kb_tool,query_knowledge_base,rerank_knowledge_base
+        from py.agent_tool import get_agent_tool
+        from py.a2a_tool import get_a2a_tool
+        from py.llm_tool import get_llm_tool
+        from py.pollinations import pollinations_image_tool,openai_image_tool,openai_chat_image_tool
+        from py.code_interpreter import e2b_code_tool,local_run_code_tool
+        from py.utility_tools import (
+            time_tool, 
+            weather_tool,
+            location_tool,
+            timer_weather_tool,
+            wikipedia_summary_tool,
+            wikipedia_section_tool,
+            arxiv_tool 
+        ) 
+        from py.autoBehavior import auto_behavior_tool
+        from py.cli_tool import claude_code_tool,qwen_code_tool,get_tools_for_mode,get_local_tools_for_mode
+        from py.cdp_tool import all_cdp_tools
+        from py.random_topic import random_topics_tools
 
-    m0 = None
-    memoryId = None
-    if settings["memorySettings"]["is_memory"] and settings["memorySettings"]["selectedMemory"] and settings["memorySettings"]["selectedMemory"] != ""  and not request.is_sub_agent:
-        memoryId = settings["memorySettings"]["selectedMemory"]
-        cur_memory = None
-        for memory in settings["memories"]:
-            if memory["id"] == memoryId:
-                cur_memory = memory
-                break
-        if cur_memory and cur_memory["providerId"]:
-            print("长期记忆启用")
-            config={
-                "embedder": {
-                    "provider": 'openai',
-                    "config": {
-                        "model": cur_memory['model'],
-                        "api_key": cur_memory['api_key'],
-                        "openai_base_url":cur_memory["base_url"],
-                        "embedding_dims":cur_memory.get("embedding_dims", 1024)
+        from py.task_tools import (
+            create_subtask_tool,
+            query_tasks_tool,
+            cancel_subtask_tool,
+            finish_task_tool,
+        )
+
+        m0 = None
+        memoryId = None
+        if settings["memorySettings"]["is_memory"] and settings["memorySettings"]["selectedMemory"] and settings["memorySettings"]["selectedMemory"] != ""  and not request.is_sub_agent:
+            memoryId = settings["memorySettings"]["selectedMemory"]
+            cur_memory = None
+            for memory in settings["memories"]:
+                if memory["id"] == memoryId:
+                    cur_memory = memory
+                    break
+            if cur_memory and cur_memory["providerId"]:
+                print("长期记忆启用")
+                config={
+                    "embedder": {
+                        "provider": 'openai',
+                        "config": {
+                            "model": cur_memory['model'],
+                            "api_key": cur_memory['api_key'],
+                            "openai_base_url":cur_memory["base_url"],
+                            "embedding_dims":cur_memory.get("embedding_dims", 1024)
+                        },
                     },
-                },
-                "llm": {
-                    "provider": 'openai',
-                    "config": {
-                        "model": settings['model'],
-                        "api_key": settings['api_key'],
-                        "openai_base_url":settings["base_url"]
-                    }
-                },
-                "vector_store": {
-                    "provider": "faiss",
-                    "config": {
-                        "collection_name": "agent-party",
-                        "path": os.path.join(MEMORY_CACHE_DIR,memoryId),
-                        "distance_strategy": "euclidean",
-                        "embedding_model_dims": cur_memory.get("embedding_dims", 1024)
+                    "llm": {
+                        "provider": 'openai',
+                        "config": {
+                            "model": settings['model'],
+                            "api_key": settings['api_key'],
+                            "openai_base_url":settings["base_url"]
+                        }
+                    },
+                    "vector_store": {
+                        "provider": "faiss",
+                        "config": {
+                            "collection_name": "agent-party",
+                            "path": os.path.join(MEMORY_CACHE_DIR,memoryId),
+                            "distance_strategy": "euclidean",
+                            "embedding_model_dims": cur_memory.get("embedding_dims", 1024)
+                        }
                     }
                 }
-            }
-            m0 = Memory.from_config(config)
-    open_tag = "<think>"
-    close_tag = "</think>"
-    try:
+                m0 = Memory.from_config(config)
+                print("长期记忆配置加载完成")
+        open_tag = "<think>"
+        close_tag = "</think>"
+
         tools = request.tools or []
         if mcp_client_list:
             for server_name, mcp_client in mcp_client_list.items():
