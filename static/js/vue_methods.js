@@ -1561,9 +1561,21 @@ let vue_methods = {
       };
     },
 
-    async handleKeyDown(event) {
-      if (event?.repeat) return;
+  async handleKeyDown(event) {
+      // 过滤长按按键产生的连续触发（这行非常关键，保证按住时只触发一次）
+      if (event?.repeat) return; 
       if (event.isComposing || event.keyCode === 229) return;
+
+      // ==========================================
+      // 【新增/修改】键盘按住：触发 PTT 录音
+      // ==========================================
+      if (event?.key === this.asrSettings.hotkey && this.asrSettings.interactionMethod === "keyTriggered") {
+        event.preventDefault(); // 阻止默认行为（比如空格键会导致页面滚动或输入空格，Tab会切换焦点）
+        await this.handlePttPress(event); // 直接复用 UI 按下时的逻辑
+        return; 
+      }
+
+      // 以下为你原有的快捷键逻辑
       if (event.code === 'Space' && event.shiftKey) {
         event.preventDefault();   // 防止页面滚动
         if (
@@ -1574,7 +1586,8 @@ let vue_methods = {
         }
         return;
       }
-     const isTextArea = event.target.tagName === 'TEXTAREA';
+      
+      const isTextArea = event.target.tagName === 'TEXTAREA';
 
       if (event.key === 'Enter' && (this.activeMenu === 'home' || this.activeMenu ==='ai-browser')) {
         // 只有当焦点确实在 textarea 内部时才处理
@@ -1589,21 +1602,18 @@ let vue_methods = {
             }
         }
       }
-      if (event?.key === this.asrSettings.hotkey && this.asrSettings.interactionMethod == "keyTriggered") {
-        event.preventDefault();
-        this.asrSettings.enabled = false;
-        await this.toggleASR();
-      }
     },
+
     async handleKeyUp(event) {
       if (event?.repeat) return;
-      if (event?.key === this.asrSettings.hotkey && this.asrSettings.interactionMethod == "keyTriggered") {
+
+      // ==========================================
+      // 【新增/修改】键盘松开：停止 PTT 录音并发送
+      // ==========================================
+      if (event?.key === this.asrSettings.hotkey && this.asrSettings.interactionMethod === "keyTriggered") {
         event.preventDefault();
-        this.asrSettings.enabled = true;
-        // 等待2秒后关闭ASR
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        await this.toggleASR();
-        await this.sendMessage();
+        await this.handlePttRelease(event); // 直接复用 UI 松开时的逻辑
+        return;
       }  
     },
     escapeHtml(unsafe) {
