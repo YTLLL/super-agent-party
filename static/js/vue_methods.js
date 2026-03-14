@@ -1327,6 +1327,7 @@ let vue_methods = {
           this.toolsSettings = data.data.tools || this.toolsSettings;
           this.llmTools = data.data.llmTools || this.llmTools;
           this.reasonerSettings = data.data.reasoner || this.reasonerSettings;
+          this.fastSettings = data.data.fast || this.fastSettings;
           this.visionSettings = data.data.vision || this.visionSettings;
           this.webSearchSettings = data.data.webSearch || this.webSearchSettings;
           this.codeSettings = data.data.codeSettings || this.codeSettings;
@@ -1392,6 +1393,7 @@ let vue_methods = {
           this.toolsSettings = data.data.tools || this.toolsSettings;
           this.llmTools = data.data.llmTools || this.llmTools;
           this.reasonerSettings = data.data.reasoner || this.reasonerSettings;
+          this.fastSettings = data.data.fast || this.fastSettings;
           this.visionSettings = data.data.vision || this.visionSettings;
           this.webSearchSettings = data.data.webSearch || this.webSearchSettings;
           this.codeSettings = data.data.codeSettings || this.codeSettings;
@@ -2929,6 +2931,7 @@ let vue_methods = {
           llmTools: this.llmTools,
           conversationId: this.conversationId,
           reasoner: this.reasonerSettings,
+          fast: this.fastSettings,
           isBtnCollapse: this.isBtnCollapse,
           vision: this.visionSettings,
           webSearch: this.webSearchSettings, 

@@ -1058,8 +1058,7 @@ const handleRemoteInstall = (data) => {
         // 自动清理无效的 selectedProvider
         [this.settings, this.reasonerSettings,this.visionSettings,
           this.KBSettings,this.text2imgSettings,this.ccSettings,
-          this.qcSettings,this.prefrontalCortexSettings,this.NeocortexSettings,
-          this.LimbicSystemSettings,this.ReptilianBrainSettings
+          this.qcSettings,this.fastSettings
         ].forEach(config => {
           if (config.selectedProvider && !existingIds.has(config.selectedProvider)) {
             config.selectedProvider = null;
@@ -1074,8 +1073,7 @@ const handleRemoteInstall = (data) => {
         });
         [this.settings, this.reasonerSettings,this.visionSettings,
           this.KBSettings,this.text2imgSettings,this.ccSettings,
-          this.qcSettings,this.prefrontalCortexSettings,this.NeocortexSettings,
-          this.LimbicSystemSettings,this.ReptilianBrainSettings
+          this.qcSettings,this.fastSettings
         ].forEach(config => {
           if (config.selectedProvider) this.syncProviderConfig(config);
         });

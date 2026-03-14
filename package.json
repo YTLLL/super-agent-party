@@ -65,7 +65,9 @@
       {
         "from": "node_modules/npm/",
         "to": "npm",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "linux": {
@@ -139,7 +141,7 @@
   "devDependencies": {
     "cross-env": "^7.0.3",
     "electron": "^39.2.6",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^26.8.1"
   },
   "dependencies": {
     "@electron/remote": "^2.1.3",
