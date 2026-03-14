@@ -1369,6 +1369,25 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </div>
                       </div>
               
+                      <div 
+                        v-if="isPttRecording && asrSettings.interactionMethod === 'keyTriggered'" 
+                        class="desktop-recording-overlay"
+                      >
+                        <div class="desktop-recording-content">
+                          <!-- 麦克风图标 (你可以换成自己的 el-icon) -->
+                          <el-icon class="mic-icon"><Microphone /></el-icon>
+                          
+                          <!-- 复用你的波纹动画 -->
+                          <div class="recording-wave">
+                            <span></span><span></span><span></span><span></span><span></span>
+                          </div>
+
+                          <!-- 文字提示 -->
+                          <span class="ptt-text">{{ t('releaseToSend') }}</span>
+                        </div>
+                      </div>
+
+
                     <div class="input-status-bar">
                       
                       <!-- ✨ 2. 语音/键盘切换按钮：始终显示（或者你可以加 v-if="isMobile" 只让手机显示） -->
