@@ -1474,6 +1474,7 @@ key3`,
         'pleaseConfigSqlDbname': 'SQL 控制工具配置不完整，请配置数据库名称 (dbname)',
         'fastModel': '快速应答模型',
         'fastModelConfiguration': '快速应答模型配置',
+        'Alt':"Alt (macOS上是option)"
     },
     'en-US': {
         'chat': 'Chat',
