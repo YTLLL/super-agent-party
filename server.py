@@ -2723,7 +2723,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     extra['max_completion_tokens'] = request.max_tokens or settings['max_tokens']
                 else:
                     extra['max_tokens'] = request.max_tokens or settings['max_tokens']
-                if settings.get('enableOmniTTS',False):
+                if settings.get('enableOmniTTS',False) and not request.is_sub_agent:
                     extra['modalities'] = ["text", "audio"]
                     extra['audio'] ={"voice": settings.get('omniVoice',"Cherry"), "format": "wav"}
                 if reasoner_vendor == 'OpenAI':
@@ -5430,9 +5430,66 @@ async def chat_endpoint(request: ChatRequest,fastapi_request: Request):
     if model == 'super-model':
         current_settings = await load_settings()
         if current_settings['fast']['enabled'] and not request.is_sub_agent:
-            # 复制 fast 配置，排除 enabled 字段
-            fast_config = {k: v for k, v in current_settings['fast'].items() if k != 'enabled'}
-            current_settings.update(fast_config)
+            fast_cfg = current_settings['fast']
+            use_fast_model = False
+            
+            if fast_cfg.get('triggerMode') == 'always':
+                use_fast_model = True
+            elif fast_cfg.get('triggerMode') == 'conditional':
+                # 1. 解析用户最新一条消息的内容和多模态特征
+                last_user_text = ""
+                has_image = False
+                
+                # 倒序遍历寻找最后一条 user 消息
+                for msg in reversed(request.messages):
+                    if msg.get('role') == 'user':
+                        content = msg.get('content')
+                        if isinstance(content, str):
+                            last_user_text = content
+                        elif isinstance(content, list):
+                            # 处理多模态结构 (GPT-4V形式)
+                            texts = []
+                            for item in content:
+                                if item.get('type') == 'text':
+                                    texts.append(item.get('text', ''))
+                                elif item.get('type') == 'image_url':
+                                    has_image = True
+                            last_user_text = "".join(texts)
+                        break
+                
+                has_files = bool(request.fileLinks) # 判断是否有 fileLinks 附件
+                
+                # 2. 开始根据条件进行拦截判断 (全部条件满足才为 True)
+                condition_pass = True
+                
+                # 规则 A: 字数限制
+                max_len = fast_cfg.get('conditionMaxLen', 0)
+                if max_len > 0 and len(last_user_text) > max_len:
+                    condition_pass = False
+                    
+                # 规则 B: 是否允许换行
+                if condition_pass and fast_cfg.get('conditionNoNewline', False):
+                    if '\n' in last_user_text:
+                        condition_pass = False
+                        
+                # 规则 C: 是否允许图片和文件
+                if condition_pass and fast_cfg.get('conditionNoFiles', True):
+                    if has_image or has_files:
+                        condition_pass = False
+                        
+                # 如果所有条件都通过，则使用快速模型
+                if condition_pass:
+                    use_fast_model = True
+
+            # 最终决定：如果允许使用快速模型，则用其覆盖 current_settings
+            if use_fast_model:
+                # 复制 fast 配置，排除控制逻辑字段
+                exclude_keys = ['enabled', 'triggerMode', 'conditionMaxLen', 'conditionNoNewline', 'conditionNoFiles']
+                fast_config = {k: v for k, v in fast_cfg.items() if k not in exclude_keys}
+                current_settings.update(fast_config)
+            else:
+                # 如果条件不满足，回退到主模型（即什么也不做，保持 current_settings）
+                pass
         if override_memory_id:
             current_settings["memorySettings"]["is_memory"] = True
             current_settings["memorySettings"]["selectedMemory"] = override_memory_id
@@ -5506,9 +5563,63 @@ async def chat_endpoint(request: ChatRequest,fastapi_request: Request):
                 content_prepend(request.messages, 'user', agentSettings['system_prompt'] + "\n\n")
         
         if agent_settings['fast']['enabled'] and not request.is_sub_agent:
-            # 复制 fast 配置，排除 enabled 字段
-            fast_config = {k: v for k, v in agent_settings['fast'].items() if k != 'enabled'}
-            agent_settings.update(fast_config)
+            fast_cfg = agent_settings['fast']
+            use_fast_model = False
+            
+            if fast_cfg.get('triggerMode') == 'always':
+                use_fast_model = True
+            elif fast_cfg.get('triggerMode') == 'conditional':
+                # 1. 解析用户最新一条消息的内容和多模态特征
+                last_user_text = ""
+                has_image = False
+                
+                # 倒序遍历寻找最后一条 user 消息
+                for msg in reversed(request.messages):
+                    if msg.get('role') == 'user':
+                        content = msg.get('content')
+                        if isinstance(content, str):
+                            last_user_text = content
+                        elif isinstance(content, list):
+                            # 处理多模态结构 (例如图片上传)
+                            texts = []
+                            for item in content:
+                                if item.get('type') == 'text':
+                                    texts.append(item.get('text', ''))
+                                elif item.get('type') == 'image_url':
+                                    has_image = True
+                            last_user_text = "".join(texts)
+                        break
+                
+                # 判断是否有 fileLinks 文件附件
+                has_files = bool(request.fileLinks)
+                
+                # 2. 开始根据条件进行拦截判断
+                condition_pass = True
+                
+                # 规则 A: 字数限制（如果设定了限制，且当前字数超出，则拦截）
+                max_len = fast_cfg.get('conditionMaxLen', 0)
+                if max_len > 0 and len(last_user_text) > max_len:
+                    condition_pass = False
+                    
+                # 规则 B: 是否禁止换行（勾选了禁止换行，且文本含 \n，则拦截）
+                if condition_pass and fast_cfg.get('conditionNoNewline', False):
+                    if '\n' in last_user_text:
+                        condition_pass = False
+                        
+                # 规则 C: 是否禁止图片和文件（勾选了禁止文件，且包含图片或文件，则拦截）
+                if condition_pass and fast_cfg.get('conditionNoFiles', True):
+                    if has_image or has_files:
+                        condition_pass = False
+                        
+                if condition_pass:
+                    use_fast_model = True
+
+            # 3. 如果判定通过，使用快速模型配置覆盖 agent_settings
+            if use_fast_model:
+                # 复制 fast 配置，排除用于判断的控制字段
+                exclude_keys = ['enabled', 'triggerMode', 'conditionMaxLen', 'conditionNoNewline', 'conditionNoFiles']
+                fast_config = {k: v for k, v in fast_cfg.items() if k not in exclude_keys}
+                agent_settings.update(fast_config)
         vendor = 'OpenAI'
         for modelProvider in agent_settings['modelProviders']: 
             if modelProvider['id'] == agent_settings['selectedProvider']:
