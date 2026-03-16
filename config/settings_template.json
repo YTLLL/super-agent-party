@@ -75,6 +75,7 @@
     },
     "fast": {
       "enabled":false,
+      "triggerMode": "always",
       "model": "",
       "base_url": "",
       "api_key": "",
@@ -86,7 +87,10 @@
       "reasoning_effort": null,
       "enableOmniTTS": false,
       "omniVoice": "Cherry", 
-      "extra_params": []
+      "extra_params": [],
+      "conditionMaxLen": 200,     
+      "conditionNoNewline": true,   
+      "conditionNoFiles": true
     },
     "reasoner": {
       "enabled": false,

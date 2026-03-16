@@ -114,6 +114,7 @@ let vue_data = {
     },
     fastSettings: {
       enabled: false, // 默认不启用
+      triggerMode: 'always', // 默认触发模式为快捷键
       model: '',
       base_url: '',
       api_key: '',
@@ -126,6 +127,9 @@ let vue_data = {
       enableOmniTTS: false,// 是否启用omniTTS
       omniVoice: 'Cherry', // omniTTS的语音
       extra_params: [], // 额外参数
+      conditionMaxLen: 200,       // 默认字数限制，小于此字数才触发
+      conditionNoNewline: true,   // 是否要求不能有换行才触发
+      conditionNoFiles: true,     // 是否要求无图片/文件才触发
     },
     reasonerSettings: {
       enabled: false, // 默认不启用
