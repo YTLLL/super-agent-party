@@ -123,9 +123,7 @@
       "verifyUpdateCodeSignature": false,
       "target": [
         "nsis"
-      ],
-      "publisherName": "Heshengtao",
-      "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+      ]
     },
     "nsis": {
       "oneClick": false,
