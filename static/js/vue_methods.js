@@ -1922,21 +1922,26 @@ let vue_methods = {
                 }
             });
 
-            // ID 修复逻辑 (保持原样)
-            const sanitized = [];
+            // ID 修复逻辑 (保持原样 + 补充兜底防止 missing field id)
+            const sanitized =[];
             for (let i = 0; i < rawMessages.length; i++) {
                 const current = rawMessages[i];
                 if (current.role === 'tool') {
                     let prev = sanitized.length > 0 ? sanitized[sanitized.length - 1] : null;
                     if (!prev || prev.role !== 'assistant') {
-                        prev = { role: 'assistant', content: null, tool_calls: [] };
+                        prev = { role: 'assistant', content: null, tool_calls:[] };
                         sanitized.push(prev);
                     }
-                    if (!prev.tool_calls) prev.tool_calls = [];
-                    const hasMatchingId = prev.tool_calls.some(tc => tc.id === current.tool_call_id);
+                    if (!prev.tool_calls) prev.tool_calls =[];
+                    
+                    // 兜底生成 ID，防止 current.tool_call_id 为 undefined 时引发后端 missing field "id" 报错
+                    const safeToolCallId = current.tool_call_id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                    current.tool_call_id = safeToolCallId;
+
+                    const hasMatchingId = prev.tool_calls.some(tc => tc.id === safeToolCallId);
                     if (!hasMatchingId) {
                         prev.tool_calls.push({
-                            id: current.tool_call_id,
+                            id: safeToolCallId,
                             type: 'function',
                             function: { name: current.name || 'unknown_tool', arguments: "{}" }
                         });
@@ -2019,7 +2024,24 @@ let vue_methods = {
                 signal: this.abortController.signal 
             });
             
-            if (!response.ok) throw new Error("Network response was not ok");
+            if (!response.ok) {
+                let errText = await response.text();
+                try {
+                    const errObj = JSON.parse(errText);
+                    errText = errObj.error?.message || errText;
+                } catch(e) {}
+                throw new Error(errText);
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                let errText = await response.text();
+                try {
+                    const errObj = JSON.parse(errText);
+                    errText = errObj.error?.message || errText;
+                } catch(e) {}
+                throw new Error(errText);
+            }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -2166,6 +2188,9 @@ let vue_methods = {
                                     if (pendingCall) {
                                         toolCallId = pendingCall.id;
                                         pendingCall.resolved = true; // 标记为已解决，下次同名调用会找下一个
+                                    } else {
+                                        // 兜底生成 ID，防止向 backend_content 写入 undefined
+                                        toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                                     }
                                 }
                                 // 如果后端提供了 tool_call_id，也需要标记对应的栈项为 resolved
@@ -2423,9 +2448,30 @@ let vue_methods = {
             console.error(error);
             if (error.name !== 'AbortError') {
                 showNotification(error.message, 'error');
+                
+                // 【满足需求】：后端返回错误时，助手消息填入占位文本 "response error"
+                if (currentMsg) {
+                    const fallbackText = 'response error';
+                    if (!currentMsg.pure_content && currentMsg.backend_content.length <= 1) {
+                        currentMsg.content = fallbackText;
+                        currentMsg.pure_content = fallbackText;
+                        currentMsg.backend_content = [{ role: 'assistant', content: fallbackText }];
+                    } else {
+                        currentMsg.content += `\n\n<div class="highlight-block-error">${fallbackText}</div>`;
+                        
+                        // 移除最后一个 assistant 块里可能未完成的 tool_calls，防止破坏后续 API 的上下文结构导致二次报错
+                        const lastBackend = currentMsg.backend_content[currentMsg.backend_content.length - 1];
+                        if (lastBackend && lastBackend.role === 'assistant' && lastBackend.tool_calls) {
+                            delete lastBackend.tool_calls;
+                        }
+                        
+                        currentMsg.backend_content.push({ role: 'assistant', content: fallbackText });
+                    }
+                }
             }
             if (audioResolve) audioResolve();
         } finally {
+
             this.isSending = false;
             this.isTyping = false;
             this.saveConversations();
