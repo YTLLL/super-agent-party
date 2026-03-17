@@ -3717,7 +3717,7 @@ let vue_methods = {
       }
     },
 
-    async selectMainProvider(providerId) {
+    async selectFastProvider(providerId) {
       const provider = this.modelProviders.find(p => p.id === providerId);
       console.log(provider)
       if (provider) {
@@ -3875,7 +3875,7 @@ let vue_methods = {
     },
     handleFastProviderVisibleChange(visible) {
       if (!visible) {
-        this.selectMainProvider(this.fastSettings.selectedProvider);
+        this.selectFastProvider(this.fastSettings.selectedProvider);
       }
     },
 
