@@ -4922,7 +4922,42 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
               <!-- 主模型界面 -->
               <div v-show="subMenu === 'main'" class="page">
+                <!-- 顶部全局设置区域 (模型配置样式优化) -->
+                <div class="market-link-banner model-config-banner">
+                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
+                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
+                  
+                  <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
+                    
+                    <!-- 左侧：图标和说明文案 -->
+                    <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                      <div class="banner-icon-box">
+                        <i class="fa-solid fa-robot"></i> <!-- 改为机器人图标更贴合模型配置 -->
+                      </div>
+                      <div class="banner-text">
+                        <h3 style="margin: 0">{{ t('mainModelConfigDescription') }}</h3>
+                        <!-- 多行说明文字 -->
+                        <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 12px; line-height: 1.5;">
+                          {{ t('firstTimeUse') }}
+                          <el-link
+                            type="primary"
+                            :underline="false"
+                            class="font-medium"
+                            @click="switchToApiBox"
+                          >
+                            <el-icon class="mr-1">
+                              <i class="fa-solid fa-key"></i>
+                            </el-icon>{{ t('keyBoxInterface') }}
+                          </el-link>
+                          {{ t('addProviderReturnSelect') }}
+                          {{ t('mainmodelnotice') }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <el-form :model="settings" class="settings-form" label-position="top">
+
                   <div class="tool-item">
                     <!-- 基础配置（仅供应商） -->
                     <div class="tool-header">
@@ -4980,29 +5015,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                         ></el-input>
                       </el-form-item>
                     </div>
-                      <el-alert
-                        type="info"
-                        :closable="false"
-                        class="mb-2"
-                      >
-                        <template #default>
-                          <div class="alert-content">
-                            {{ t('firstTimeUse') }}
-                            <el-link
-                              type="primary"
-                              :underline="false"
-                              class="font-medium"
-                              @click="switchToApiBox"
-                            >
-                              <el-icon class="mr-1">
-                                <i class="fa-solid fa-key"></i>
-                              </el-icon>{{ t('keyBoxInterface') }}
-                            </el-link>
-                            {{ t('addProviderReturnSelect') }}
-                            {{ t('mainmodelnotice') }}
-                          </div>
-                        </template>
-                      </el-alert>
                   </div>
                   <!-- 新增高级配置 -->
                   <div class="tool-item">
@@ -5171,6 +5183,40 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
               <!-- 快速应答模型界面 -->
               <div v-show="subMenu === 'fast'" class="page">
+                <!-- 顶部全局设置区域 (模型配置样式优化) -->
+                <div class="market-link-banner model-config-banner">
+                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
+                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
+                  
+                  <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
+                    
+                    <!-- 左侧：图标和说明文案 -->
+                    <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                      <div class="banner-icon-box">
+                        <i class="fa-solid fa-robot"></i> <!-- 改为机器人图标更贴合模型配置 -->
+                      </div>
+                      <div class="banner-text">
+                        <h3 style="margin: 0">{{ t('fastModelConfigDescription') }}</h3>
+                        <!-- 多行说明文字 -->
+                        <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 12px; line-height: 1.5;">
+                          {{ t('firstTimeUse') }}
+                          <el-link
+                            type="primary"
+                            :underline="false"
+                            class="font-medium"
+                            @click="switchToApiBox"
+                          >
+                            <el-icon class="mr-1">
+                              <i class="fa-solid fa-key"></i>
+                            </el-icon>{{ t('keyBoxInterface') }}
+                          </el-link>
+                          {{ t('addProviderReturnSelect') }}
+                          {{ t('mainmodelnotice') }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <el-form :model="fastSettings" class="settings-form" label-position="top">
                   <div class="tool-item">
                     <!-- 基础配置（仅供应商） -->
@@ -5271,29 +5317,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                         ></el-input>
                       </el-form-item>
                     </div>
-                      <el-alert
-                        type="info"
-                        :closable="false"
-                        class="mb-2"
-                      >
-                        <template #default>
-                          <div class="alert-content">
-                            {{ t('firstTimeUse') }}
-                            <el-link
-                              type="primary"
-                              :underline="false"
-                              class="font-medium"
-                              @click="switchToApiBox"
-                            >
-                              <el-icon class="mr-1">
-                                <i class="fa-solid fa-key"></i>
-                              </el-icon>{{ t('keyBoxInterface') }}
-                            </el-link>
-                            {{ t('addProviderReturnSelect') }}
-                            {{ t('mainmodelnotice') }}
-                          </div>
-                        </template>
-                      </el-alert>
                   </div>
                   <!-- 新增高级配置 -->
                   <div class="tool-item">
@@ -5462,6 +5485,40 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
               <!-- 推理模型界面 -->
               <div v-show="subMenu === 'reasoner'" class="page">
+                <!-- 顶部全局设置区域 (模型配置样式优化) -->
+                <div class="market-link-banner model-config-banner">
+                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
+                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
+                  
+                  <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
+                    
+                    <!-- 左侧：图标和说明文案 -->
+                    <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                      <div class="banner-icon-box">
+                        <i class="fa-solid fa-robot"></i> <!-- 改为机器人图标更贴合模型配置 -->
+                      </div>
+                      <div class="banner-text">
+                        <h3 style="margin: 0">{{ t('reasonerModelConfigDescription') }}</h3>
+                        <!-- 多行说明文字 -->
+                        <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 12px; line-height: 1.5;">
+                          {{ t('firstTimeUse') }}
+                          <el-link
+                            type="primary"
+                            :underline="false"
+                            class="font-medium"
+                            @click="switchToApiBox"
+                          >
+                            <el-icon class="mr-1">
+                              <i class="fa-solid fa-key"></i>
+                            </el-icon>{{ t('keyBoxInterface') }}
+                          </el-link>
+                          {{ t('addProviderReturnSelect') }}
+                          {{ t('addresonerNotice') }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <el-form :model="settings" class="settings-form" label-position="top">
                   <div class="tool-item">
                     <div class="tool-header">
@@ -5502,29 +5559,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-select>
                       </el-form-item>
                     </div>
-                    <el-alert
-                    type="info"
-                    :closable="false"
-                    class="mb-2"
-                  >
-                    <template #default>
-                      <div class="alert-content">
-                        {{ t('firstTimeUse') }}
-                        <el-link
-                          type="primary"
-                          :underline="false"
-                          class="font-medium"
-                          @click="switchToApiBox"
-                        >
-                          <el-icon class="mr-1">
-                            <i class="fa-solid fa-key"></i>
-                          </el-icon>{{ t('keyBoxInterface') }}
-                        </el-link>
-                        {{ t('addProviderReturnSelect') }}
-                        {{ t('addresonerNotice') }}
-                      </div>
-                    </template>
-                  </el-alert>
                   </div>
                   <div class="tool-item">
                     <div class="tool-header">
@@ -5591,6 +5625,40 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </el-form>
               </div>
               <div v-show="subMenu === 'vision'" class="page">
+                <!-- 顶部全局设置区域 (模型配置样式优化) -->
+                <div class="market-link-banner model-config-banner">
+                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
+                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
+                  
+                  <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
+                    
+                    <!-- 左侧：图标和说明文案 -->
+                    <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                      <div class="banner-icon-box">
+                        <i class="fa-solid fa-robot"></i> <!-- 改为机器人图标更贴合模型配置 -->
+                      </div>
+                      <div class="banner-text">
+                        <h3 style="margin: 0">{{ t('visionModelConfigDescription') }}</h3>
+                        <!-- 多行说明文字 -->
+                        <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 12px; line-height: 1.5;">
+                          {{ t('firstTimeUse') }}
+                          <el-link
+                            type="primary"
+                            :underline="false"
+                            class="font-medium"
+                            @click="switchToApiBox"
+                          >
+                            <el-icon class="mr-1">
+                              <i class="fa-solid fa-key"></i>
+                            </el-icon>{{ t('keyBoxInterface') }}
+                          </el-link>
+                          {{ t('addProviderReturnSelect') }}
+                          {{ t('addVisionNotice') }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <el-form :model="settings" class="settings-form" label-position="top">
                   <div class="tool-item">
                     <div class="tool-header">
@@ -5629,29 +5697,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-select>
                       </el-form-item>
                     </div>
-                    <el-alert
-                    type="info"
-                    :closable="false"
-                    class="mb-2"
-                  >
-                    <template #default>
-                      <div class="alert-content">
-                        {{ t('firstTimeUse') }}
-                        <el-link
-                          type="primary"
-                          :underline="false"
-                          class="font-medium"
-                          @click="switchToApiBox"
-                        >
-                          <el-icon class="mr-1">
-                            <i class="fa-solid fa-key"></i>
-                          </el-icon>{{ t('keyBoxInterface') }}
-                        </el-link>
-                        {{ t('addProviderReturnSelect') }}
-                        {{ t('addVisionNotice') }}
-                      </div>
-                    </template>
-                  </el-alert>
                   </div>
                   <div class="tool-item">
                     <div class="tool-header">
@@ -5681,6 +5726,40 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
              <!-- 图像生成界面 -->
               <div v-show="subMenu === 'text2img'" class="page">
+                <!-- 顶部全局设置区域 (模型配置样式优化) -->
+                <div class="market-link-banner model-config-banner">
+                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
+                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
+                  
+                  <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
+                    
+                    <!-- 左侧：图标和说明文案 -->
+                    <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                      <div class="banner-icon-box">
+                        <i class="fa-solid fa-robot"></i> <!-- 改为机器人图标更贴合模型配置 -->
+                      </div>
+                      <div class="banner-text">
+                        <h3 style="margin: 0">{{ t('text2imgModelConfigDescription') }}</h3>
+                        <!-- 多行说明文字 -->
+                        <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 12px; line-height: 1.5;">
+                          {{ t('firstTimeUse') }}
+                            <el-link
+                              type="primary"
+                              :underline="false"
+                              class="font-medium"
+                              @click="switchToApiBox"
+                            >
+                              <el-icon class="mr-1">
+                                <i class="fa-solid fa-key"></i>
+                              </el-icon>{{ t('keyBoxInterface') }}
+                            </el-link>
+                            {{ t('addProviderReturnSelect') }}
+                            {{ t('addText2imgNotice') }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <el-form :model="text2imgSettings" class="settings-form"  label-position="top">
                   <div class="tool-item">
                     <div class="tool-header">
@@ -5829,29 +5908,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-select>                        
                       </el-form-item>
                     </div>
-                    <el-alert
-                      type="info"
-                      :closable="false"
-                      class="mb-2"
-                    >
-                      <template #default>
-                        <div class="alert-content">
-                          {{ t('firstTimeUse') }}
-                          <el-link
-                            type="primary"
-                            :underline="false"
-                            class="font-medium"
-                            @click="switchToApiBox"
-                          >
-                            <el-icon class="mr-1">
-                              <i class="fa-solid fa-key"></i>
-                            </el-icon>{{ t('keyBoxInterface') }}
-                          </el-link>
-                          {{ t('addProviderReturnSelect') }}
-                          {{ t('addText2imgNotice') }}
-                        </div>
-                      </template>
-                    </el-alert>
                   </div>
                   <div class="tool-item" v-show="text2imgSettings.engine === 'openaiChat'">
                     <div class="tool-header">
@@ -5919,6 +5975,28 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
              <!-- 语音识别界面 -->
               <div v-show="subMenu === 'asr'" class="page">
+                <!-- 顶部全局设置区域 (模型配置样式优化) -->
+                <div class="market-link-banner model-config-banner">
+                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
+                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
+                  
+                  <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
+                    
+                    <!-- 左侧：图标和说明文案 -->
+                    <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                      <div class="banner-icon-box">
+                        <i class="fa-solid fa-robot"></i> <!-- 改为机器人图标更贴合模型配置 -->
+                      </div>
+                      <div class="banner-text">
+                        <h3 style="margin: 0">{{ t('asrModelConfigDescription') }}</h3>
+                        <!-- 多行说明文字 -->
+                        <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 12px; line-height: 1.5;">
+                            {{ t('addAsrNotice') }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <el-form :model="asrSettings" class="settings-form"  label-position="top">
                   <div class="tool-item">
                     <div class="tool-header">
@@ -6234,6 +6312,28 @@ function updateElement(el, rawMarkdown, formatFn) {
 
               <!-- 语音合成界面 -->
               <div v-show="subMenu === 'tts'" class="page">
+                <!-- 顶部全局设置区域 (模型配置样式优化) -->
+                <div class="market-link-banner model-config-banner">
+                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
+                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
+                  
+                  <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
+                    
+                    <!-- 左侧：图标和说明文案 -->
+                    <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                      <div class="banner-icon-box">
+                        <i class="fa-solid fa-robot"></i> <!-- 改为机器人图标更贴合模型配置 -->
+                      </div>
+                      <div class="banner-text">
+                        <h3 style="margin: 0">{{ t('ttsModelConfigDescription') }}</h3>
+                        <!-- 多行说明文字 -->
+                        <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 12px; line-height: 1.5;">
+                            {{ t('addTtsNotice') }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <el-form :model="ttsSettings" class="settings-form"  label-position="top">
                   <div class="tool-item">
                     <div class="tool-header">

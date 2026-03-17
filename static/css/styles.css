@@ -8331,7 +8331,7 @@ hr.footnotes-sep {
 .banner-text p {
   margin: 2px 0 0 0 !important;
   font-size: 12px !important;
-  color: var(--el-text-color-secondary) !important;
+  color: var(--text-color) !important;
   line-height: 1.2;
 }
 
