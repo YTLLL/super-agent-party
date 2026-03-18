@@ -15068,7 +15068,7 @@ isSkillInProject(skillId) {
 
       // 核心判断：如果项目里也没有了，说明这是彻底删除，必须警告！
       if (!skill.isProject) {
-        this.$confirm('此操作将彻底删除该技能文件，是否继续？', 'Warning', { type: 'warning' })
+        this.$confirm(this.t('deleteSkillConfirm'), this.t('warning'), { type: 'warning' })
           .then(execDelete).catch(() => {});
       } else {
         // 项目里还有，属于安全操作，静默删除
