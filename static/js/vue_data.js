@@ -484,7 +484,7 @@ let vue_data = {
     },
     networkOptions:[
       { value: 'local', label: 'local' }, 
-      { value: 'global', label: 'global' },
+      { value: 'global', label: 'allDevicesVisible' },
     ],
     imgHostOptions:[
       { value: 'easyImage2', label: 'easyImage2' }
@@ -2028,6 +2028,7 @@ main();`,
     renderedSkillContent: '',
     extensionsPollingTimer: null,
     skillsInProject: [], 
+    projectSkillsDetails: [],
     showBehaviorDialog: false,     // 控制弹窗显示
     currentBehaviorIndex: -1,      // 当前编辑的索引，-1 表示新增
     tempBehavior: null,            // 临时编辑对象，避免直接修改原数据

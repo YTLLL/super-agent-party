@@ -8349,41 +8349,83 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </div>
                   </div>
                   <div class="provider-grid">
-                    <!-- 已安装的 Skills 卡片 -->
-                    <div class="provider-card knowledge-card" v-for="skill in skillsList" :key="skill.id">
+                    <!-- 技能卡片 -->
+                    <div class="provider-card knowledge-card skill-card" v-for="skill in computedSkillsList" :key="skill.id">
+                      
+                      <!-- 头部信息 -->
                       <div class="card-header">
-                        <el-tooltip 
-                          :content="!CLISettings.cc_path ? t('pleaseSelectWorkspaceFirst') : t('syncToProject')" 
-                          placement="top"
-                        >
-                          <el-switch 
-                            :model-value="isSkillInProject(skill.id)"
-                            :disabled="!CLISettings.cc_path"
-                            @change="(val) => toggleSkillInProject(skill.id, val)"
-                          ></el-switch>
-                        </el-tooltip>
+                        <div class="kb-header">
+                          <h3 class="kb-title">{{ skill.name }}</h3>
+                          <el-tag type="info" size="small" effect="plain">v{{ skill.version }}</el-tag>
+                        </div>
                         <div class="card-actions">
-                          <el-button @click="previewSkill(skill.id)" type="info" circle size="small">
+                          <el-button @click="previewSkill(skill.id)" type="info" link size="small">
                             <i class="fa-solid fa-eye"></i>
-                          </el-button>
-                          <el-button @click="removeSkill(skill.id)" type="danger" circle size="small">
-                            <i class="fa-solid fa-trash"></i>
                           </el-button>
                         </div>
                       </div>
-                      <div class="kb-content">
-                        <div class="kb-header">
-                          <h3 class="kb-title">{{ skill.name }}</h3>
-                          <el-tag type="info" size="small">v{{ skill.version }}</el-tag>
+
+                      <!-- 技能内容 -->
+                      <div class="kb-content skill-content-wrapper">
+                        <p class="skill-desc">
+                          {{ skill.description && skill.description.length > 120 
+                            ? skill.description.slice(0, 120) + '...' 
+                            : skill.description }}
+                        </p>
+                        <div class="skill-meta">
+                          <i class="fa-regular fa-file-code"></i> {{ skill.files ? skill.files.length : 0 }} files
                         </div>
-                        <div class="kb-meta">
-                          <p style="font-size: 12px; color: #666; margin-bottom: 5px;">
-                            {{ skill.description && skill.description.length > 200 
-                              ? skill.description.slice(0, 200) + '...' 
-                              : skill.description }}
-                          </p>
-                          <div style="font-size: 11px; color: #909399;">
-                            <i class="fa-regular fa-file"></i> {{ skill.files.length }} files
+                      </div>
+
+                      <!-- 底部状态管理栏 (严格适配你的主题体系) -->
+                      <div class="skill-locations-bar">
+                        <!-- 🌍 全局状态 (Global) -->
+                        <div class="location-pane" :class="{ 'is-active': skill.isGlobal }">
+                          <div class="pane-title"><i class="fa-solid fa-globe"></i> {{ t('global') || 'Global' }}</div>
+                          <div class="pane-action">
+                            <template v-if="skill.isGlobal">
+                              <span class="status-indicator success"><i class="fa-solid fa-circle-check"></i> {{ t('installed') }}</span>
+                              <!-- 传 skill 对象，用于判断是否要弹窗 -->
+                              <el-button @click="removeGlobalSkill(skill)" type="danger" link class="action-icon-btn" :title="t('removeFromGlobal')">
+                                <i class="fa-solid fa-trash-can"></i>
+                              </el-button>
+                            </template>
+                            <template v-else>
+                              <span class="status-indicator pending">{{ t('notInstalled') }}</span>
+                              <!-- 如果全局没有，但项目里有，显示反向同步按钮 -->
+                              <el-button @click="syncToGlobal(skill.id)" type="default" link class="action-icon-btn" :title="t('syncToGlobal') || 'Sync to Global'">
+                                <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                              </el-button>
+                            </template>
+                          </div>
+                        </div>
+
+
+                        <!-- 分割线 -->
+                        <div class="pane-divider"></div>
+
+                        <!-- 📁 项目状态 (Workspace) -->
+                        <div class="location-pane" :class="{ 'is-active': skill.isProject, 'is-disabled': !CLISettings.cc_path }">
+                          <div class="pane-title">
+                            <i class="fa-solid fa-folder-tree"></i> {{ t('workspace') || 'Project' }}
+                          </div>
+                          <div class="pane-action">
+                            <template v-if="!CLISettings.cc_path">
+                              <span class="status-indicator disabled">{{ t('pleaseSelectWorkspaceFirst') }}</span>
+                            </template>
+                            <template v-else-if="skill.isProject">
+                              <span class="status-indicator success"><i class="fa-solid fa-link"></i> {{ t('synced') }}</span>
+                              <!-- 传 skill 对象，用于判断是否要弹窗 -->
+                              <el-button @click="removeProjectSkill(skill)" type="danger" link class="action-icon-btn" :title="t('removeFromProject')">
+                                <i class="fa-solid fa-unlink"></i>
+                              </el-button>
+                            </template>
+                            <template v-else>
+                              <span class="status-indicator pending">{{ t('notSynced') || 'Not Synced' }}</span>
+                              <el-button @click="syncToProject(skill.id)" type="default" link class="action-icon-btn" :disabled="!skill.isGlobal" :title="t('sync')">
+                                <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                              </el-button>
+                            </template>
                           </div>
                         </div>
                       </div>
@@ -8391,10 +8433,9 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                     <!-- 添加新 Skill 卡片 -->
                     <div class="provider-card add-tile" @click="showAddSkillDialog = true">
-                      <el-icon :size="40" color="#909399"><i class="fa-solid fa-plus"></i></el-icon>
-                      <div style="color: #606266; margin-top: 10px;">{{ t('addSkill') }}</div>
+                      <el-icon :size="40" color="var(--el-text-color-secondary)"><i class="fa-solid fa-plus"></i></el-icon>
+                      <div style="color: var(--el-text-color-regular); margin-top: 10px; font-weight: 500;">{{ t('addSkill') }}</div>
                     </div>
-
                   </div>
                 </el-tab-pane>
               </el-tabs>
