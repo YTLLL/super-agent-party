@@ -14991,20 +14991,120 @@ isSkillInProject(skillId) {
   return this.skillsInProject && this.skillsInProject.includes(skillId);
 },
 
-// 获取当前项目下的技能状态
-async fetchProjectSkillsStatus() {
-  if (!this.CLISettings.cc_path) {
-    this.skillsInProject = [];
-    return;
-  }
-  try {
-    const res = await fetch(`/api/skills/project-status?path=${encodeURIComponent(this.CLISettings.cc_path)}`);
-    const data = await res.json();
-    this.skillsInProject = data.installed_ids || [];
-  } catch (e) {
-    console.error("获取项目技能状态失败", e);
-  }
-},
+    // 1. 升级获取项目状态：顺便保存详细信息
+    async fetchProjectSkillsStatus() {
+      if (!this.CLISettings.cc_path) {
+        this.skillsInProject = [];
+        this.projectSkillsDetails = [];
+        return;
+      }
+      try {
+        const res = await fetch(`/api/skills/project-status?path=${encodeURIComponent(this.CLISettings.cc_path)}`);
+        if (res.ok) {
+          const data = await res.json();
+          this.skillsInProject = data.installed_ids || [];
+          this.projectSkillsDetails = data.project_skills || []; // 存入详情
+        }
+      } catch (e) {
+        console.error("获取项目技能状态失败", e);
+      }
+    },
+
+    // 2. 反向同步：从项目 -> 全局
+    async syncToGlobal(skillId) {
+      try {
+        const response = await fetch('/api/skills/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ skill_id: skillId, project_path: this.CLISettings.cc_path, action: 'sync_to_global' })
+        });
+        const data = await response.json();
+        if (response.ok && data.status === 'success') {
+          showNotification('Skill synced to Global', 'success');
+          this.fetchSkills(); // 刷新全局状态即可
+        } else {
+          throw new Error(data.detail || 'Sync failed');
+        }
+      } catch (e) {
+        showNotification(e.message, 'error');
+      }
+    },
+
+    // 3. 正向同步：从全局 -> 项目 (原逻辑略微简化)
+    async syncToProject(skillId) {
+      if (!this.CLISettings.cc_path) return;
+      try {
+        const response = await fetch('/api/skills/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ skill_id: skillId, project_path: this.CLISettings.cc_path, action: 'install' })
+        });
+        if (response.ok) {
+          showNotification('Skill synced to Workspace', 'success');
+          this.fetchProjectSkillsStatus(); // 刷新项目状态
+        } else {
+          throw new Error('Sync failed');
+        }
+      } catch (e) {
+        showNotification(e.message, 'error');
+      }
+    },
+
+    // 4. 从全局删除（智能提示）
+    async removeGlobalSkill(skill) {
+      const execDelete = async () => {
+        try {
+          const response = await fetch(`/api/skills/${encodeURIComponent(skill.id)}`, { method: 'DELETE' });
+          if (response.ok) {
+            showNotification('Removed globally', 'success');
+            await this.fetchSkills(); 
+          } else {
+            throw new Error('Remove failed');
+          }
+        } catch (e) {
+          showNotification(e.message, 'error');
+        }
+      };
+
+      // 核心判断：如果项目里也没有了，说明这是彻底删除，必须警告！
+      if (!skill.isProject) {
+        this.$confirm(this.t('deleteSkillConfirm'), this.t('warning'), { type: 'warning' })
+          .then(execDelete).catch(() => {});
+      } else {
+        // 项目里还有，属于安全操作，静默删除
+        execDelete();
+      }
+    },
+
+    // 5. 从项目删除（智能提示）
+    async removeProjectSkill(skill) {
+      const execDelete = async () => {
+        try {
+          const response = await fetch('/api/skills/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skill_id: skill.id, project_path: this.CLISettings.cc_path, action: 'remove' })
+          });
+          if (response.ok) {
+            showNotification('Removed from Workspace', 'success');
+            await this.fetchProjectSkillsStatus(); 
+          } else {
+            throw new Error('Remove failed');
+          }
+        } catch (e) {
+          showNotification(e.message, 'error');
+        }
+      };
+
+      // 核心判断：如果全局里也没有了，说明这是彻底删除，必须警告！
+      if (!skill.isGlobal) {
+        this.$confirm('此操作将彻底删除该技能文件，是否继续？', 'Warning', { type: 'warning' })
+          .then(execDelete).catch(() => {});
+      } else {
+        // 全局里还有，属于安全操作，静默删除
+        execDelete();
+      }
+    },
 
 // 切换技能同步状态
 async toggleSkillInProject(skillId, isInstall) {

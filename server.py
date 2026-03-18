@@ -1645,12 +1645,12 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
             print(f"[Skill Loader] 扫描技能失败: {e}")
         permission_message = ""
         # 权限模式提示（原有逻辑，但修复了变量名）
-        if permissionMode != "plan":
+        if permissionMode != "plan" and permissionMode != "cowork":
             permission_message = "你当前处于执行模式，你可以自由地使用所有工具，但请注意不要滥用权限！如果有更安全的工具，请不要直接使用bash命令！"
             content_append(request.messages, 'system', permission_message)
         elif permissionMode == "cowork":
             if not request.is_sub_agent:
-                permission_message += "你当前处于协作模式，对于需要**调用工具**完成的**任何事情**，你都倾向于将任何任务改写成一个或者多个简单子任务，**交给create_subtask工具执行**，这些子智能体将在后台异步执行这些任务，当你创建任务后，**请不要查询这些任务的结果**，因为它们可能还在执行中，请当用户询问时再查询任务进度即可!当你需要调用工具时，尽可能的使用子任务来执行，这样可以避免直接调用工具阻塞对话！"
+                permission_message += "你当前处于协作模式，对于需要**调用工具**完成的**任何事情**（比如联网搜索，查询知识库，使用skills里的功能，写代码或者一个报告等等工作），你都必须将任何任务改写成一个或者多个简单子任务，**交给create_subtask工具执行**，这些子智能体将在后台异步执行这些任务，当你创建任务后，**请不要查询这些任务的结果**，因为它们可能还在执行中，请当用户询问时再查询任务进度即可!当你需要调用工具时，尽可能的使用子任务来执行，这样可以避免直接调用工具阻塞对话！"
                 content_append(request.messages, 'system', permission_message)
             else:
                 pass
