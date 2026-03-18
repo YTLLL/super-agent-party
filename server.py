@@ -885,7 +885,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
 
     # 新增：本地环境 CLI 工具（假设保存在 py/local_cli_tool.py）
     from py.cli_tool import (
-        bash_tool_local,           # 本地 bash 执行（对应 docker_sandbox_async）
+        shell_tool_local,           # 本地 bash 执行（对应 docker_sandbox_async）
         list_files_tool_local,     # 本地文件列表
         read_file_tool_local,      # 本地文件读取
         read_file_range_tool_local, # <--- 新增导入
@@ -999,7 +999,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "read_skill_tool": read_skill_tool,
         
         # 本地环境工具（新增）- 与 Docker 版本功能相同但操作本地文件系统
-        "bash_tool_local": bash_tool_local,                     # 本地 bash 执行
+        "shell_tool_local": shell_tool_local,                     # 本地 bash 执行
         "list_files_tool_local": list_files_tool_local,         # 本地文件列表
         "read_file_tool_local": read_file_tool_local,           # 本地文件读取
         "read_file_range_tool_local": read_file_range_tool_local, # <--- 映射新工具
@@ -1027,7 +1027,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "edit_file_tool",
         "edit_file_patch_tool",   
         "todo_write_tool",        
-        "bash_tool_local",
+        "shell_tool_local",
         "edit_file_tool_local",
         "edit_file_patch_tool_local",
         "todo_write_tool_local",
@@ -1389,7 +1389,7 @@ def get_system_context() -> str:
 ⚠️ 重要提示：
 1. {path_hint}
 2. {command_hint}
-3. 执行 bash_tool_local 时，命令必须符合当前系统的语法规范
+3. 执行 shell_tool_local 时，命令必须符合当前系统的语法规范
 4. 路径分隔符：Windows 使用反斜杠(\\)，Unix 使用正斜杠(/)
 5. 如果需要使用网络端口，请尽可能选择不常用的端口，避免冲突，例如：10000 以上的端口
 6. 请尽量使用相对路径，避免使用绝对路径，以免在跨平台时出现问题
@@ -5109,7 +5109,7 @@ async def execute_tool_manually(request: Request):
 
     # 新增：本地环境 CLI 工具（假设保存在 py/local_cli_tool.py）
     from py.cli_tool import (
-        bash_tool_local,           # 本地 bash 执行（对应 docker_sandbox_async）
+        shell_tool_local,           # 本地 bash 执行（对应 docker_sandbox_async）
         list_files_tool_local,     # 本地文件列表
         read_file_tool_local,      # 本地文件读取
         read_file_range_tool_local, # <--- 新增导入
@@ -5223,7 +5223,7 @@ async def execute_tool_manually(request: Request):
         "read_skill_tool": read_skill_tool,
         
         # 本地环境工具（新增）- 与 Docker 版本功能相同但操作本地文件系统
-        "bash_tool_local": bash_tool_local,                     # 本地 bash 执行
+        "shell_tool_local": shell_tool_local,                     # 本地 bash 执行
         "list_files_tool_local": list_files_tool_local,         # 本地文件列表
         "read_file_tool_local": read_file_tool_local,           # 本地文件读取
         "read_file_range_tool_local": read_file_range_tool_local, # <--- 映射新工具
