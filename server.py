@@ -3617,6 +3617,15 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 "reasoning_content": "",
                             }
                         )
+
+                        # 【核心修复】：如果工具返回的是审批请求，立即跳出循环，结束当前流，等待前端手动调用恢复
+                        if isinstance(results, str) and '"approval_required"' in results:
+                            try:
+                                parsed_res = json.loads(results)
+                                if parsed_res.get("type") == "approval_required":
+                                    break  # 立即跳出 while 循环，不再进行下一轮 LLM 推理
+                            except Exception:
+                                pass
                     # 如果启用推理模型
                     if settings['reasoner']['enabled'] or enable_thinking:
                         if tools:

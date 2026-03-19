@@ -114,7 +114,7 @@ let vue_data = {
     },
     fastSettings: {
       enabled: false, // 默认不启用
-      triggerMode: 'always', // 默认触发模式为快捷键
+      triggerMode: 'conditional', // 默认触发模式条件触发
       model: '',
       base_url: '',
       api_key: '',

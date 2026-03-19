@@ -75,7 +75,7 @@
     },
     "fast": {
       "enabled":false,
-      "triggerMode": "always",
+      "triggerMode": "conditional",
       "model": "",
       "base_url": "",
       "api_key": "",
