@@ -26,10 +26,10 @@
 
 ### 🚀 **An AI desktop companion with endless possibilities!**  
 
-#### VRM Desktop Pet: Supports uploading custom VRM models to create your exclusive desktop companion
+#### VRM Desktop Pet: Supports uploading custom VRM models, actions, and 3D scenes to create a personalized desktop companion.
 ![image](doc/image/img-2/vrm.jpeg)
 
-#### Task Center: Enables your AI agents to perform any advanced tasks in the background, automatically controlling your computer to get work done
+#### Task Center: Enable your AI agents to perform any advanced tasks in the background, automatically control your computer to get work done, supporting MCP and Agent Skills.
 ![image](doc/image/img-2/task.jpeg)
 
 #### Multi-Role Group Chat: Supports tavern character cards and long-term memory, allowing you to chat with multiple characters simultaneously!
@@ -38,13 +38,13 @@
 #### Instant Messaging Bot: Supports one-click deployment to QQ, Feishu, DingTalk, Telegram, Discord, Slack
 ![image](doc/image/img-2/im.jpeg)
 
-#### Live Streaming Bot: Supports one-click deployment to Bilibili, YouTube, Twitch
+#### Live Streaming Bot: Supports one-click deployment to Bilibili, YouTube, Twitch, and enables 360-degree panoramic live streaming.
 ![image](doc/image/img-2/yt.jpeg)
 
 #### AI Browser: Equips your AI agents with their own browser, supporting automatic control
 ![image](doc/image/img-2/browser.jpeg)
 
-#### Extension System: Supports installing extensions and creating new ones yourself. The image below shows a galgame extension
+#### Extension System: Supports installing extensions and creating new ones. The image below shows a galgame extension. All extensions can be opened either in an independent window or in a sidebar.
 ![image](doc/image/img-2/ext.jpeg)
 
 #### Developer-Friendly: Offers open OpenAI API interfaces and MCP interfaces, allowing agents to be externally connected

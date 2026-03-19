@@ -25,10 +25,10 @@
 
 ### 🚀 **一款拥有无限可能的AI桌面伴侣！**
 
-#### VRM桌宠：支持上传自定义VRM模型，打造专属桌面伴侣
+#### VRM桌宠：支持上传自定义VRM模型、动作、3D场景，打造专属桌面伴侣
 ![image](doc/image/img-1/vrm.jpeg)
 
-#### 任务中心：让你的AI智能体可以在后台执行任何高级任务，自动控制电脑帮你干活
+#### 任务中心：让你的AI智能体可以在后台执行任何高级任务，自动控制电脑帮你干活，支持 MCP 和 Agent Skills
 ![image](doc/image/img-1/task.jpeg)
 
 #### 多角色群聊：支持酒馆角色卡，支持长期记忆，你可以同时和多个角色一起聊天！
@@ -37,13 +37,13 @@
 #### 即时通讯机器人：支持一键部署到QQ、飞书、钉钉、Telegram、Discord、Slack
 ![image](doc/image/img-1/im.jpeg)
 
-#### 直播机器人：支持一键部署到B站、YouTube、twitch
+#### 直播机器人：支持一键部署到B站、YouTube、twitch，支持360度全景直播
 ![image](doc/image/img-1/yt.jpeg)
 
 #### AI浏览器：让你的AI智能体拥有自己的浏览器，支持自动控制
 ![image](doc/image/img-1/browser.jpeg)
 
-#### 扩展系统：支持安装扩展，和自己创造新的扩展，下图为galgame扩展
+#### 扩展系统：支持安装扩展，和自己创造新的扩展，下图为galgame扩展，扩展均支持独立窗口或者侧边栏两种方式打开
 ![image](doc/image/img-1/ext.jpeg)
 
 #### 开发者友好：开放openai API接口、MCP接口，可以将智能体对外转接
