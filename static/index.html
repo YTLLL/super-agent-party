@@ -12446,23 +12446,31 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                   <!-- 桌宠配置页面 -->
                   <div v-show="subMenu === 'table_pet'">
-                    <el-form class="settings-form" :model="VRMConfig" label-position="top">
-                      <div class="tool-item">
-                        <!-- 桌宠机器人配置头部 -->
-                        <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
-                          <span>
-                            <el-icon><i class="fa-solid fa-user-ninja"></i></el-icon>
-                            {{ t('table_pet_config') }}
+
+                  <div class="market-link-banner" @click="openRepository('https://www.agentparty.top/blog/en/article-0yuan.html')">
+
+                    <div class="banner-accent-bar">VRM Table Pet</div>
+                    
+                    <div class="banner-main">
+                      <!-- 图标换成闪电 -->
+                      <div class="banner-icon-box">
+                        <i class="fa-solid fa-user-ninja"></i>
+                      </div>
+                      
+                      <div class="banner-text">
+                        <h3>{{ t('table_pet_config')}}</h3>
+                        <p>
                             <el-link
                               type="primary"
                               :underline="false"
-                              href="https://www.agentparty.top/article.html?lang=zh&slug=0yuan" 
+                              href="https://www.agentparty.top/blog/en/article-0yuan.html" 
                               target="_blank"
                             >
                               <el-icon class="mr-1">
                                 <i class="fa-solid fa-book-open-reader"></i>
                               </el-icon>{{ t('detailedTutorial') }}
                             </el-link>
+                            <span>{{ '   ' }}</span>
                             <el-link
                               type="primary"
                               :underline="false"
@@ -12473,7 +12481,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 <i class="fa-solid fa-key"></i>
                               </el-icon>{{ t('gotoVroid') }}
                             </el-link>
-                            <span>{{ '  ' }}</span>
+                            <span>{{ '   ' }}</span>
                             <el-link
                               type="primary"
                               :underline="false"
@@ -12484,7 +12492,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 <i class="fa-solid fa-cube"></i>
                               </el-icon>{{ t('gotoVroidHub') }}
                             </el-link>
-                            <span>{{ '  ' }}</span>
+                            <span>{{ '   ' }}</span>
                             <el-link
                               type="primary"
                               :underline="false"
@@ -12495,6 +12503,22 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 <i class="fa-solid fa-cube"></i>
                               </el-icon>{{ t('gotoAplaybox') }}
                             </el-link>
+                        </p>
+                      </div>
+
+                      <div class="banner-action">
+                        <span>GO</span>
+                        <i class="fa-solid fa-arrow-right-long"></i>
+                      </div>
+                    </div>
+                  </div>
+                    <el-form class="settings-form" :model="VRMConfig" label-position="top">
+                      <div class="tool-item">
+                        <!-- 桌宠机器人配置头部 -->
+                        <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
+                          <span>
+                            <el-icon><i class="fa-solid fa-user-ninja"></i></el-icon>
+                            {{ t('table_pet_config') }}
                           </span>
                           <div>
                             <!-- 启动按钮 -->
