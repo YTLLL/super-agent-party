@@ -7485,17 +7485,43 @@ handleCreateSlackSeparator(val) {
   // 1. 按下：开始录音
   async handlePttPress(event) {
     this.stopAllAudioPlayback(); // 停止所有正在播放的音频
-    // 【修复核心】手动阻止默认事件，解决 _withMods 报错
+    
+    // 手动阻止默认事件，解决 _withMods 报错
     if (event && event.preventDefault) {
-      // 允许触摸滚动，但阻止长按弹出菜单等怪异行为
       if (event.type !== 'touchstart') {
         event.preventDefault();
       }
     }
 
     if (this.isPttRecording || this.isProcessingPtt) return;
-    
     this.isPttRecording = true;
+
+    // ==========================================
+    // 分支 A: Web Speech API 模式 (直接复用你现有的 initWebSpeechAPI)
+    // ==========================================
+    if (this.asrSettings.engine === 'webSpeech') {
+      // 如果还没有初始化识别对象，则进行初始化
+      if (!this.recognition) {
+        const success = this.initWebSpeechAPI();
+        if (!success) {
+          this.isPttRecording = false;
+          return;
+        }
+      }
+      
+      try {
+        this.recognition.start();
+        if (navigator.vibrate) navigator.vibrate(50);
+      } catch (e) {
+        // 捕获“已经启动”的错误，避免控制台报错
+        console.warn("Web Speech already started:", e);
+      }
+      return; // ⚠️ 关键：直接跳出，不执行下方的 MediaRecorder 逻辑
+    }
+
+    // ==========================================
+    // 分支 B: 其他 ASR 模式 (二进制流模式：Sherpa/FunASR/OpenAI)
+    // ==========================================
     this.audioChunks = []; // 重置数据桶
 
     try {
@@ -7521,21 +7547,56 @@ handleCreateSlackSeparator(val) {
 
     } catch (error) {
       console.error("PTT Start Error:", error);
-      showNotification(this.t('micPermissionDenied'), 'error');
+      // 如果定义了 showNotification 则调用，否则用 alert 兜底
+      if (typeof showNotification === 'function') {
+        showNotification(this.t('micPermissionDenied'), 'error');
+      }
       this.isPttRecording = false;
     }
   },
 
   // 2. 松开：停止录音 -> 转码 -> 发送
   async handlePttRelease(event) {
-    // 【修复核心】手动阻止默认事件
+    // 手动阻止默认事件
     if (event && event.preventDefault && event.type !== 'touchend') {
        event.preventDefault();
     }
 
-    if (!this.isPttRecording || !this.pttMediaRecorder) return;
-
+    if (!this.isPttRecording) return;
     this.isPttRecording = false;
+
+    // ==========================================
+    // 分支 A: Web Speech API 模式
+    // ==========================================
+    if (this.asrSettings.engine === 'webSpeech') {
+      if (this.recognition) {
+        // 【核心修复】：创建一个一次性的监听器，确保在文字识别彻底完成后发送
+        const sendAfterRecognition = () => {
+          // 移除监听器，避免下次重复触发
+          this.recognition.removeEventListener('end', sendAfterRecognition);
+          
+          // 给一点点延迟（100ms），确保 handleASRResult 已经把最后的文字更新到 userInput
+          setTimeout(() => {
+            if (this.userInput && this.userInput.trim() !== '') {
+              this.sendMessage(); // 触发发送逻辑
+            }
+          }, 100);
+        };
+
+        // 绑定一次性结束监听
+        this.recognition.addEventListener('end', sendAfterRecognition);
+        
+        this.recognition.stop(); // 停止识别
+        if (navigator.vibrate) navigator.vibrate(30);
+      }
+      return; 
+    }
+
+    // ==========================================
+    // 分支 B: 其他 ASR 模式 (二进制流停止逻辑)
+    // ==========================================
+    if (!this.pttMediaRecorder) return;
+
     this.isProcessingPtt = true;
 
     // 停止录制
@@ -7551,12 +7612,12 @@ handleCreateSlackSeparator(val) {
     
     if (navigator.vibrate) navigator.vibrate(30);
 
-    // 等待录制彻底结束
+    // 等待录制彻底结束并合并数据
     await new Promise(resolve => {
       this.pttMediaRecorder.onstop = () => resolve();
     });
 
-    // 处理音频
+    // 处理音频逻辑 (原有的 processAndSendPttAudio)
     await this.processAndSendPttAudio();
     
     this.isProcessingPtt = false;
