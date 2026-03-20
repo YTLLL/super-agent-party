@@ -7484,6 +7484,7 @@ handleCreateSlackSeparator(val) {
     },
   // 1. 按下：开始录音
   async handlePttPress(event) {
+    this.stopAllAudioPlayback(); // 停止所有正在播放的音频
     // 【修复核心】手动阻止默认事件，解决 _withMods 报错
     if (event && event.preventDefault) {
       // 允许触摸滚动，但阻止长按弹出菜单等怪异行为

@@ -369,7 +369,7 @@ locales = {}
 global_http_client = None  # 用于共享底层的 TCP 连接池
 openai_tts_clients_cache = {}  # 缓存 OpenAI TTS Client
 tetos_speakers_cache = {}      # 缓存 Tetos Speaker 对象
-
+openai_asr_clients_cache = {}
 _TOOL_HOOKS = {}
 ALLOWED_EXTENSIONS = [
   # 办公文档
@@ -6339,12 +6339,15 @@ async def asr_transcription(
     HTTP版本的ASR接口
     支持多种音频格式，根据配置自动选择ASR引擎
     """
+    # 声明使用全局缓存
+    global openai_asr_clients_cache, settings
+
     try:
-        # 读取上传的音频文件
+        # 1. 读取上传的音频文件
         audio_bytes = await audio.read()
         print(f"Received audio file: {audio.filename}, size: {len(audio_bytes)} bytes")
         
-        # 自动检测格式（如果用户没有指定）
+        # 2. 自动检测格式
         if format == "auto":
             if audio.filename:
                 file_ext = audio.filename.split('.')[-1].lower()
@@ -6352,23 +6355,40 @@ async def asr_transcription(
             else:
                 format = 'wav'
         
-        # 加载设置
-        settings = await load_settings()
-        asr_settings = settings.get('asrSettings', {})
+        # 3. 加载设置 (为了性能，可以直接使用全局变量 settings，或者重新加载)
+        current_settings = await load_settings()
+        asr_settings = current_settings.get('asrSettings', {})
         asr_engine = asr_settings.get('engine', 'openai')
         
         result = ""
         
+        # ==========================================
+        # ASR 引擎分支：OpenAI (Whisper)
+        # ==========================================
         if asr_engine == "openai":
-            # OpenAI ASR
-            print("Using OpenAI ASR engine")
-            audio_file = BytesIO(audio_bytes)
-            audio_file.name = f"audio.{format}"
+            api_key = asr_settings.get('api_key', '')
+            base_url = asr_settings.get('base_url', '') or "https://api.openai.com/v1"
             
-            client = AsyncOpenAI(
-                api_key=asr_settings.get('api_key', ''),
-                base_url=asr_settings.get('base_url', '') or "https://api.openai.com/v1"
-            )
+            if not api_key:
+                raise HTTPException(status_code=400, detail="OpenAI ASR API密钥未配置")
+
+            # --- 核心改进：使用缓存的客户端 ---
+            cache_key = (api_key, base_url)
+            if cache_key not in openai_asr_clients_cache:
+                print(f"Initializing new OpenAI ASR Client for: {base_url}")
+                openai_asr_clients_cache[cache_key] = AsyncOpenAI(
+                    api_key=api_key,
+                    base_url=base_url
+                )
+            client = openai_asr_clients_cache[cache_key]
+            # --------------------------------
+
+            print(f"Using OpenAI ASR engine ({asr_settings.get('model', 'whisper-1')})")
+            
+            # 包装音频数据
+            audio_file = BytesIO(audio_bytes)
+            # OpenAI SDK 要求文件必须有特定的名字后缀来判断类型
+            audio_file.name = f"audio.{format}"
             
             response = await client.audio.transcriptions.create(
                 file=audio_file,
@@ -6376,15 +6396,21 @@ async def asr_transcription(
             )
             result = response.text
             
+        # ==========================================
+        # ASR 引擎分支：FunASR
+        # ==========================================
         elif asr_engine == "funasr":
-            # FunASR（强制使用离线模式）
             print("Using FunASR engine (offline mode)")
+            # 假设 funasr_recognize_offline 内部已处理好性能问题
             result = await funasr_recognize_offline(audio_bytes, asr_settings)
             
+        # ==========================================
+        # ASR 引擎分支：Sherpa (本地)
+        # ==========================================
         elif asr_engine == "sherpa":
             from py.sherpa_asr import sherpa_recognize
-            # Sherpa ASR
             print("Using Sherpa ASR engine")
+            # Sherpa 通常是本地模型推理，损耗在于 CPU/GPU，不在连接建立
             result = await sherpa_recognize(audio_bytes)
         
         else:
@@ -6397,11 +6423,11 @@ async def asr_transcription(
                 }
             )
         
-        # 返回识别结果
+        # 4. 返回识别结果
         return JSONResponse(
             content={
                 "success": True,
-                "text": result.strip(),
+                "text": result.strip() if result else "",
                 "engine": asr_engine,
                 "format": format
             }
@@ -6409,6 +6435,8 @@ async def asr_transcription(
         
     except Exception as e:
         print(f"ASR HTTP interface error: {e}")
+        import traceback
+        traceback.print_exc()
         
         return JSONResponse(
             status_code=500,
