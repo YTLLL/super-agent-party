@@ -365,6 +365,11 @@ ChromeMCP_client = None
 sql_client = None
 mcp_client_list = {}
 locales = {}
+
+global_http_client = None  # 用于共享底层的 TCP 连接池
+openai_tts_clients_cache = {}  # 缓存 OpenAI TTS Client
+tetos_speakers_cache = {}      # 缓存 Tetos Speaker 对象
+
 _TOOL_HOOKS = {}
 ALLOWED_EXTENSIONS = [
   # 办公文档
@@ -496,6 +501,10 @@ from py.node_runner import node_mgr
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await _copy_default_skills()
+    global global_http_client # 声明全局变量
+    # 1. 初始化一个全局的、带连接池的 HTTP 客户端
+    timeout_config = httpx.Timeout(None, connect=10.0)
+    global_http_client = httpx.AsyncClient(timeout=timeout_config)
     # 1. 准备所有独立的初始化任务
     from py.get_setting import init_db, init_covs_db
     from tzlocal import get_localzone
@@ -712,6 +721,8 @@ async def lifespan(app: FastAPI):
             await node_mgr.stop(ext_id)
         except Exception as e:
             print(f"Error stopping {ext_id}: {e}")
+    if global_http_client:
+        await global_http_client.aclose()
     print("All Node processes terminated.")
 
 # WebSocket端点增加连接管理
@@ -6723,33 +6734,36 @@ async def get_tts_status():
 @app.post("/tts")
 async def text_to_speech(request: Request):
     import edge_tts
+    import subprocess
+    
+    # 声明全局缓存和客户端
+    global global_http_client, openai_tts_clients_cache, tetos_speakers_cache
+
     try:
         data = await request.json()
-        text = data['text']
-        if text == "":
+        text = data.get('text', '')
+        if not text:
             return JSONResponse(status_code=400, content={"error": "Text is empty"})
         
         # 移动端专用：强制使用opus格式
         mobile_optimized = data.get('mobile_optimized', False)
         target_format = "opus" if mobile_optimized else data.get('format', 'mp3')
         
-        new_voice = data.get('voice','default')
-        tts_settings = data['ttsSettings']
-        if new_voice in tts_settings['newtts'] and new_voice!='default':
-            # 获取新声音的配置
+        new_voice = data.get('voice', 'default')
+        tts_settings = data.get('ttsSettings', {})
+        
+        # 处理声音配置继承逻辑
+        if new_voice in tts_settings.get('newtts', {}) and new_voice != 'default':
             voice_settings = tts_settings['newtts'][new_voice]
             parent_settings = tts_settings
             
-            # 从父配置继承关键字段（只继承非空值）
             inherited_fields = ['api_key', 'base_url', 'model', 'selectedProvider', 'vendor']
             for field in inherited_fields:
-                # 只在子配置中不存在或为空，且父配置中有非空值时继承
                 child_value = voice_settings.get(field, '')
                 parent_value = parent_settings.get(field, '')
                 if not child_value and parent_value:
                     voice_settings[field] = parent_value
             
-            # 如果有selectedProvider但仍缺少api_key，从modelProviders中查找
             selected_provider_id = voice_settings.get('selectedProvider')
             if selected_provider_id and not voice_settings.get('api_key'):
                 model_providers = parent_settings.get('modelProviders', [])
@@ -6760,777 +6774,331 @@ async def text_to_speech(request: Request):
                         voice_settings['model'] = provider.get('modelId', '')
                         voice_settings['vendor'] = provider.get('vendor', '')
                         break
-            
             tts_settings = voice_settings
-        index = data['index']
+
+        index = data.get('index', 0)
         tts_engine = tts_settings.get('engine', 'edgetts')
                 
         print(f"TTS请求 - 引擎: {tts_engine}, 格式: {target_format}, 移动端优化: {mobile_optimized}")
                 
+        # ==========================================
+        # 1. EdgeTTS 引擎
+        # ==========================================
         if tts_engine == 'edgetts':
             edgettsLanguage = tts_settings.get('edgettsLanguage', 'zh-CN')
             edgettsVoice = tts_settings.get('edgettsVoice', 'XiaoyiNeural')
             rate = tts_settings.get('edgettsRate', 1.0)
             full_voice_name = f"{edgettsLanguage}-{edgettsVoice}"
             
-            # 飞书优化：稍微降低语速
             if mobile_optimized:
                 rate = min(rate * 0.95, 1.1)
             
             rate_text = "+0%"
             if rate >= 1.0:
-                rate_pent = (rate - 1.0) * 100
-                rate_text = f"+{int(rate_pent)}%"
+                rate_text = f"+{int((rate - 1.0) * 100)}%"
             elif rate < 1.0:
-                rate_pent = (1.0 - rate) * 100
-                rate_text = f"-{int(rate_pent)}%"
+                rate_text = f"-{int((1.0 - rate) * 100)}%"
             
             async def generate_audio():
                 communicate = edge_tts.Communicate(text, full_voice_name, rate=rate_text)
-                
                 if target_format == "opus":
-                    # 需要转换为opus，收集完整数据
                     audio_chunks = []
                     async for chunk in communicate.stream():
                         if chunk["type"] == "audio":
                             audio_chunks.append(chunk["data"])
                     
                     full_audio = b''.join(audio_chunks)
-                    
-                    # 【修复点 2】放入线程池 + 解包元组
                     convert_result = await asyncio.to_thread(convert_to_opus_simple, full_audio)
-                    if isinstance(convert_result, tuple):
-                        opus_audio = convert_result[0]
-                    else:
-                        opus_audio = convert_result
+                    opus_audio = convert_result[0] if isinstance(convert_result, tuple) else convert_result
                     
-                    # 分块返回opus数据
                     chunk_size = 4096
                     for i in range(0, len(opus_audio), chunk_size):
                         yield opus_audio[i:i + chunk_size]
                 else:
-                    # 真流式
                     async for chunk in communicate.stream():
                         if chunk["type"] == "audio":
                             yield chunk["data"]
 
-            # 设置正确的媒体类型和文件名
-            if target_format == "opus":
-                media_type = "audio/ogg"  # opus通常包装在ogg容器中
-                filename = f"tts_{index}.opus"
-            else:
-                media_type = "audio/mpeg"  # EdgeTTS默认返回mp3
-                filename = f"tts_{index}.mp3"
+            media_type = "audio/ogg" if target_format == "opus" else "audio/mpeg"
+            filename = f"tts_{index}.opus" if target_format == "opus" else f"tts_{index}.mp3"
             
             return StreamingResponse(
                 generate_audio(),
                 media_type=media_type,
-                headers={
-                    "Content-Disposition": f"inline; filename={filename}",
-                    "X-Audio-Index": str(index),
-                    "X-Audio-Format": target_format
-                }
+                headers={"Content-Disposition": f"inline; filename={filename}", "X-Audio-Index": str(index), "X-Audio-Format": target_format}
             )
 
+        # ==========================================
+        # 2. CustomTTS 引擎 (使用全局连接池)
+        # ==========================================
         elif tts_engine == 'customTTS':
-            # 从 tts_settings 中获取用户配置的键名，如果未配置，则使用默认值
             key_text = tts_settings.get('customTTSKeyText', 'text')
             key_speaker = tts_settings.get('customTTSKeySpeaker', 'speaker')
             key_speed = tts_settings.get('customTTSKeySpeed', 'speed')
-
-            # 获取用户配置的 speaker 和 speed 的值
             speaker_value = tts_settings.get('customTTSspeaker', '')
             speed_value = tts_settings.get('customTTSspeed', 1.0)
             
-            # 移动端优化
             if mobile_optimized:
                 speed_value = min(speed_value * 0.95, 1.2)
 
-            # 使用用户配置的键名构建 params
-            params = {
-                key_text: text,
-                key_speaker: speaker_value,
-                key_speed: speed_value,
-            }
-            
-            custom_tts_servers_list = tts_settings.get('customTTSserver', 'http://127.0.0.1:9880').split('\n')
-            custom_tts_servers_list = [server for server in custom_tts_servers_list if server.strip()]
-            custom_tt_server = custom_tts_servers_list[index % len(custom_tts_servers_list)]
-            
-            # 获取流式配置
+            params = {key_text: text, key_speaker: speaker_value, key_speed: speed_value}
+            servers = [s for s in tts_settings.get('customTTSserver', 'http://127.0.0.1:9880').split('\n') if s.strip()]
+            custom_tt_server = servers[index % len(servers)]
             custom_streaming = tts_settings.get('customStream', False)
             
             async def generate_audio():
-                safe_tts_url = sanitize_url(
-                    input_url=custom_tt_server,
-                    default_base="http://127.0.0.1:9880", # 这里填你代码里原本的默认 TTS 地址
-                    endpoint=""  # 因为 TTS URL 通常已经包含了路径
-                )
-                timeout_config = httpx.Timeout(None, connect=10.0) 
-                async with httpx.AsyncClient(timeout=timeout_config) as client:
-                    try:
-                        async with client.stream("GET", safe_tts_url, params=params) as response:
-                            response.raise_for_status()
+                safe_url = sanitize_url(input_url=custom_tt_server, default_base="http://127.0.0.1:9880", endpoint="")
+                try:
+                    # 使用全局客户端，无需 async with httpx.AsyncClient()
+                    async with global_http_client.stream("GET", safe_url, params=params) as response:
+                        response.raise_for_status()
+                        if custom_streaming:
+                            async for chunk in response.aiter_bytes():
+                                yield chunk
+                        else:
+                            audio_data = await response.aread()
+                            if target_format == "opus":
+                                convert_result = await asyncio.to_thread(convert_to_opus_simple, audio_data)
+                                audio_data = convert_result[0] if isinstance(convert_result, tuple) else convert_result
                             
-                            if custom_streaming:
-                                # 流式模式：直接返回数据，假设服务端能返回正确格式
-                                async for chunk in response.aiter_bytes():
-                                    if chunk:
-                                        yield chunk
-                            else:
-                                # 非流式模式：收集完整数据，进行格式转换
-                                audio_chunks = []
-                                async for chunk in response.aiter_bytes():
-                                    if chunk:
-                                        audio_chunks.append(chunk)
-                                
-                                full_audio = b''.join(audio_chunks)
-                                
-                                # 转换为opus
-                                if target_format == "opus":
-                                    # 【修复点 3】放入线程池 + 解包元组
-                                    convert_result = await asyncio.to_thread(convert_to_opus_simple, full_audio)
-                                    if isinstance(convert_result, tuple):
-                                        opus_audio = convert_result[0]
-                                    else:
-                                        opus_audio = convert_result
-                                        
-                                    chunk_size = 4096
-                                    for i in range(0, len(opus_audio), chunk_size):
-                                        yield opus_audio[i:i + chunk_size]
-                                else:
-                                    chunk_size = 4096
-                                    for i in range(0, len(full_audio), chunk_size):
-                                        yield full_audio[i:i + chunk_size]
-                                        
-                    except httpx.RequestError as e:
-                        raise HTTPException(status_code=502, detail=f"Custom TTS 连接失败: {str(e)}")
+                            chunk_size = 4096
+                            for i in range(0, len(audio_data), chunk_size):
+                                yield audio_data[i:i + chunk_size]
+                except Exception as e:
+                    raise HTTPException(status_code=502, detail=f"Custom TTS 连接失败: {str(e)}")
 
-            # 根据流式模式和目标格式设置媒体类型和文件名
-            if custom_streaming:
-                # 流式模式：假设返回的格式与目标格式一致
-                if target_format == "opus":
-                    media_type = "audio/ogg"
-                    filename = f"tts_{index}.opus"
-                else:
-                    # 默认假设是wav格式
-                    media_type = "audio/wav"
-                    filename = f"tts_{index}.wav"
-            else:
-                # 非流式模式：保持原有逻辑
-                if target_format == "opus":
-                    media_type = "audio/ogg"
-                    filename = f"tts_{index}.opus"
-                else:
-                    media_type = "audio/wav"
-                    filename = f"tts_{index}.wav"
+            media_type = "audio/ogg" if target_format == "opus" else "audio/wav"
+            filename = f"tts_{index}.opus" if target_format == "opus" else f"tts_{index}.wav"
+            return StreamingResponse(generate_audio(), media_type=media_type, headers={"Content-Disposition": f"inline; filename={filename}", "X-Audio-Index": str(index)})
 
-            return StreamingResponse(
-                generate_audio(),
-                media_type=media_type,
-                headers={
-                    "Content-Disposition": f"inline; filename={filename}",
-                    "X-Audio-Index": str(index),
-                    "X-Audio-Format": target_format
-                }
-            )
-
+        # ==========================================
+        # 3. GSV 引擎 (使用全局连接池)
+        # ==========================================
         elif tts_engine == 'GSV':
-            # GSV生成ogg格式，检查是否可以直接作为opus使用
             audio_path = os.path.join(UPLOAD_FILES_DIR, tts_settings.get('gsvRefAudioPath', ''))
-            if not os.path.exists(audio_path):
-                audio_path = tts_settings.get('gsvRefAudioPath', '')
+            if not os.path.exists(audio_path): audio_path = tts_settings.get('gsvRefAudioPath', '')
 
             gsv_params = {
-                "text": text,
-                "text_lang": tts_settings.get('gsvTextLang', 'zh'),
-                "ref_audio_path": audio_path,
-                "prompt_lang": tts_settings.get('gsvPromptLang', 'zh'),
-                "prompt_text": tts_settings.get('gsvPromptText', ''),
-                "speed_factor": tts_settings.get('gsvRate', 1.0),
-                "sample_steps": tts_settings.get('gsvSample_steps', 4),
-                "streaming_mode": True,
-                "text_split_method": "cut0",
-                "media_type": "ogg",
-                "batch_size": 1,
-                "seed": 42,
+                "text": text, "text_lang": tts_settings.get('gsvTextLang', 'zh'),
+                "ref_audio_path": audio_path, "prompt_lang": tts_settings.get('gsvPromptLang', 'zh'),
+                "prompt_text": tts_settings.get('gsvPromptText', ''), "speed_factor": tts_settings.get('gsvRate', 1.0),
+                "sample_steps": tts_settings.get('gsvSample_steps', 4), "streaming_mode": True,
+                "media_type": "ogg", "batch_size": 1, "seed": 42,
             }
+            if mobile_optimized: gsv_params["speed_factor"] = min(gsv_params["speed_factor"] * 0.95, 1.1)
             
-            if mobile_optimized:
-                gsv_params["speed_factor"] = min(gsv_params["speed_factor"] * 0.95, 1.1)
-            
-            gsvServer_list = tts_settings.get('gsvServer', 'http://127.0.0.1:9880').split('\n')
-            gsvServer_list = [server for server in gsvServer_list if server.strip()]
-            gsvServer = gsvServer_list[index % len(gsvServer_list)]
+            servers = [s for s in tts_settings.get('gsvServer', 'http://127.0.0.1:9880').split('\n') if s.strip()]
+            gsvServer = servers[index % len(servers)]
                 
             async def generate_audio():
-                safe_tts_url = sanitize_url(
-                    input_url=gsvServer,
-                    default_base="http://127.0.0.1:9880", # 这里填你代码里原本的默认 TTS 地址
-                    endpoint="/tts"  # 因为 TTS URL 通常已经包含了路径
-                )
-                timeout_config = httpx.Timeout(None, connect=10.0) 
-                async with httpx.AsyncClient(timeout=timeout_config) as client:
-                    try:
-                        async with client.stream("POST", safe_tts_url, json=gsv_params) as response:
-                            response.raise_for_status()
-                            # 直接流式返回，不管目标格式（假设GSV的ogg内部是opus编码）
-                            async for chunk in response.aiter_bytes():
-                                if chunk:
-                                    yield chunk
-                                
-                    except httpx.HTTPStatusError as e:
-                        error_detail = f"GSV服务错误: {e.response.status_code}"
-                        raise HTTPException(status_code=502, detail=error_detail)
+                safe_url = sanitize_url(input_url=gsvServer, default_base="http://127.0.0.1:9880", endpoint="/tts")
+                try:
+                    async with global_http_client.stream("POST", safe_url, json=gsv_params) as response:
+                        response.raise_for_status()
+                        async for chunk in response.aiter_bytes():
+                            yield chunk
+                except Exception as e:
+                    raise HTTPException(status_code=502, detail=f"GSV服务错误: {str(e)}")
             
-            # 统一使用ogg媒体类型，但文件名根据目标格式调整
-            media_type = "audio/ogg"
-            filename = f"tts_{index}.opus" if target_format == "opus" else f"tts_{index}.ogg"
-            
-            return StreamingResponse(
-                generate_audio(),
-                media_type=media_type,
-                headers={
-                    "Content-Disposition": f"inline; filename={filename}",
-                    "X-Audio-Index": str(index),
-                    "X-Audio-Format": target_format
-                }
-            )
-            
+            return StreamingResponse(generate_audio(), media_type="audio/ogg", headers={"Content-Disposition": f"inline; filename=tts_{index}.opus"})
+
+        # ==========================================
+        # 4. 火山引擎 (使用全局连接池)
+        # ==========================================
         elif tts_engine == 'volcengine':
-            # ==========================================
-            # 火山引擎 (Volcengine) TTS
-            # ==========================================
-            import json
-            import base64
-            
-            # 1. 获取配置
             volc_app_id = tts_settings.get('volcAppId', '')
             volc_access_key = tts_settings.get('volcAccessKey', '')
-            # 这里的 Resource ID 通常是 'volc_tts_release'，或者是特定的部署ID
             volc_resource_id = tts_settings.get('volcResourceId', 'volc_tts_release') 
             volc_voice = tts_settings.get('volcVoice', 'zh_female_cancan_mars_bigtts')
             volc_rate = float(tts_settings.get('volcRate', 1.0))
+            if mobile_optimized: volc_rate = min(volc_rate * 0.95, 1.2)
             
-            # 移动端优化：火山的语速范围通常在 [0.2, 3.0] 之间，1.0为正常
-            if mobile_optimized:
-                volc_rate = min(volc_rate * 0.95, 1.2)
-            
-            # 2. 构造请求
             url = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
-            headers = {
-                "X-Api-App-Id": volc_app_id,
-                "X-Api-Access-Key": volc_access_key,
-                "X-Api-Resource-Id": volc_resource_id,
-                "Content-Type": "application/json",
-                "Connection": "keep-alive"
-            }
-            
-            # 构造 payload
-            # 注意：speed_ratio 是在 req_params 下，不同模型可能支持程度不同，标准V3支持
+            headers = {"X-Api-App-Id": volc_app_id, "X-Api-Access-Key": volc_access_key, "X-Api-Resource-Id": volc_resource_id, "Content-Type": "application/json"}
             payload = {
-                "user": {
-                    "uid": "123456" # 这里的uid可以是任意标识
-                },
+                "user": {"uid": "123456"},
                 "req_params": {
-                    "text": text,
-                    "speaker": volc_voice,
-                    "speed_ratio": volc_rate, 
-                    "audio_params": {
-                        "format": "mp3", # 火山默认输出 mp3 或 pcm，这里选 mp3
-                        "sample_rate": 24000,
-                    },
-                    # 避免 Markdown 符号被朗读出来
+                    "text": text, "speaker": volc_voice, "speed_ratio": volc_rate, 
+                    "audio_params": {"format": "mp3", "sample_rate": 24000},
                     "additions": "{\"disable_markdown_filter\":true}" 
                 }
             }
 
             async def generate_audio():
-                timeout_config = httpx.Timeout(None, connect=10.0)
-                async with httpx.AsyncClient(timeout=timeout_config) as client:
-                    try:
-                        async with client.stream("POST", url, headers=headers, json=payload) as response:
-                            if response.status_code != 200:
-                                error_content = await response.aread()
-                                print(f"[Volcengine Error] Status: {response.status_code}, Body: {error_content}")
-                                raise HTTPException(status_code=502, detail=f"火山引擎返回错误: {response.status_code}")
-
-                            # 准备收集器（如果需要转 opus）
-                            collected_audio = bytearray()
-                            
-                            # httpx 的 aiter_lines 对应 requests 的 iter_lines
-                            async for line in response.aiter_lines():
-                                if not line:
-                                    continue
-                                try:
-                                    data = json.loads(line)
-                                except json.JSONDecodeError:
-                                    continue
-
-                                # 处理错误码
-                                if data.get("code", 0) != 0 and data.get("code", 0) != 20000000:
-                                    # 忽略结束标识 20000000，报告其他错误
-                                    print(f"[Volcengine Error Packet] {data}")
-                                    continue
-                                
-                                if "data" in data and data["data"]:
-                                    chunk_audio = base64.b64decode(data["data"])
-                                    
-                                    if target_format == "opus":
-                                        # 如果需要转 opus，必须先收集所有 mp3 数据
-                                        collected_audio.extend(chunk_audio)
-                                    else:
-                                        # 不需要转换，直接流式输出 mp3
-                                        yield chunk_audio
-                            
-                            # 循环结束后，如果是 opus 模式，进行转换
-                            if target_format == "opus" and len(collected_audio) > 0:
-                                # 【复用既有的转换函数】放入线程池 + 解包元组
-                                convert_result = await asyncio.to_thread(convert_to_opus_simple, bytes(collected_audio))
-                                if isinstance(convert_result, tuple):
-                                    opus_audio = convert_result[0]
-                                else:
-                                    opus_audio = convert_result
-                                
-                                # 分块返回
-                                chunk_size = 4096
-                                for i in range(0, len(opus_audio), chunk_size):
-                                    yield opus_audio[i:i + chunk_size]
-
-                    except httpx.RequestError as e:
-                        print(f"[Volcengine Network Error] {str(e)}")
-                        raise HTTPException(status_code=502, detail=f"火山引擎连接失败: {str(e)}")
-
-            # 设置响应头
-            if target_format == "opus":
-                media_type = "audio/ogg"
-                filename = f"tts_{index}.opus"
-            else:
-                media_type = "audio/mpeg"
-                filename = f"tts_{index}.mp3"
-
-            return StreamingResponse(
-                generate_audio(),
-                media_type=media_type,
-                headers={
-                    "Content-Disposition": f"inline; filename={filename}",
-                    "X-Audio-Index": str(index),
-                    "X-Audio-Format": target_format
-                }
-            )
-
-        elif tts_engine == 'openai':
-            # OpenAI TTS处理
-            openai_config = {
-                'api_key': tts_settings.get('api_key', ''),
-                'model': tts_settings.get('model', 'tts-1'),
-                'voice': tts_settings.get('openaiVoice', 'alloy'),
-                'speed': tts_settings.get('openaiSpeed', 1.0),
-                'base_url': tts_settings.get('base_url', 'https://api.openai.com/v1'),
-                'prompt_text': tts_settings.get('gsvPromptText', ''),
-                'ref_audio': tts_settings.get('gsvRefAudioPath', ''),
-                'streaming': tts_settings.get('openaiStream', False)
-            }
-            
-            if not openai_config['api_key']:
-                raise HTTPException(status_code=400, detail="OpenAI API密钥未配置")
-            
-            speed = float(openai_config['speed'])
-            if mobile_optimized:
-                speed = min(speed * 0.95, 1.2)
-            
-            speed = max(0.25, min(4.0, speed))
-
-            async def generate_audio():
                 try:
-                    client = AsyncOpenAI(
-                        api_key=openai_config['api_key'],
-                        base_url=openai_config['base_url']
-                    )
-                    
-                    # 根据目标格式设置response_format
-                    response_format = target_format if target_format in ['mp3', 'opus', 'aac', 'flac', 'wav', 'pcm'] else 'mp3'
-                    
-                    # 准备请求参数
-                    request_params = {
-                        'model': openai_config['model'],
-                        'input': text,
-                        'speed': speed,
-                        'response_format': response_format
-                    }
-                    
-                    # 处理参考音频
-                    if openai_config['ref_audio']:
-                        audio_file_path = os.path.join(UPLOAD_FILES_DIR, openai_config['ref_audio'])
-                        with open(audio_file_path, "rb") as audio_file:
-                            audio_data = audio_file.read()
-                        audio_type = Path(audio_file_path).suffix[1:]
-                        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-                        audio_uri = f"data:audio/{audio_type};base64,{audio_base64}"
+                    async with global_http_client.stream("POST", url, headers=headers, json=payload) as response:
+                        response.raise_for_status()
+                        collected_audio = bytearray()
+                        async for line in response.aiter_lines():
+                            if not line: continue
+                            data = json.loads(line)
+                            if data.get("code", 0) != 0 and data.get("code", 0) != 20000000: continue
+                            if "data" in data and data["data"]:
+                                chunk_audio = base64.b64decode(data["data"])
+                                if target_format == "opus": collected_audio.extend(chunk_audio)
+                                else: yield chunk_audio
                         
-                        request_params['voice'] = None
-                        request_params['extra_body'] = {
-                            "references": [{"text": openai_config['prompt_text'], "audio": audio_uri}]
-                        }
-                    else:
-                        request_params['voice'] = openai_config['voice']
-                    
-                    # 根据流式设置选择调用方式
-                    if openai_config['streaming']:
-                        # 流式模式 - 真正的流式，无需格式转换
-                        async with client.audio.speech.with_streaming_response.create(**request_params) as response:
-                            async for chunk in response.iter_bytes(chunk_size=4096):
-                                yield chunk
-                                await asyncio.sleep(0)
-                    else:
-                        # 非流式模式
-                        response = await client.audio.speech.create(**request_params)
-                        content = await response.aread()
-                        
-                        # 分块返回
-                        chunk_size = 4096
-                        for i in range(0, len(content), chunk_size):
-                            yield content[i:i + chunk_size]
-                            await asyncio.sleep(0)
-                                
+                        if target_format == "opus" and collected_audio:
+                            res = await asyncio.to_thread(convert_to_opus_simple, bytes(collected_audio))
+                            final = res[0] if isinstance(res, tuple) else res
+                            for i in range(0, len(final), 4096): yield final[i:i + 4096]
                 except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"OpenAI TTS错误: {str(e)}")
-            
-            # 根据目标格式设置媒体类型和文件名
-            if target_format == "opus":
-                media_type = "audio/ogg"  # opus通常用ogg容器
-                filename = f"tts_{index}.opus"
-            elif target_format == "wav":
-                media_type = "audio/wav"
-                filename = f"tts_{index}.wav"
-            elif target_format == "aac":
-                media_type = "audio/aac"
-                filename = f"tts_{index}.aac"
-            elif target_format == "flac":
-                media_type = "audio/flac"
-                filename = f"tts_{index}.flac"
-            else:  # mp3 或其他
-                media_type = "audio/mpeg"
-                filename = f"tts_{index}.mp3"
-            
-            return StreamingResponse(
-                generate_audio(),
-                media_type=media_type,
-                headers={
-                    "Content-Disposition": f"inline; filename={filename}",
-                    "X-Audio-Index": str(index),
-                    "X-Audio-Format": target_format
-                }
-            )
-        elif tts_engine == 'systemtts':
-            import subprocess
-            import uuid
-            # 注意：pyttsx3 不要在全局导入，防止在 Mac 上干扰主线程
+                    raise HTTPException(status_code=502, detail=f"火山引擎错误: {str(e)}")
 
-            # ==========================================
-            # System TTS (Cross-Platform) 引擎
-            # ==========================================
+            media_type = "audio/ogg" if target_format == "opus" else "audio/mpeg"
+            return StreamingResponse(generate_audio(), media_type=media_type)
+
+        # ==========================================
+        # 5. OpenAI TTS (使用实例缓存)
+        # ==========================================
+        elif tts_engine == 'openai':
+            api_key = tts_settings.get('api_key', '')
+            base_url = tts_settings.get('base_url', 'https://api.openai.com/v1')
+            if not api_key: raise HTTPException(status_code=400, detail="API密钥未配置")
             
-            # 1. 获取配置参数
-            system_voice_name = tts_settings.get('systemVoiceName', None)
-            system_rate = tts_settings.get('systemRate', 200)
+            # 获取或创建缓存的客户端
+            cache_key = (api_key, base_url)
+            if cache_key not in openai_tts_clients_cache:
+                openai_tts_clients_cache[cache_key] = AsyncOpenAI(api_key=api_key, base_url=base_url)
+            client = openai_tts_clients_cache[cache_key]
+
+            speed = float(tts_settings.get('openaiSpeed', 1.0))
+            if mobile_optimized: speed = min(speed * 0.95, 1.2)
             
-            # 移动端优化：适当降低语速
-            if mobile_optimized:
-                system_rate = int(system_rate * 0.95)
-            
-            # 2. 定义同步合成函数 (将在线程池中运行)
-            def sync_generate_wav(input_text: str, voice_name: str, rate: int, req_index: int) -> bytes:
-                """
-                跨平台同步合成：
-                - Windows/Linux: 使用 pyttsx3
-                - macOS: 使用系统原生 'say' 命令 (避开 Cocoa 线程限制)
-                """
-                unique_suffix = uuid.uuid4().hex[:8]
-                temp_file = f"temp_tts_{req_index}_{unique_suffix}.wav"
-                # 假设 TOOL_TEMP_DIR 是你全局定义的临时目录，如果没有请改为 "." 或 os.getcwd()
-                temp_filename = os.path.join(TOOL_TEMP_DIR, temp_file)
+            async def generate_audio():
+                response_format = target_format if target_format in ['mp3', 'opus', 'aac', 'flac', 'wav', 'pcm'] else 'mp3'
+                params = {'model': tts_settings.get('model', 'tts-1'), 'input': text, 'speed': max(0.25, min(4.0, speed)), 'response_format': response_format}
                 
+                ref_audio = tts_settings.get('gsvRefAudioPath', '')
+                if ref_audio:
+                    audio_file_path = os.path.join(UPLOAD_FILES_DIR, ref_audio)
+                    audio_base64 = base64.b64encode(open(audio_file_path, "rb").read()).decode('utf-8')
+                    params['extra_body'] = {"references": [{"text": tts_settings.get('gsvPromptText', ''), "audio": f"data:audio/{Path(audio_file_path).suffix[1:]};base64,{audio_base64}"}]}
+                else:
+                    params['voice'] = tts_settings.get('openaiVoice', 'alloy')
+
+                if tts_settings.get('openaiStream', False):
+                    async with client.audio.speech.with_streaming_response.create(**params) as response:
+                        async for chunk in response.iter_bytes(chunk_size=4096): yield chunk
+                else:
+                    response = await client.audio.speech.create(**params)
+                    content = await response.aread()
+                    for i in range(0, len(content), 4096): yield content[i:i + 4096]
+
+            media_map = {"opus": "audio/ogg", "wav": "audio/wav", "aac": "audio/aac", "flac": "audio/flac"}
+            return StreamingResponse(generate_audio(), media_type=media_map.get(target_format, "audio/mpeg"))
+
+        # ==========================================
+        # 6. System TTS (系统原生)
+        # ==========================================
+        elif tts_engine == 'systemtts':
+            system_voice_name = tts_settings.get('systemVoiceName', None)
+            system_rate = int(tts_settings.get('systemRate', 200))
+            if mobile_optimized: system_rate = int(system_rate * 0.95)
+            
+            def sync_generate_wav(input_text, voice_name, rate, req_index):
+                temp_filename = os.path.join(TOOL_TEMP_DIR, f"temp_tts_{req_index}_{uuid.uuid4().hex[:8]}.wav")
                 wav_data = b""
-                current_os = platform.system()
-
                 try:
-                    # -------------------------------------------------
-                    # 分支 A: macOS 系统 (使用 subprocess 调用 say)
-                    # -------------------------------------------------
-                    if current_os == 'Darwin':
-                        # --data-format=LEI16@22050 强制输出标准 WAV (16bit Little Endian, 22.05kHz)
+                    if platform.system() == 'Darwin':
                         cmd = ['say', '-o', temp_filename, '--data-format=LEI16@22050', input_text]
-                        
-                        if voice_name:
-                            cmd.extend(['-v', voice_name])
-                        
-                        if rate:
-                            # 简单传递语速，虽然 pyttsx3 和 say 的数值标准不同，但在合理范围内都可用
-                            cmd.extend(['-r', str(rate)])
-
-                        # 执行命令
-                        subprocess.run(cmd, check=True, stderr=subprocess.PIPE)
-
-                    # -------------------------------------------------
-                    # 分支 B: Windows / Linux (使用 pyttsx3)
-                    # -------------------------------------------------
+                        if voice_name: cmd.extend(['-v', voice_name])
+                        if rate: cmd.extend(['-r', str(rate)])
+                        subprocess.run(cmd, check=True)
                     else:
                         import pyttsx3
-                        # 在子线程内初始化，隔离环境
                         engine = pyttsx3.init()
                         engine.setProperty('rate', rate)
-                        
                         if voice_name:
-                            voices = engine.getProperty('voices')
-                            for voice in voices:
-                                # 模糊匹配名称或精确匹配ID
-                                if voice_name.lower() in voice.name.lower() or voice_name == voice.id:
-                                    engine.setProperty('voice', voice.id)
-                                    break
-                        
-                        # save_to_file 是阻塞操作，在 Windows 上安全
+                            for v in engine.getProperty('voices'):
+                                if voice_name.lower() in v.name.lower() or voice_name == v.id:
+                                    engine.setProperty('voice', v.id); break
                         engine.save_to_file(input_text, temp_filename)
                         engine.runAndWait()
-
-                    # -------------------------------------------------
-                    # 读取生成的音频
-                    # -------------------------------------------------
-                    if os.path.exists(temp_filename):
-                        with open(temp_filename, 'rb') as f:
-                            wav_data = f.read()
-                    else:
-                        raise Exception("TTS引擎未能生成音频文件")
-
-                except subprocess.CalledProcessError as e:
-                    print(f"[SystemTTS-Mac] 命令执行失败: {e.stderr.decode() if e.stderr else str(e)}")
-                    raise Exception("macOS TTS 生成失败")
-                except Exception as e:
-                    print(f"[SystemTTS] 合成出错 ({current_os}): {str(e)}")
-                    raise e
+                    if os.path.exists(temp_filename): wav_data = open(temp_filename, 'rb').read()
                 finally:
-                    # 清理临时文件
-                    if os.path.exists(temp_filename):
-                        try:
-                            os.remove(temp_filename)
-                        except:
-                            pass
-                
+                    if os.path.exists(temp_filename): os.remove(temp_filename)
                 return wav_data
 
-            # 3. 异步生成流程
             async def generate_audio():
-                try:
-                    # 将同步阻塞操作放入线程池
-                    wav_content = await asyncio.to_thread(
-                        sync_generate_wav, 
-                        text, 
-                        system_voice_name, 
-                        system_rate, 
-                        index
-                    )
-                    
-                    if not wav_content:
-                        raise HTTPException(status_code=500, detail="SystemTTS 生成内容为空")
-
-                    # 格式转换逻辑 (WAV -> OPUS)
-                    final_audio = wav_content
-                    if target_format == "opus":
-                        # 【修复点 1】放入线程池 + 解包元组
-                        convert_result = await asyncio.to_thread(convert_to_opus_simple, wav_content)
-                        if isinstance(convert_result, tuple):
-                            final_audio = convert_result[0] # 取出数据部分
-                        else:
-                            final_audio = convert_result
-                    
-                    # 分块返回 (模拟流式)
-                    chunk_size = 4096
-                    for i in range(0, len(final_audio), chunk_size):
-                        yield final_audio[i:i + chunk_size]
-                        await asyncio.sleep(0) # 让出控制权
-                        
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"SystemTTS 处理失败: {str(e)}")
-            # 4. 设置响应头
-            if target_format == "opus":
-                media_type = "audio/ogg"
-                filename = f"tts_{index}.opus"
-            else:
-                media_type = "audio/wav"
-                filename = f"tts_{index}.wav"
+                wav_content = await asyncio.to_thread(sync_generate_wav, text, system_voice_name, system_rate, index)
+                final = wav_content
+                if target_format == "opus":
+                    res = await asyncio.to_thread(convert_to_opus_simple, wav_content)
+                    final = res[0] if isinstance(res, tuple) else res
+                for i in range(0, len(final), 4096): yield final[i:i + 4096]
             
-            return StreamingResponse(
-                generate_audio(),
-                media_type=media_type,
-                headers={
-                    "Content-Disposition": f"inline; filename={filename}",
-                    "X-Audio-Index": str(index),
-                    "X-Audio-Format": target_format
-                }
-            )
-        
+            media_type = "audio/ogg" if target_format == "opus" else "audio/wav"
+            return StreamingResponse(generate_audio(), media_type=media_type)
+
         # ==========================================
-        # Tetos 统一处理逻辑 (Azure, Baidu, etc.)
+        # 7. Tetos SDK (Azure, 百度, 谷歌, Fish, etc. - 使用实例缓存)
         # ==========================================
         elif tts_engine in ['azure', 'baidu', 'minimax', 'xunfei', 'fish', 'google']:
-            import traceback # 用于打印报错堆栈
-            import uuid
-            # 1. 准备临时文件路径
-            unique_suffix = uuid.uuid4().hex[:8]
-            os.makedirs(TOOL_TEMP_DIR, exist_ok=True)
-            temp_filename = os.path.join(TOOL_TEMP_DIR, f"temp_tetos_{index}_{unique_suffix}.mp3")
+            selected_voice = tts_settings.get(f'{tts_engine}Voice', '') or None
+            
+            # 根据引擎生成缓存Key
+            if tts_engine == 'azure': cache_key = (tts_engine, tts_settings.get('azureSpeechKey'), tts_settings.get('azureRegion'), selected_voice)
+            elif tts_engine == 'baidu': cache_key = (tts_engine, tts_settings.get('baiduApiKey'), tts_settings.get('baiduSecretKey'), selected_voice)
+            elif tts_engine == 'minimax': cache_key = (tts_engine, tts_settings.get('minimaxApiKey'), tts_settings.get('minimaxGroupId'), selected_voice)
+            elif tts_engine == 'xunfei': cache_key = (tts_engine, tts_settings.get('xunfeiAppId'), tts_settings.get('xunfeiApiKey'), tts_settings.get('xunfeiApiSecret'), selected_voice)
+            elif tts_engine == 'fish': cache_key = (tts_engine, tts_settings.get('fishApiKey'), selected_voice)
+            elif tts_engine == 'google': cache_key = (tts_engine, hash(tts_settings.get('googleServiceAccount', '')), selected_voice)
+            else: cache_key = None
 
-            print(f"[DEBUG] 准备调用 Tetos: 引擎={tts_engine}, 临时文件={temp_filename}")
+            temp_filename = os.path.join(TOOL_TEMP_DIR, f"temp_tetos_{index}_{uuid.uuid4().hex[:8]}.mp3")
 
-            # 2. 定义同步生成函数 (将在线程池运行)
             def run_tetos_sync():
-                try:
-                    speaker = None
-                    
-                    # === 统一获取音色 ===
-                    # 如果前端传来的 voice 是空字符串，设为 None，否则 SDK 可能报错
-                    selected_voice = tts_settings.get(f'{tts_engine}Voice', '')
-                    if not selected_voice:
-                        selected_voice = None
-                        
-                    print(f"[DEBUG] 初始化 Speaker: {tts_engine}, 音色: {selected_voice}")
-
-                    # === 1. Azure ===
+                if cache_key in tetos_speakers_cache:
+                    speaker = tetos_speakers_cache[cache_key]
+                else:
                     if tts_engine == 'azure':
                         from tetos.azure import AzureSpeaker
-                        speaker = AzureSpeaker(
-                            speech_key=tts_settings.get('azureSpeechKey', ''),
-                            speech_region=tts_settings.get('azureRegion', ''),
-                            voice=selected_voice  # 在初始化时传入
-                        )
-
-                    # === 3. Baidu ===
+                        speaker = AzureSpeaker(speech_key=cache_key[1], speech_region=cache_key[2], voice=selected_voice)
                     elif tts_engine == 'baidu':
                         from tetos.baidu import BaiduSpeaker
-                        speaker = BaiduSpeaker(
-                            api_key=tts_settings.get('baiduApiKey', ''),
-                            secret_key=tts_settings.get('baiduSecretKey', ''),
-                            voice=selected_voice  # 在初始化时传入
-                        )
-
-                    # === 4. Minimax ===
+                        speaker = BaiduSpeaker(api_key=cache_key[1], secret_key=cache_key[2], voice=selected_voice)
                     elif tts_engine == 'minimax':
                         from tetos.minimax import MinimaxSpeaker
-                        speaker = MinimaxSpeaker(
-                            api_key=tts_settings.get('minimaxApiKey', ''),
-                            group_id=tts_settings.get('minimaxGroupId', ''),
-                            voice=selected_voice  # 在初始化时传入
-                        )
-
-                    # === 5. Xunfei (讯飞) ===
+                        speaker = MinimaxSpeaker(api_key=cache_key[1], group_id=cache_key[2], voice=selected_voice)
                     elif tts_engine == 'xunfei':
                         from tetos.xunfei import XunfeiSpeaker
-                        speaker = XunfeiSpeaker(
-                            app_id=tts_settings.get('xunfeiAppId', ''),
-                            api_key=tts_settings.get('xunfeiApiKey', ''),
-                            api_secret=tts_settings.get('xunfeiApiSecret', ''),
-                            voice=selected_voice  # 在初始化时传入
-                        )
-                    
-                    # === 6. Fish Audio ===
+                        speaker = XunfeiSpeaker(app_id=cache_key[1], api_key=cache_key[2], api_secret=cache_key[3], voice=selected_voice)
                     elif tts_engine == 'fish':
                         from tetos.fish import FishSpeaker
-                        speaker = FishSpeaker(
-                            api_key=tts_settings.get('fishApiKey', ''),
-                            voice=selected_voice  # 在初始化时传入
-                        )
-
-                    # === 7. Google ===
+                        speaker = FishSpeaker(api_key=cache_key[1], voice=selected_voice)
                     elif tts_engine == 'google':
                         from tetos.google import GoogleSpeaker
-                        # Google 需要先处理鉴权文件
                         sa_json = tts_settings.get('googleServiceAccount', '')
                         if sa_json:
-                            import json
                             import tempfile
                             with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp:
-                                tmp.write(sa_json)
-                                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp.name
-                        
-                        speaker = GoogleSpeaker(
-                            voice=selected_voice # 在初始化时传入
-                        )
+                                tmp.write(sa_json); os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp.name
+                        speaker = GoogleSpeaker(voice=selected_voice)
+                    tetos_speakers_cache[cache_key] = speaker
+                speaker.say(text, temp_filename)
 
-                    if not speaker:
-                        raise Exception(f"无法初始化 {tts_engine} Speaker (对象为空)")
-
-                    # === 执行合成 ===
-                    # 因为 voice 已经在初始化时传入了，这里不再传 voice 参数
-                    print(f"[DEBUG] 开始合成文本 (长度: {len(text)})...")
-                    speaker.say(text, temp_filename)
-                    print(f"[DEBUG] 合成完成，文件已生成: {temp_filename}")
-
-                except Exception as e:
-                    print(f"[ERROR] Tetos 合成线程内部报错: {str(e)}")
-                    raise e
-
-            # 3. 异步执行合成
-            try:
-                await asyncio.to_thread(run_tetos_sync)
-            except Exception as e:
-                print(f"[ERROR] Tetos 异步调用失败: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"TTS合成失败: {str(e)}")
-
-            # 4. 读取文件并返回流
-            if not os.path.exists(temp_filename):
-                raise HTTPException(status_code=500, detail="合成文件未生成")
-
-            async def generate_audio_from_file():
+            await asyncio.to_thread(run_tetos_sync)
+            
+            async def generate_from_file():
                 try:
-                    with open(temp_filename, "rb") as f:
-                        file_data = f.read()
-                    
-                    if target_format == "opus":
-                        # 【修复点 4】放入线程池 + 解包元组
-                        convert_result = await asyncio.to_thread(convert_to_opus_simple, file_data)
-                        if isinstance(convert_result, tuple):
-                            opus_data = convert_result[0]
-                        else:
-                            opus_data = convert_result
-                            
-                        chunk_size = 4096
-                        for i in range(0, len(opus_data), chunk_size):
-                            yield opus_data[i:i + chunk_size]
-                    else:
-                        chunk_size = 4096
-                        for i in range(0, len(file_data), chunk_size):
-                            yield file_data[i:i + chunk_size]
-                except Exception as stream_e:
-                     print(f"[ERROR] 流式读取/转换失败: {str(stream_e)}")
-                finally:
                     if os.path.exists(temp_filename):
-                        try:
-                            os.remove(temp_filename)
-                        except:
-                            pass
+                        data = open(temp_filename, "rb").read()
+                        if target_format == "opus":
+                            res = await asyncio.to_thread(convert_to_opus_simple, data)
+                            data = res[0] if isinstance(res, tuple) else res
+                        for i in range(0, len(data), 4096): yield data[i:i + 4096]
+                finally:
+                    if os.path.exists(temp_filename): os.remove(temp_filename)
 
-            # 设置响应头
-            if target_format == "opus":
-                media_type = "audio/ogg"
-                filename = f"tts_{index}.opus"
-            else:
-                media_type = "audio/mpeg"
-                filename = f"tts_{index}.mp3"
-
-            return StreamingResponse(
-                generate_audio_from_file(),
-                media_type=media_type,
-                headers={
-                    "Content-Disposition": f"inline; filename={filename}",
-                    "X-Audio-Index": str(index),
-                    "X-Audio-Format": target_format
-                }
-            )
+            media_type = "audio/ogg" if target_format == "opus" else "audio/mpeg"
+            return StreamingResponse(generate_from_file(), media_type=media_type)
 
         raise HTTPException(status_code=400, detail="不支持的TTS引擎")
     
     except Exception as e:
-        print(f"[ERROR] TTS 合成失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": f"服务器内部错误: {str(e)}"})
 
 @app.post("/tts/tetos/list_voices")
