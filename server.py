@@ -358,6 +358,7 @@ os.environ["no_proxy"] = "localhost,127.0.0.1"
 local_timezone = None
 settings = None
 client = None
+fast_client = None 
 reasoner_client = None
 HA_client = None
 ChromeMCP_client = None
@@ -479,6 +480,17 @@ def content_new(message, role, content):
 
 configure_host_port(args.host, args.port)
 
+def get_client_class(config, provider_id):
+    if not config or 'modelProviders' not in config:
+        return AsyncOpenAI
+    vendor = 'OpenAI'
+    for provider in config['modelProviders']:
+        if provider['id'] == provider_id:
+            vendor = provider['vendor']
+            break
+    # 假设你已经导入了 DifyOpenAIAsync 和 AsyncOpenAI
+    return DifyOpenAIAsync if vendor == 'Dify' else AsyncOpenAI
+
 from py.node_runner import node_mgr
 
 @asynccontextmanager
@@ -507,7 +519,7 @@ async def lifespan(app: FastAPI):
     
     # 3. 解包结果
     # init_db 和 init_covs 没有返回值(None)
-    global settings, client, reasoner_client, mcp_client_list, local_timezone, logger, locales
+    global settings, client, reasoner_client, fast_client, mcp_client_list, local_timezone, logger, locales
     _, _, locales, settings, local_timezone = results
     
     # 创建带时间戳的日志文件路径
@@ -536,27 +548,27 @@ async def lifespan(app: FastAPI):
         logger.error(f"尝试启动sherpa失败: {e}")
         pass
 
-    vendor = 'OpenAI'
-    for modelProvider in settings['modelProviders']: 
-        if modelProvider['id'] == settings['selectedProvider']:
-            vendor = modelProvider['vendor']
-            break
-    client_class = AsyncOpenAI
-    if vendor == 'Dify':
-        client_class = DifyOpenAIAsync
-    reasoner_vendor = 'OpenAI'
-    for modelProvider in settings['modelProviders']: 
-        if modelProvider['id'] == settings['reasoner']['selectedProvider']:
-            reasoner_vendor = modelProvider['vendor']
-            break
-    reasoner_client_class = AsyncOpenAI
-    if reasoner_vendor == 'Dify':
-        reasoner_client_class = DifyOpenAIAsync
     if settings:
-        client = client_class(api_key=settings['api_key'], base_url=settings['base_url'])
-        reasoner_client = reasoner_client_class(api_key=settings['reasoner']['api_key'], base_url=settings['reasoner']['base_url'])
+        # 1. 初始化主模型 Client
+        c_class = get_client_class(settings, settings.get('selectedProvider'))
+        client = c_class(api_key=settings.get('api_key', ''), base_url=settings.get('base_url') or "https://api.openai.com/v1")
+        
+        # 2. 初始化推理模型 Client
+        r_class = get_client_class(settings, settings.get('reasoner', {}).get('selectedProvider'))
+        reasoner_client = r_class(api_key=settings.get('reasoner', {}).get('api_key', ''), base_url=settings.get('reasoner', {}).get('base_url') or "https://api.openai.com/v1")
+        
+        # 3. 初始化快速模型 Client
+        fast_cfg = settings.get('fast', {})
+        if fast_cfg.get('enabled'):
+            f_provider = fast_cfg.get('selectedProvider', settings.get('selectedProvider'))
+            f_class = get_client_class(settings, f_provider)
+            fast_client = f_class(
+                api_key=fast_cfg.get('api_key') or settings.get('api_key', ''),
+                base_url=fast_cfg.get('base_url') or settings.get('base_url') or "https://api.openai.com/v1"
+            )
+
+        # 设置代理
         if settings["systemSettings"]["proxy"] and settings["systemSettings"]["proxyMode"] == "manual":
-            # 设置代理环境变量
             os.environ['http_proxy'] = settings["systemSettings"]["proxy"].strip()
             os.environ['https_proxy'] = settings["systemSettings"]["proxy"].strip()
         elif settings["systemSettings"]["proxyMode"] == "system":
@@ -566,8 +578,10 @@ async def lifespan(app: FastAPI):
             os.environ['http_proxy'] = ""
             os.environ['https_proxy'] = ""
     else:
-        client = client_class()
-        reasoner_client = reasoner_client_class()
+        client = AsyncOpenAI()
+        reasoner_client = AsyncOpenAI()
+        fast_client = None
+        
     mcp_init_tasks = []
 
     async def init_mcp_with_timeout(
@@ -1492,7 +1506,26 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
     
     permissionMode = env_settings.get("permissionMode", "default")
     
-    if cwd and Path(cwd).exists() and cli_settings.get("enabled", False) and engine in ["ds", "local"]:
+    if cwd and Path(cwd).exists() and cli_settings.get("enabled", False):
+        permission_message = ""
+        # 权限模式提示（原有逻辑，但修复了变量名）
+        if permissionMode != "plan" and permissionMode != "cowork":
+            permission_message = "你当前处于执行模式，你可以自由地使用所有工具，但请注意不要滥用权限！如果有更安全的工具，请不要直接使用bash命令！"
+            content_append(request.messages, 'system', permission_message)
+        elif permissionMode == "cowork":
+            if not request.is_sub_agent:
+                permission_message += "你当前处于协作模式，create_subtask工具可以帮你完成几乎任何任务（比如查资料、写代码、生成报告等），当你遇到难题时，可以尝试把它分解成一个个小任务，交给create_subtask工具去完成！"
+                content_append(request.messages, 'system', permission_message)
+            else:
+                permission_message = "你当前处于执行模式，你可以自由地使用所有工具，但请注意不要滥用权限！如果有更安全的工具，请不要直接使用bash命令！"
+                content_append(request.messages, 'system', permission_message)
+        else:
+            permission_message = "你当前处于计划模式，请尽可能只使用只读工具了解当前项目，使用自然语言描述你的需求和计划，并等待用户确认后再执行！"
+            content_append(request.messages, 'system', permission_message)
+
+    if permissionMode == "cowork" and not request.is_sub_agent:
+        pass
+    elif cwd and Path(cwd).exists() and cli_settings.get("enabled", False) and engine in ["ds", "local"]:
         
         if engine == "local":
             # 在本地环境下，首先注入系统环境信息
@@ -1643,30 +1676,8 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
                 content_append(request.messages, 'system', skills_message)
         except Exception as e:
             print(f"[Skill Loader] 扫描技能失败: {e}")
-        permission_message = ""
-        # 权限模式提示（原有逻辑，但修复了变量名）
-        if permissionMode != "plan" and permissionMode != "cowork":
-            permission_message = "你当前处于执行模式，你可以自由地使用所有工具，但请注意不要滥用权限！如果有更安全的工具，请不要直接使用bash命令！"
-            content_append(request.messages, 'system', permission_message)
-        elif permissionMode == "cowork":
-            if not request.is_sub_agent:
-                permission_message += "你当前处于协作模式，对于需要**调用工具**完成的**任何事情**（比如联网搜索，查询知识库，使用skills里的功能，写代码或者一个报告等等工作），你都必须将任何任务改写成一个或者多个简单子任务，**交给create_subtask工具执行**，这些子智能体将在后台异步执行这些任务，当你创建任务后，**请不要查询这些任务的结果**，因为它们可能还在执行中，请当用户询问时再查询任务进度即可!当你需要调用工具时，尽可能的使用子任务来执行，这样可以避免直接调用工具阻塞对话！"
-                content_append(request.messages, 'system', permission_message)
-            else:
-                pass
-        else:
-            permission_message = "你当前处于计划模式，请尽可能只使用只读工具了解当前项目，使用自然语言描述你的需求和计划，并等待用户确认后再执行！"
-            content_append(request.messages, 'system', permission_message)
 
-    if settings["HASettings"]["enabled"]:
-        HA_devices = await HA_client.call_tool("GetLiveContext", {})
-        HA_message = f"\n\n以下是home assistant连接的设备信息：{HA_devices}\n\n"
-        content_append(request.messages, 'system', HA_message)
-    if settings['sqlSettings']['enabled']:
-        sql_status = await sql_client.call_tool("all_table_names", {})
-        sql_message = f"\n\n以下是当前数据库all_table_names工具的返回结果：{sql_status}\n\n"
-        content_append(request.messages, 'system', sql_message)
-    if request.messages[-1]['role'] == 'system' and settings['tools']['autoBehavior']['enabled'] and not request.is_app_bot:
+    if request.messages[-1]['role'] == 'system' and settings['tools']['autoBehavior']['enabled'] and not request.is_app_bot and not request.is_sub_agent:
         language_message = f"\n\n当你看到被插入到对话之间的系统消息，这是自主行为系统向你发送的消息，例如用户主动或者要求你设置了一些定时任务或者延时任务，当你看到自主行为系统向你发送的消息时，说明这些任务到了需要被执行的节点，例如：用户要你三点或五分钟后提醒开会的事情，然后当你看到一个被插入的“提醒用户开会”的系统消息，你需要立刻提醒用户开会，以此类推\n\n"
         content_append(request.messages, 'system', language_message)
 
@@ -1757,7 +1768,7 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
 
 如果没有什么需要静音的文字，也没有必要强行使用<silence></silence>标签，因为这样会导致语音合成速度变慢！
 
-<silence></silence>标签最好用于图片的markdown语法、网页链接等不适合语音合成的部分，并且<silence></silence>标签必须另起一行，并且独占一行！<silence></silence>标签与图片的markdown语法之间不能有空格和回车，否则会导致解析失败！
+<silence></silence>标签最好用于图片的markdown语法、网页链接等不适合语音合成的部分，并且<silence></silence>标签必须另起一行，并且独占一行！<silence></silence>标签与图片的markdown语法之间不能有空格和回车，否则会导致解析失败！比如：<silence>![图片名](图片URL)</silence>\n\n
 
 注意！你最好只使用你正在扮演的角色音色和旁白音色，不要使用其他角色音色，除非你明确知道你在做什么！\n\n"""
                 
@@ -1767,7 +1778,7 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
 
 如果没有什么需要静音的文字，也没有必要强行使用<silence></silence>标签，因为这样会导致语音合成速度变慢！
 
-<silence></silence>标签最好用于图片的markdown语法、网页链接等不适合语音合成的部分，并且<silence></silence>标签必须另起一行，并且独占一行！<silence></silence>标签与图片的markdown语法之间不能有空格和回车，否则会导致解析失败！"""
+<silence></silence>标签最好用于图片的markdown语法、网页链接等不适合语音合成的部分，并且<silence></silence>标签必须另起一行，并且独占一行！<silence></silence>标签与图片的markdown语法之间不能有空格和回车，否则会导致解析失败！比如：<silence>![图片名](图片URL)</silence>\n\n"""
             content_prepend(request.messages, 'system', tts_messages)
     if settings['vision']['desktopVision'] and not request.is_app_bot  and not request.is_sub_agent:
         desktop_message = "\n\n用户与你对话时，如果发了图片给你，有可能是给你发当前的桌面截图。\n\n"
@@ -2478,103 +2489,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         },
                     }
                     tools.append(comfyui_tool)
-        # ==================== 获取权限模式 ====================
-        cli_settings = settings.get("CLISettings", {})
-        engine = cli_settings.get("engine", "")
         
-        # 根据环境类型获取权限模式
-        if engine == "local":
-            env_settings = settings.get("localEnvSettings", {})
-        elif engine == "ds":
-            env_settings = settings.get("dsSettings", {})
-        elif engine == "cc":
-            env_settings = settings.get("ccSettings", {})
-        elif engine == "qc":
-            env_settings = settings.get("qcSettings", {})
-        else:
-            env_settings = {}
-        
-        permission_mode = env_settings.get("permissionMode", "default")
-        if permission_mode == "cowork" and settings['CLISettings']['enabled'] and not request.is_sub_agent:
-            tools.append(create_subtask_tool)
-            tools.append(query_tasks_tool)
-            tools.append(cancel_subtask_tool)
-
-        if request.is_sub_agent:
-            tools.append(finish_task_tool)
-        # 如果是子智能体调用，或者指定了工具过滤规则
-        if request.is_sub_agent or request.enable_tools or request.disable_tools:
-            original_tool_count = len(tools)
-            
-            # 1. Enable Tools 过滤（白名单模式）
-            if request.enable_tools and len(request.enable_tools) > 0:
-                # 只保留白名单中的工具
-                filtered_tools = []
-                enable_set = set(request.enable_tools)
-                
-                for tool in tools:
-                    tool_name = tool.get("function", {}).get("name", "")
-                    if tool_name in enable_set:
-                        filtered_tools.append(tool)
-                
-                tools = filtered_tools
-                print(f"[Tool Filter] Enable mode: {original_tool_count} -> {len(tools)} tools (enabled: {request.enable_tools})")
-            
-            # 2. Disable Tools 过滤（黑名单模式）
-            elif request.disable_tools and len(request.disable_tools) > 0:
-                # 移除黑名单中的工具
-                disable_set = set(request.disable_tools)
-                filtered_tools = []
-                
-                for tool in tools:
-                    tool_name = tool.get("function", {}).get("name", "")
-                    if tool_name not in disable_set:
-                        filtered_tools.append(tool)
-                
-                tools = filtered_tools
-                print(f"[Tool Filter] Disable mode: {original_tool_count} -> {len(tools)} tools (disabled: {request.disable_tools})")
-            
-            # 3. 子智能体默认策略（如果没有指定 enable/disable）
-            elif request.is_sub_agent:
-                # 子智能体默认只保留安全的工具，移除高风险操作
-                SUBAGENT_BLOCKED_TOOLS = [
-                    # 阻止子智能体执行系统命令
-                    "claude_code_async",
-                    "qwen_code_async",
-                    
-                    # 阻止子智能体管理进程/端口
-                    "manage_processes_tool",
-                    "docker_manage_ports_tool",
-                    "local_net_tool",
-                    
-                    # 阻止子智能体创建子任务（防止递归）
-                    "create_subtask",
-                    
-                    # 阻止高风险的浏览器操作
-                    "new_page",
-                    "close_page",
-                    "evaluate_script",
-                    
-                    # 阻止子智能体使用 Agent 调用（防止复杂的嵌套）
-                    "agent_tool_call",
-                    "todo_write_tool",
-                ]
-                
-                filtered_tools = []
-                blocked_count = 0
-                
-                for tool in tools:
-                    tool_name = tool.get("function", {}).get("name", "")
-                    if tool_name not in SUBAGENT_BLOCKED_TOOLS:
-                        filtered_tools.append(tool)
-                    else:
-                        blocked_count += 1
-                
-                tools = filtered_tools
-                print(f"[SubAgent Safety] Blocked {blocked_count} dangerous tools: {original_tool_count} -> {len(tools)} tools")
-    
-
-        print(tools)
         source_prompt = ""
         if request.fileLinks:
             print("fileLinks",request.fileLinks)
@@ -2705,7 +2620,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
             extra_params = {item['name']: item['value'] for item in extra_params}
         else:
             extra_params = {}
-        async def stream_generator(user_prompt,DRS_STAGE):
+        async def stream_generator(user_prompt,DRS_STAGE,tools):
             # ---------- 统一 SSE 封装 ----------
             def make_sse(tool_data: dict) -> str:
                 chunk = {
@@ -2956,6 +2871,106 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             tools.append(markdown_new_tool)
                 if kb_list:
                     tools.append(kb_tool)
+
+                # ==================== 获取权限模式 ====================
+                cli_settings = settings.get("CLISettings", {})
+                engine = cli_settings.get("engine", "")
+                
+                # 根据环境类型获取权限模式
+                if engine == "local":
+                    env_settings = settings.get("localEnvSettings", {})
+                elif engine == "ds":
+                    env_settings = settings.get("dsSettings", {})
+                elif engine == "cc":
+                    env_settings = settings.get("ccSettings", {})
+                elif engine == "qc":
+                    env_settings = settings.get("qcSettings", {})
+                else:
+                    env_settings = {}
+                
+                permission_mode = env_settings.get("permissionMode", "default")
+                if permission_mode == "cowork" and settings['CLISettings']['enabled'] and not request.is_sub_agent:
+                    tools = []
+                    tools.append(create_subtask_tool)
+                    tools.append(query_tasks_tool)
+                    tools.append(cancel_subtask_tool)
+
+                if request.is_sub_agent:
+                    tools.append(finish_task_tool)
+                # 如果是子智能体调用，或者指定了工具过滤规则
+                if request.is_sub_agent or request.enable_tools or request.disable_tools:
+                    original_tool_count = len(tools)
+                    
+                    # 1. Enable Tools 过滤（白名单模式）
+                    if request.enable_tools and len(request.enable_tools) > 0:
+                        # 只保留白名单中的工具
+                        filtered_tools = []
+                        enable_set = set(request.enable_tools)
+                        
+                        for tool in tools:
+                            tool_name = tool.get("function", {}).get("name", "")
+                            if tool_name in enable_set:
+                                filtered_tools.append(tool)
+                        
+                        tools = filtered_tools
+                        print(f"[Tool Filter] Enable mode: {original_tool_count} -> {len(tools)} tools (enabled: {request.enable_tools})")
+                    
+                    # 2. Disable Tools 过滤（黑名单模式）
+                    elif request.disable_tools and len(request.disable_tools) > 0:
+                        # 移除黑名单中的工具
+                        disable_set = set(request.disable_tools)
+                        filtered_tools = []
+                        
+                        for tool in tools:
+                            tool_name = tool.get("function", {}).get("name", "")
+                            if tool_name not in disable_set:
+                                filtered_tools.append(tool)
+                        
+                        tools = filtered_tools
+                        print(f"[Tool Filter] Disable mode: {original_tool_count} -> {len(tools)} tools (disabled: {request.disable_tools})")
+                    
+                    # 3. 子智能体默认策略（如果没有指定 enable/disable）
+                    elif request.is_sub_agent:
+                        # 子智能体默认只保留安全的工具，移除高风险操作
+                        SUBAGENT_BLOCKED_TOOLS = [
+                            # 阻止子智能体执行系统命令
+                            "claude_code_async",
+                            "qwen_code_async",
+                            
+                            # 阻止子智能体管理进程/端口
+                            "manage_processes_tool",
+                            "docker_manage_ports_tool",
+                            "local_net_tool",
+                            
+                            # 阻止子智能体创建子任务（防止递归）
+                            "create_subtask",
+                            
+                            # 阻止高风险的浏览器操作
+                            "new_page",
+                            "close_page",
+                            "evaluate_script",
+                            
+                            # 阻止子智能体使用 Agent 调用（防止复杂的嵌套）
+                            "agent_tool_call",
+                            "todo_write_tool",
+                        ]
+                        
+                        filtered_tools = []
+                        blocked_count = 0
+                        
+                        for tool in tools:
+                            tool_name = tool.get("function", {}).get("name", "")
+                            if tool_name not in SUBAGENT_BLOCKED_TOOLS:
+                                filtered_tools.append(tool)
+                            else:
+                                blocked_count += 1
+                        
+                        tools = filtered_tools
+                        print(f"[SubAgent Safety] Blocked {blocked_count} dangerous tools: {original_tool_count} -> {len(tools)} tools")
+            
+
+                print(tools)
+
                 if settings['tools']['deepsearch']['enabled'] or enable_deep_research: 
                     deepsearch_messages = copy.deepcopy(request.messages)
                     content_append(deepsearch_messages, 'user',  "\n\n将用户提出的问题或给出的当前任务拆分成多个步骤，每一个步骤用一句简短的话概括即可，无需回答或执行这些内容，直接返回总结即可，但不能省略问题或任务的细节。如果用户输入的只是闲聊或者不包含任务和问题，直接把用户输入重复输出一遍即可。如果是非常简单的问题，也可以只给出一个步骤即可。一般情况下都是需要拆分成多个步骤的。")
@@ -4075,7 +4090,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 return
         
         return StreamingResponse(
-            stream_generator(user_prompt, DRS_STAGE),
+            stream_generator(user_prompt, DRS_STAGE, tools),
             media_type="text/event-stream",
             headers={
                 "Content-Type": "text/event-stream",
@@ -5408,26 +5423,21 @@ async def fetch_provider_models(request: ProviderModelRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/v1/chat/completions", operation_id="chat_with_agent_party")
-async def chat_endpoint(request: ChatRequest,fastapi_request: Request):
+async def chat_endpoint(request: ChatRequest, fastapi_request: Request):
     """
     用来与agent party中的模型聊天
-    messages: 必填项，聊天记录，包括role和content
-    model: 可选项，默认使用 'super-model'，可以用get_models()获取所有可用的模型
-    stream: 可选项，默认为False，是否启用流式响应
-    enable_thinking: 默认为False，是否启用思考模式
-    enable_deep_research: 默认为False，是否启用深度研究模式
-    enable_web_search: 默认为False，是否启用网络搜索
     """
     fastapi_base_url = str(fastapi_request.base_url)
-    global client, settings,reasoner_client,mcp_client_list
+    # 【注意】引入全局 fast_client
+    global client, reasoner_client, fast_client, settings, mcp_client_list
+    
     raw_model = request.model or 'super-model'
     override_memory_id = None
     
     if raw_model.startswith("memory/"):
-        parts = raw_model.split('/', 2) # 分解为 ['memory', 'id', 'rest']
+        parts = raw_model.split('/', 2) 
         if len(parts) >= 2:
             override_memory_id = parts[1]
-            # 如果有第三部分，则是实际的模型/Agent名；否则默认为 super-model
             request.model = parts[2] if len(parts) > 2 else 'super-model'
             print(f"检测到动态 Memory ID: {override_memory_id}, 目标模型更新为: {request.model}")
     
@@ -5436,8 +5446,14 @@ async def chat_endpoint(request: ChatRequest,fastapi_request: Request):
     enable_deep_research = request.enable_deep_research or False
     enable_web_search = request.enable_web_search or False
     async_tools_id = request.asyncToolsID or None
+
     if model == 'super-model':
         current_settings = await load_settings()
+        
+        # 【修改点1】创建当前请求的专属配置，避免污染全局
+        request_settings = current_settings.copy()
+        active_client = client  # 默认使用主模型
+        
         if current_settings['fast']['enabled'] and not request.is_sub_agent:
             fast_cfg = current_settings['fast']
             use_fast_model = False
@@ -5445,18 +5461,14 @@ async def chat_endpoint(request: ChatRequest,fastapi_request: Request):
             if fast_cfg.get('triggerMode') == 'always':
                 use_fast_model = True
             elif fast_cfg.get('triggerMode') == 'conditional':
-                # 1. 解析用户最新一条消息的内容和多模态特征
                 last_user_text = ""
                 has_image = False
-                
-                # 倒序遍历寻找最后一条 user 消息
                 for msg in reversed(request.messages):
                     if msg.get('role') == 'user':
                         content = msg.get('content')
                         if isinstance(content, str):
                             last_user_text = content
                         elif isinstance(content, list):
-                            # 处理多模态结构 (GPT-4V形式)
                             texts = []
                             for item in content:
                                 if item.get('type') == 'text':
@@ -5466,96 +5478,101 @@ async def chat_endpoint(request: ChatRequest,fastapi_request: Request):
                             last_user_text = "".join(texts)
                         break
                 
-                has_files = bool(request.fileLinks) # 判断是否有 fileLinks 附件
-                
-                # 2. 开始根据条件进行拦截判断 (全部条件满足才为 True)
+                has_files = bool(request.fileLinks) 
                 condition_pass = True
                 
-                # 规则 A: 字数限制
                 max_len = fast_cfg.get('conditionMaxLen', 0)
                 if max_len > 0 and len(last_user_text) > max_len:
                     condition_pass = False
-                    
-                # 规则 B: 是否允许换行
                 if condition_pass and fast_cfg.get('conditionNoNewline', False):
                     if '\n' in last_user_text:
                         condition_pass = False
-                        
-                # 规则 C: 是否允许图片和文件
                 if condition_pass and fast_cfg.get('conditionNoFiles', True):
                     if has_image or has_files:
                         condition_pass = False
                         
-                # 如果所有条件都通过，则使用快速模型
                 if condition_pass:
                     use_fast_model = True
 
-            # 最终决定：如果允许使用快速模型，则用其覆盖 current_settings
             if use_fast_model:
-                # 复制 fast 配置，排除控制逻辑字段
                 exclude_keys = ['enabled', 'triggerMode', 'conditionMaxLen', 'conditionNoNewline', 'conditionNoFiles']
                 fast_config = {k: v for k, v in fast_cfg.items() if k not in exclude_keys}
-                current_settings.update(fast_config)
-            else:
-                # 如果条件不满足，回退到主模型（即什么也不做，保持 current_settings）
-                pass
+                
+                # 更新专属配置，不影响 current_settings
+                request_settings.update(fast_config)
+                
+                # 【修改点2】动态检查并更新快速模型的 Client (仅配置被修改时触发)
+                old_fast_cfg = settings.get('fast', {}) if settings else {}
+                if (fast_client is None 
+                    or fast_cfg.get('api_key') != old_fast_cfg.get('api_key') 
+                    or fast_cfg.get('base_url') != old_fast_cfg.get('base_url')):
+                    
+                    f_provider = fast_cfg.get('selectedProvider', current_settings.get('selectedProvider'))
+                    f_class = get_client_class(current_settings, f_provider)
+                    fast_client = f_class(
+                        api_key=fast_cfg.get('api_key') or current_settings.get('api_key'),
+                        base_url=fast_cfg.get('base_url') or current_settings.get('base_url') or "https://api.openai.com/v1"
+                    )
+                
+                # 当前请求切花为快速 Client
+                active_client = fast_client
+
         if override_memory_id:
-            current_settings["memorySettings"]["is_memory"] = True
-            current_settings["memorySettings"]["selectedMemory"] = override_memory_id
+            request_settings["memorySettings"]["is_memory"] = True
+            request_settings["memorySettings"]["selectedMemory"] = override_memory_id
+            
         if len(current_settings['modelProviders']) <= 0:
-            return JSONResponse(
-                status_code=500,
-                content={"error": {"message": await t("NoModelProvidersConfigured"), "type": "server_error", "code": 500}}
-            )
-        vendor = 'OpenAI'
-        for modelProvider in current_settings['modelProviders']: 
-            if modelProvider['id'] == current_settings['selectedProvider']:
-                vendor = modelProvider['vendor']
-                break
-        client_class = AsyncOpenAI
-        if vendor == 'Dify':
-            client_class = DifyOpenAIAsync
-        reasoner_vendor = 'OpenAI'
-        for modelProvider in current_settings['modelProviders']: 
-            if modelProvider['id'] == current_settings['reasoner']['selectedProvider']:
-                reasoner_vendor = modelProvider['vendor']
-                break
-        reasoner_client_class = AsyncOpenAI
-        if reasoner_vendor == 'Dify':
-            reasoner_client_class = DifyOpenAIAsync
-        # 动态更新客户端配置
+            return JSONResponse(status_code=500, content={"error": {"message": await t("NoModelProvidersConfigured"), "type": "server_error", "code": 500}})
+
+        # 【修改点3】动态更新主模型 Client (仅主配置修改时)
         if (current_settings['api_key'] != settings['api_key'] 
-            or current_settings['base_url'] != settings['base_url']):
-            client = client_class(
+            or current_settings['base_url'] != settings['base_url']
+            or client is None):
+            c_class = get_client_class(current_settings, current_settings['selectedProvider'])
+            client = c_class(
                 api_key=current_settings['api_key'],
                 base_url=current_settings['base_url'] or "https://api.openai.com/v1",
             )
+            # 如果当前没有触发快速模型，需要确保 active_client 指向最新的主 client
+            if active_client != fast_client:
+                active_client = client
+
+        # 动态更新推理模型 Client
         if (current_settings['reasoner']['api_key'] != settings['reasoner']['api_key'] 
-            or current_settings['reasoner']['base_url'] != settings['reasoner']['base_url']):
-            reasoner_client = reasoner_client_class(
+            or current_settings['reasoner']['base_url'] != settings['reasoner']['base_url']
+            or reasoner_client is None):
+            r_class = get_client_class(current_settings, current_settings['reasoner']['selectedProvider'])
+            reasoner_client = r_class(
                 api_key=current_settings['reasoner']['api_key'],
                 base_url=current_settings['reasoner']['base_url'] or "https://api.openai.com/v1",
             )
-        print('model:',current_settings['model'])
-        # 将"system_prompt"插入到request.messages[0].content中
-        if current_settings['system_prompt']:
-            content_prepend(request.messages, 'system', current_settings['system_prompt'] + "\n\n")
+
+        print('model:', request_settings['model'])
+        
+        # 将"system_prompt"插入到request.messages[0].content中 (注意这里使用的是 request_settings)
+        if request_settings['system_prompt']:
+            content_prepend(request.messages, 'system', request_settings['system_prompt'] + "\n\n")
+            
+        # 【核心修正】因为之前我们没污染 current_settings，所以这里的比较才是真实的配置对比
         if current_settings != settings:
             settings = current_settings
+            
         try:
+            # 传入 active_client (0延迟切换) 和 request_settings
             if request.stream:
-                return await generate_stream_response(client,reasoner_client, request, settings,fastapi_base_url,enable_thinking,enable_deep_research,enable_web_search,async_tools_id)
-            return await generate_complete_response(client,reasoner_client, request, settings,fastapi_base_url,enable_thinking,enable_deep_research,enable_web_search)
+                return await generate_stream_response(active_client, reasoner_client, request, request_settings, fastapi_base_url, enable_thinking, enable_deep_research, enable_web_search, async_tools_id)
+            return await generate_complete_response(active_client, reasoner_client, request, request_settings, fastapi_base_url, enable_thinking, enable_deep_research, enable_web_search)
         except asyncio.CancelledError:
-            # 处理客户端中断连接的情况
             print("Client disconnected")
             raise
         except Exception as e:
-            return JSONResponse(
-                status_code=500,
-                content={"error": {"message": str(e), "type": "server_error", "code": 500}}
-            )
+            return JSONResponse(status_code=500, content={"error": {"message": str(e), "type": "server_error", "code": 500}})
+            
     else:
+        # ===== Agent 部分逻辑 ===== 
+        # (因为 agent_settings 每次请求都是从本地 json.load 创建的新字典，
+        # 所以它天生就不会产生你主模型遇到的“全局污染”问题，这里的代码可以基本保留原样)
+        
         current_settings = await load_settings()
         agentSettings = current_settings['agents'].get(model, {})
         if not agentSettings:
@@ -5564,14 +5581,12 @@ async def chat_endpoint(request: ChatRequest,fastapi_request: Request):
                     agentSettings = current_settings['agents'][agentId]
                     break
         if not agentSettings:
-            return JSONResponse(
-                status_code=404,
-                content={"error": {"message": f"Agent {model} not found", "type": "not_found", "code": 404}}
-            )
+            return JSONResponse(status_code=404, content={"error": {"message": f"Agent {model} not found", "type": "not_found", "code": 404}})
+            
+        # 每次读取文件生成新的 agent_settings 字典
         if agentSettings['config_path']:
             with open(agentSettings['config_path'], 'r' , encoding='utf-8') as f:
                 agent_settings = json.load(f)
-            # 将"system_prompt"插入到request.messages[0].content中
             if agentSettings['system_prompt']:
                 content_prepend(request.messages, 'user', agentSettings['system_prompt'] + "\n\n")
         
@@ -5582,18 +5597,14 @@ async def chat_endpoint(request: ChatRequest,fastapi_request: Request):
             if fast_cfg.get('triggerMode') == 'always':
                 use_fast_model = True
             elif fast_cfg.get('triggerMode') == 'conditional':
-                # 1. 解析用户最新一条消息的内容和多模态特征
                 last_user_text = ""
                 has_image = False
-                
-                # 倒序遍历寻找最后一条 user 消息
                 for msg in reversed(request.messages):
                     if msg.get('role') == 'user':
                         content = msg.get('content')
                         if isinstance(content, str):
                             last_user_text = content
                         elif isinstance(content, list):
-                            # 处理多模态结构 (例如图片上传)
                             texts = []
                             for item in content:
                                 if item.get('type') == 'text':
@@ -5603,73 +5614,45 @@ async def chat_endpoint(request: ChatRequest,fastapi_request: Request):
                             last_user_text = "".join(texts)
                         break
                 
-                # 判断是否有 fileLinks 文件附件
                 has_files = bool(request.fileLinks)
-                
-                # 2. 开始根据条件进行拦截判断
                 condition_pass = True
-                
-                # 规则 A: 字数限制（如果设定了限制，且当前字数超出，则拦截）
                 max_len = fast_cfg.get('conditionMaxLen', 0)
-                if max_len > 0 and len(last_user_text) > max_len:
-                    condition_pass = False
-                    
-                # 规则 B: 是否禁止换行（勾选了禁止换行，且文本含 \n，则拦截）
+                if max_len > 0 and len(last_user_text) > max_len: condition_pass = False
                 if condition_pass and fast_cfg.get('conditionNoNewline', False):
-                    if '\n' in last_user_text:
-                        condition_pass = False
-                        
-                # 规则 C: 是否禁止图片和文件（勾选了禁止文件，且包含图片或文件，则拦截）
+                    if '\n' in last_user_text: condition_pass = False
                 if condition_pass and fast_cfg.get('conditionNoFiles', True):
-                    if has_image or has_files:
-                        condition_pass = False
+                    if has_image or has_files: condition_pass = False
                         
                 if condition_pass:
                     use_fast_model = True
 
-            # 3. 如果判定通过，使用快速模型配置覆盖 agent_settings
             if use_fast_model:
-                # 复制 fast 配置，排除用于判断的控制字段
                 exclude_keys = ['enabled', 'triggerMode', 'conditionMaxLen', 'conditionNoNewline', 'conditionNoFiles']
                 fast_config = {k: v for k, v in fast_cfg.items() if k not in exclude_keys}
-                agent_settings.update(fast_config)
-        vendor = 'OpenAI'
-        for modelProvider in agent_settings['modelProviders']: 
-            if modelProvider['id'] == agent_settings['selectedProvider']:
-                vendor = modelProvider['vendor']
-                break
-        client_class = AsyncOpenAI
-        if vendor == 'Dify':
-            client_class = DifyOpenAIAsync
-        reasoner_vendor = 'OpenAI'
-        for modelProvider in agent_settings['modelProviders']: 
-            if modelProvider['id'] == agent_settings['reasoner']['selectedProvider']:
-                reasoner_vendor = modelProvider['vendor']
-                break
-        reasoner_client_class = AsyncOpenAI
-        if reasoner_vendor == 'Dify':
-            reasoner_client_class = DifyOpenAIAsync
-        agent_client = client_class(
-            api_key=agent_settings['api_key'],
-            base_url=agent_settings['base_url'] or "https://api.openai.com/v1",
+                agent_settings.update(fast_config) # Agent 这里更新无所谓，因为它是局部变量
+                
+        # 顺便用上刚才写的辅助函数简化代码
+        a_client_class = get_client_class(agent_settings, agent_settings.get('selectedProvider'))
+        agent_client = a_client_class(
+            api_key=agent_settings.get('api_key', ''),
+            base_url=agent_settings.get('base_url') or "https://api.openai.com/v1"
         )
-        agent_reasoner_client = reasoner_client_class(
-            api_key=agent_settings['reasoner']['api_key'],
-            base_url=agent_settings['reasoner']['base_url'] or "https://api.openai.com/v1",
+        
+        ar_client_class = get_client_class(agent_settings, agent_settings.get('reasoner', {}).get('selectedProvider'))
+        agent_reasoner_client = ar_client_class(
+            api_key=agent_settings.get('reasoner', {}).get('api_key', ''),
+            base_url=agent_settings.get('reasoner', {}).get('base_url') or "https://api.openai.com/v1"
         )
+        
         try:
             if request.stream:
-                return await generate_stream_response(agent_client,agent_reasoner_client, request, agent_settings,fastapi_base_url,enable_thinking,enable_deep_research,enable_web_search,async_tools_id)
-            return await generate_complete_response(agent_client,agent_reasoner_client, request, agent_settings,fastapi_base_url,enable_thinking,enable_deep_research,enable_web_search)
+                return await generate_stream_response(agent_client, agent_reasoner_client, request, agent_settings, fastapi_base_url, enable_thinking, enable_deep_research, enable_web_search, async_tools_id)
+            return await generate_complete_response(agent_client, agent_reasoner_client, request, agent_settings, fastapi_base_url, enable_thinking, enable_deep_research, enable_web_search)
         except asyncio.CancelledError:
-            # 处理客户端中断连接的情况
             print("Client disconnected")
             raise
         except Exception as e:
-            return JSONResponse(
-                status_code=500,
-                content={"error": {"message": str(e), "type": "server_error", "code": 500}}
-            )
+            return JSONResponse(status_code=500, content={"error": {"message": str(e), "type": "server_error", "code": 500}})
 
 @app.post("/simple_chat")
 async def simple_chat_endpoint(request: ChatRequest):
