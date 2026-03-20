@@ -148,25 +148,28 @@ async def create_subtask(
     consensus_content: Optional[str] = None
 ) -> str:
     """创建并启动子任务"""
-    task_center = await get_task_center(workspace_dir)
-    
-    # 创建任务
-    task = await task_center.create_task(
-        title=title,
-        description=description,
-        parent_task_id=parent_task_id,
-        agent_type=agent_type
-    )
-    
-    # 在后台异步执行
-    asyncio.create_task(
-        run_subtask_in_background(
-            task_id=task.task_id,
-            workspace_dir=workspace_dir,
-            settings=settings, 
-            consensus_content=consensus_content
+    try:
+        task_center = await get_task_center(workspace_dir)
+        
+        # 创建任务
+        task = await task_center.create_task(
+            title=title,
+            description=description,
+            parent_task_id=parent_task_id,
+            agent_type=agent_type
         )
-    )
+        
+        # 在后台异步执行
+        asyncio.create_task(
+            run_subtask_in_background(
+                task_id=task.task_id,
+                workspace_dir=workspace_dir,
+                settings=settings, 
+                consensus_content=consensus_content
+            )
+        )
+    except Exception as e:
+        return f"❌ 创建子任务失败: {str(e)}"
     
     return f"✅ 子任务已创建并开始执行\n\n任务ID: {task.task_id}\n标题: {task.title}\n请不要主动查询任务进度，客户端UI会自动将当前进度和结果显示给用户"
 
@@ -178,82 +181,88 @@ async def query_task_progress(
     verbose: bool = False
 ) -> str:
     """查询任务进度 - 支持单任务精确查询和列表查询"""
-    from py.task_center import get_task_center, TaskStatus
-    
-    task_center = await get_task_center(workspace_dir)
-    status_enum = TaskStatus(status) if status else None
-    
-    tasks = []
-
-    # 👉 优化 1：如果有 task_id，优先精确查找，且忽略 status 过滤
-    if task_id:
-        single_task = await task_center.get_task(task_id)
-        if single_task:
-            tasks = [single_task]
-        else:
-            return f"❌ 未找到 ID 为 {task_id} 的任务，请检查 ID 是否正确。"
-    
-    # 👉 优化 2：如果没有 task_id，再进行列表搜索和过滤
-    else:
+    try:
+        from py.task_center import get_task_center, TaskStatus
+        
+        task_center = await get_task_center(workspace_dir)
         status_enum = TaskStatus(status) if status else None
-        tasks = await task_center.list_tasks(
-            parent_task_id=parent_task_id,
-            status=status_enum
-        )
-    
-    if not tasks:
-        return "📋 任务中心当前没有相关任务。"
-    
-    # 构建输出
-    result_lines = [f"📋 任务中心状态 (共 {len(tasks)} 个任务)"]
-    if verbose:
-        result_lines.append("📢 [详情模式] 已开启：正在展示完整结果...")
-    result_lines.append("-" * 30)
-    
-    for task in tasks:
-        icon = "✅" if task.status == TaskStatus.COMPLETED else "🔄" if task.status == TaskStatus.RUNNING else "⏳"
-        result_lines.append(f"{icon} [{task.task_id}] {task.title}")
-        result_lines.append(f"   状态: {task.status.value.upper()} | 进度: {task.progress}%")
         
-        history = task.context.get("history", [])
-        
-        # 运行中
-        if task.status == TaskStatus.RUNNING:
-            if history:
-                result_lines.append(f"   执行动态: {history[-1][:100]}...")
-            if verbose and history:
-                result_lines.append("   📜 已完成步骤:")
-                for i, step in enumerate(history, 1):
-                    result_lines.append(f"     {i}. {step[:200]}...")
+        tasks = []
 
-        # 已完成
-        elif task.status == TaskStatus.COMPLETED:
-            if verbose:
-                # ✅ 如果 verbose=True，强制显示完整 result
-                result_content = task.result if task.result else "（无结果内容）"
-                result_lines.append(f"   🎯 最终完整产出:\n{result_content}\n")
-                
-                # 可选：显示中间过程
-                if history:
-                    result_lines.append("   📜 执行过程回溯 (最近3步):")
-                    for i, step in enumerate(history[-3:], 1):
-                        result_lines.append(f"     ... {step[:100]} ...")
+        # 👉 优化 1：如果有 task_id，优先精确查找，且忽略 status 过滤
+        if task_id:
+            single_task = await task_center.get_task(task_id)
+            if single_task:
+                tasks = [single_task]
             else:
-                summary = task.context.get('summary') or (task.result[:150] + "..." if task.result else "无结果内容")
-                result_lines.append(f"   📝 结果摘要: {summary}")
-                result_lines.append(f"   💡 (提示: 使用 verbose=true 可查看完整报告)")
+                return f"❌ 未找到 ID 为 {task_id} 的任务，请检查 ID 是否正确。"
+        
+        # 👉 优化 2：如果没有 task_id，再进行列表搜索和过滤
+        else:
+            status_enum = TaskStatus(status) if status else None
+            tasks = await task_center.list_tasks(
+                parent_task_id=parent_task_id,
+                status=status_enum
+            )
+        
+        if not tasks:
+            return "📋 任务中心当前没有相关任务。"
+        
+        # 构建输出
+        result_lines = [f"📋 任务中心状态 (共 {len(tasks)} 个任务)"]
+        if verbose:
+            result_lines.append("📢 [详情模式] 已开启：正在展示完整结果...")
+        result_lines.append("-" * 30)
+        
+        for task in tasks:
+            icon = "✅" if task.status == TaskStatus.COMPLETED else "🔄" if task.status == TaskStatus.RUNNING else "⏳"
+            result_lines.append(f"{icon} [{task.task_id}] {task.title}")
+            result_lines.append(f"   状态: {task.status.value.upper()} | 进度: {task.progress}%")
+            
+            history = task.context.get("history", [])
+            
+            # 运行中
+            if task.status == TaskStatus.RUNNING:
+                if history:
+                    result_lines.append(f"   执行动态: {history[-1][:100]}...")
+                if verbose and history:
+                    result_lines.append("   📜 已完成步骤:")
+                    for i, step in enumerate(history, 1):
+                        result_lines.append(f"     {i}. {step[:200]}...")
 
-        elif task.status == TaskStatus.FAILED:
-            result_lines.append(f"   ❌ 错误信息: {task.error}")
+            # 已完成
+            elif task.status == TaskStatus.COMPLETED:
+                if verbose:
+                    # ✅ 如果 verbose=True，强制显示完整 result
+                    result_content = task.result if task.result else "（无结果内容）"
+                    result_lines.append(f"   🎯 最终完整产出:\n{result_content}\n")
+                    
+                    # 可选：显示中间过程
+                    if history:
+                        result_lines.append("   📜 执行过程回溯 (最近3步):")
+                        for i, step in enumerate(history[-3:], 1):
+                            result_lines.append(f"     ... {step[:100]} ...")
+                else:
+                    summary = task.context.get('summary') or (task.result[:150] + "..." if task.result else "无结果内容")
+                    result_lines.append(f"   📝 结果摘要: {summary}")
+                    result_lines.append(f"   💡 (提示: 使用 verbose=true 可查看完整报告)")
 
-        result_lines.append("") 
+            elif task.status == TaskStatus.FAILED:
+                result_lines.append(f"   ❌ 错误信息: {task.error}")
+
+            result_lines.append("") 
+    except Exception as e:
+        return f"❌ 查询任务进度失败: {str(e)}"
 
     return "\n".join(result_lines)
 
 async def cancel_subtask(workspace_dir: str, task_id: str) -> str:
     """取消子任务"""
-    task_center = await get_task_center(workspace_dir)
-    success = await task_center.cancel_task(task_id)
+    try:
+        task_center = await get_task_center(workspace_dir)
+        success = await task_center.cancel_task(task_id)
+    except Exception as e:
+        return f"❌ 取消任务失败: {str(e)}"
     return f"✅ 任务 {task_id} 已取消" if success else f"❌ 取消任务 {task_id} 失败"
 
 # ⭐ 新增实现：finish_task
@@ -262,16 +271,19 @@ async def finish_task(
     task_id: str,
     result: str
 ) -> str:
-    """子智能体调用此函数来标记任务完成"""
-    task_center = await get_task_center(workspace_dir)
-    
-    # 强制更新为 COMPLETED，进度 100，并保存最终结果
-    success = await task_center.update_task_progress(
-        task_id=task_id,
-        progress=100,
-        status=TaskStatus.COMPLETED,
-        result=result
-    )
+    try:
+        """子智能体调用此函数来标记任务完成"""
+        task_center = await get_task_center(workspace_dir)
+        
+        # 强制更新为 COMPLETED，进度 100，并保存最终结果
+        success = await task_center.update_task_progress(
+            task_id=task_id,
+            progress=100,
+            status=TaskStatus.COMPLETED,
+            result=result
+        )
+    except Exception as e:
+        return f"❌ 标记任务完成失败: {str(e)}"
     
     if success:
         return f"🎉 任务 {task_id} 已成功标记为完成！结果已保存。请停止后续操作。"
