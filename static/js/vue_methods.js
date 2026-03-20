@@ -1688,9 +1688,12 @@ let vue_methods = {
             this.currentAudio.pause();
             this.currentAudio = null;
         }
-        this.stopGenerate();
         this.stopAllAudioPlayback();
         this.TTSrunning = false;
+
+        if (this.vrmOnline && this.ttsWebSocket) {
+            this.ttsWebSocket.send(JSON.stringify({ type: 'ttsStarted', data: {} }));
+        }
 
         this.isTyping = true;
         this.startTimer();
@@ -2719,124 +2722,95 @@ let vue_methods = {
     },
 
     async playPCMChunk(b64, currentText = '', message = null) {
-      this.isOmniPlaying = true;
-      
-      if (message) {
-        message.isPlaying = true;
-        // 【关键修复 1】初始化时长变量，防止 NaN 或 undefined
-        if (message.omniDuration === undefined) message.omniDuration = 0;
-        if (message.omniCurrentTime === undefined) message.omniCurrentTime = 0;
-        if (!message.generationFinished) {
-          message.omniAudioChunks.push(b64);
-        }
-      }
-
-      try {
-        // 1. 确保 AudioContext 已启动
-        if (!this.audioCtx) {
-          this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (this.audioCtx.state === 'suspended') {
-          await this.audioCtx.resume();
+        this.isOmniPlaying = true;
+        if (message) {
+            message.isPlaying = true;
+            if (message.omniDuration === undefined) message.omniDuration = 0;
+            if (message.omniCurrentTime === undefined) message.omniCurrentTime = 0;
+            if (!message.generationFinished) message.omniAudioChunks.push(b64);
         }
 
-        // 2. 解码 Base64 PCM 数据
-        const raw = atob(b64);
-        const pcm16 = new Int16Array(raw.length / 2);
-        for (let i = 0; i < raw.length; i += 2) {
-          pcm16[i >> 1] = raw.charCodeAt(i) | (raw.charCodeAt(i + 1) << 8);
-        }
+        try {
+            if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
 
-        // 3. 转换为 Web Audio 缓冲
-        const sampleRate = 24000;
-        const buf = this.audioCtx.createBuffer(1, pcm16.length, sampleRate);
-        const floatData = buf.getChannelData(0);
-        for (let i = 0; i < pcm16.length; i++) {
-          floatData[i] = pcm16[i] / 32768; 
-        }
-
-        const chunkDuration = buf.duration;
-
-        // 【关键修复 2】累加总时长！每收到一块音频，总时长就增加一点
-        if (message && message.isOmni && !message.generationFinished) {
-          message.omniDuration += chunkDuration;
-        }
-
-        // 4. 排程管理
-        const now = this.audioCtx.currentTime;
-        if (this.audioStartTime < now) {
-          this.audioStartTime = now;
-        }
-
-        // 5. 创建音频节点
-        const src = this.audioCtx.createBufferSource();
-        src.buffer = buf;
-
-        if (!this.activeSources) this.activeSources = [];
-        this.activeSources.push(src);
-
-        // 6. VRM 同步
-        if (this.vrmOnline) {
-          this.sendTTSStatusToVRM('omniStreaming', {
-            audioData: b64,
-            text: currentText,
-            sampleRate: sampleRate,
-            timestamp: Date.now()
-          });
-        }
-
-        // 7. 音量控制节点
-        const gainNode = this.audioCtx.createGain();
-        gainNode.gain.value = this.vrmOnline ? 0.000001 : 1.0;
-
-        src.connect(gainNode);
-        gainNode.connect(this.audioCtx.destination);
-
-        // 8. 结束回调
-        src.onended = () => {
-          // 清理当前节点
-          if (this.activeSources) {
-            this.activeSources = this.activeSources.filter(s => s !== src);
-          }
-
-          // ✨ 【最关键的一步】只有自然播放结束的节点 (!src.isForceStopped)，才允许累加进度条！
-          if (message && message.isOmni && !src.isForceStopped) {
-            // 累加当前播放进度
-            message.omniCurrentTime += chunkDuration;
-            
-            // 防止浮点数误差导致当前时间超过总时长
-            if (message.omniCurrentTime > message.omniDuration) {
-              message.omniCurrentTime = message.omniDuration;
+            // 解码数据
+            const raw = atob(b64);
+            const pcm16 = new Int16Array(raw.length / 2);
+            for (let i = 0; i < raw.length; i += 2) {
+                pcm16[i >> 1] = raw.charCodeAt(i) | (raw.charCodeAt(i + 1) << 8);
             }
 
-            // 结束判定：API 生成完毕 且 喇叭里没声音了
-            const isStreamFullyDone = message.generationFinished && this.activeSources.length === 0;
+            const sampleRate = 24000;
+            const buf = this.audioCtx.createBuffer(1, pcm16.length, sampleRate);
+            const floatData = buf.getChannelData(0);
+            for (let i = 0; i < pcm16.length; i++) floatData[i] = pcm16[i] / 32768;
 
-            if (isStreamFullyDone) {
-              message.isPlaying = false; // 图标恢复为播放！
-              message.omniCurrentTime = message.omniDuration; // 进度条吸附到满格
-              
-              this.sendTTSStatusToVRM('allChunksCompleted', {});
-              this.isOmniPlaying = false;
-              console.log('Playback completely finished for message:', message.id);
+            const chunkDuration = buf.duration;
+            if (message && message.isOmni && !message.generationFinished) {
+                message.omniDuration += chunkDuration;
             }
-          }
-          
-          try {
-            src.disconnect();
-            gainNode.disconnect();
-          } catch (e) {}
-        };
-        
 
-        // 9. 启动播放
-        src.start(this.audioStartTime);
-        this.audioStartTime += buf.duration;
+            // ======= 【核心修改：利用二进制同步到 VRM】 =======
+            if (this.vrmOnline && this.ttsWebSocket) {
+                const pcmUint8 = new Uint8Array(raw.length);
+                for(let i=0; i<raw.length; i++) pcmUint8[i] = raw.charCodeAt(i);
+                
+                this.sendBinaryToVRM({
+                    type: 'omni_chunk',
+                    text: currentText, // 传入当前文本
+                    sampleRate: sampleRate
+                }, pcmUint8.buffer);
+            }
+            // ===============================================
 
-      } catch (error) {
-        console.error('Error in playPCMChunk:', error);
-        if (message) message.isPlaying = false;
-      }
+            const now = this.audioCtx.currentTime;
+            if (this.audioStartTime < now) this.audioStartTime = now;
+
+            const src = this.audioCtx.createBufferSource();
+            src.buffer = buf;
+            if (!this.activeSources) this.activeSources = [];
+            this.activeSources.push(src);
+
+            const gainNode = this.audioCtx.createGain();
+            gainNode.gain.value = this.vrmOnline ? 0.000001 : 1.0;
+
+            src.connect(gainNode);
+            gainNode.connect(this.audioCtx.destination);
+
+            src.onended = () => {
+                if (this.activeSources) this.activeSources = this.activeSources.filter(s => s !== src);
+                if (message && message.isOmni && !src.isForceStopped) {
+                    message.omniCurrentTime += chunkDuration;
+                    if (message.omniCurrentTime > message.omniDuration) message.omniCurrentTime = message.omniDuration;
+
+                    if (message.generationFinished && this.activeSources.length === 0) {
+                        message.isPlaying = false;
+                        message.omniCurrentTime = message.omniDuration;
+                        if (this.vrmOnline) this.sendTTSStatusToVRM('allChunksCompleted', {});
+                        this.isOmniPlaying = false;
+                    }
+                }
+                try { src.disconnect(); gainNode.disconnect(); } catch (e) {}
+            };
+
+            src.start(this.audioStartTime);
+            this.audioStartTime += buf.duration;
+        } catch (error) {
+            console.error('Error in playPCMChunk:', error);
+            if (message) message.isPlaying = false;
+        }
+    },
+    // --- [4] 辅助函数：二进制打包打包器 ---
+    sendBinaryToVRM(metadata, audioArrayBuffer) {
+        if (!this.ttsWebSocket || this.ttsWebSocket.readyState !== WebSocket.OPEN) return;
+        const metadataBytes = new TextEncoder().encode(JSON.stringify(metadata));
+        const totalBuffer = new Uint8Array(4 + metadataBytes.byteLength + audioArrayBuffer.byteLength);
+        const view = new DataView(totalBuffer.buffer);
+        view.setUint32(0, metadataBytes.byteLength, true); // JSON长度
+        totalBuffer.set(metadataBytes, 4);
+        totalBuffer.set(new Uint8Array(audioArrayBuffer), 4 + metadataBytes.byteLength);
+        this.ttsWebSocket.send(totalBuffer);
     },
 
     async translateMessage(index) {
@@ -7995,81 +7969,56 @@ handleCreateSlackSeparator(val) {
       this.elapsedTime = Date.now() - this.startTime;
     },
     async processTTSChunk(message, index) {
-      const chunk = message.ttsChunks[index];
-      const voice = message.chunks_voice[index];
-      let remainingText = chunk;
-      let chunk_text = remainingText;
-      let chunk_expressions = [];
-      if (chunk.indexOf('<') !== -1){
-        const tagReg = /<[^>]+>/g;
-        chunk_expressions = (chunk.match(tagReg) || []).map(t => t.slice(1, -1)); 
-        chunk_text = chunk.replace(tagReg, '').trim();
-      }
-      console.log(`Processing TTS chunk ${index}:`, chunk_text ,"\nvoice:" ,voice,"\nchunk_expressions:", chunk_expressions);
-      
-      try {
-        if (voice=='silence'){
-          console.log(`TTS chunk ${index} is silence`);
-          message.audioChunks[index] = { 
-            url: null, 
-            expressions: chunk_expressions, // 添加表情
-            text: chunk_text,
-            index
-          };
-          this.cur_audioDatas[index]= null;
-          this.checkAudioPlayback();
-        }else{
-          const response = await fetch(`/tts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ttsSettings: this.ttsSettings,text: chunk_text, index, voice})
-          });
+        const chunk = message.ttsChunks[index];
+        const voice = message.chunks_voice[index];
+        let chunk_text = chunk;
+        let chunk_expressions = [];
 
-          if (response.ok) {
-            const audioBlob = await response.blob();
-            
-            // 本地播放 blob URL
-            const audioUrl = URL.createObjectURL(audioBlob);
-            
-            message.audioChunks[index] = { 
-              url: audioUrl, 
-              expressions: chunk_expressions, // 添加表情
-              text: chunk_text,
-              index 
-            };
-            if (index == 0){
-              // 结束计时并打印时间
-              this.stopTimer();
-              console.log(`TTS chunk ${index} processed in ${this.elapsedTime}ms`);
-            }
-            // 转换为 Base64
-            const base64 = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload  = () => resolve(reader.result.split(',')[1]); // 去掉 data:*
-              reader.onerror = reject;
-              reader.readAsDataURL(audioBlob);
-            });
-            const audioDataUrl = `data:${audioBlob.type};base64,${base64}`;
-            this.cur_audioDatas[index]= audioDataUrl;
-            console.log(`TTS chunk ${index} processed`);
-            this.checkAudioPlayback();
-          } else {
-            console.error(`TTS failed for chunk ${index}`);
-            message.audioChunks[index] = { 
-              url: null, 
-              expressions: chunk_expressions, // 添加表情
-              text: chunk_text,
-              index
-            };
-            this.cur_audioDatas[index]= null;
-            this.checkAudioPlayback();
-          }
+        if (chunk.indexOf('<') !== -1) {
+            const tagReg = /<[^>]+>/g;
+            chunk_expressions = (chunk.match(tagReg) || []).map(t => t.slice(1, -1));
+            chunk_text = chunk.replace(tagReg, '').trim();
         }
 
-      } catch (error) {
-        console.error(`Error processing TTS chunk ${index}:`, error);
-        this.TTSrunning= false;
-      }
+        try {
+            if (voice === 'silence') {
+                // 静音块走文本通道发指令
+                const cmd = JSON.stringify({
+                    type: 'startSpeaking',
+                    data: { chunkIndex: index, text: chunk_text, voice: 'silence', expressions: chunk_expressions }
+                });
+                if (this.ttsWebSocket && this.vrmOnline) this.ttsWebSocket.send(cmd);
+                message.audioChunks[index] = { url: null, expressions: chunk_expressions, text: chunk_text, index };
+                this.checkAudioPlayback();
+            } else {
+                const response = await fetch(`/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ttsSettings: this.ttsSettings, text: chunk_text, index, voice })
+                });
+
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // --- 二进制打包发送 ---
+                    const audioBuffer = await audioBlob.arrayBuffer();
+                    const metadata = {
+                        type: 'audio_chunk',
+                        chunkIndex: index,
+                        text: chunk_text,
+                        expressions: chunk_expressions,
+                        mimeType: audioBlob.type
+                    };
+                    this.sendBinaryToVRM(metadata, audioBuffer);
+
+                    message.audioChunks[index] = { url: audioUrl, expressions: chunk_expressions, text: chunk_text, index };
+                    this.checkAudioPlayback();
+                }
+            }
+        } catch (error) {
+            console.error(`TTS Chunk ${index} error:`, error);
+        }
     },
 
     // 音频播放进程

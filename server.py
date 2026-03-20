@@ -338,7 +338,7 @@ from fastapi import status
 from fastapi.responses import JSONResponse, StreamingResponse,Response
 import uuid
 import time
-from typing import Any, AsyncIterator, List, Dict,Optional, Tuple
+from typing import Any, AsyncIterator, List, Dict,Optional, Tuple, Union
 import shortuuid
 from py.mcp_clients import McpClient
 from contextlib import asynccontextmanager
@@ -6599,155 +6599,102 @@ class TTSConnectionManager:
     def __init__(self):
         self.main_connections: List[WebSocket] = []
         self.vrm_connections: List[WebSocket] = []
-        self.audio_cache: Dict[str, bytes] = {}  # 缓存音频数据
-        
+
     async def connect_main(self, websocket: WebSocket):
         await websocket.accept()
         self.main_connections.append(websocket)
         logging.info(f"Main interface connected. Total: {len(self.main_connections)}")
-        
+
     async def connect_vrm(self, websocket: WebSocket):
         await websocket.accept()
         self.vrm_connections.append(websocket)
         logging.info(f"VRM interface connected. Total: {len(self.vrm_connections)}")
-        
+
     def disconnect_main(self, websocket: WebSocket):
         if websocket in self.main_connections:
             self.main_connections.remove(websocket)
-            logging.info(f"Main interface disconnected. Total: {len(self.main_connections)}")
-            
+
     def disconnect_vrm(self, websocket: WebSocket):
         if websocket in self.vrm_connections:
             self.vrm_connections.remove(websocket)
-            logging.info(f"VRM interface disconnected. Total: {len(self.vrm_connections)}")
-    
-    async def broadcast_to_vrm(self, message: dict):
-        """广播消息到所有VRM连接"""
-        if self.vrm_connections:
-            message_str = json.dumps(message)
-            disconnected = []
-            
-            for connection in self.vrm_connections:
-                try:
-                    await connection.send_text(message_str)
-                except:
-                    disconnected.append(connection)
-            
-            # 清理断开的连接
-            for conn in disconnected:
-                self.disconnect_vrm(conn)
-    
-    async def send_to_main(self, message: dict):
-        """发送消息到主界面"""
-        if self.main_connections:
-            message_str = json.dumps(message)
-            disconnected = []
-            
-            for connection in self.main_connections:
-                try:
-                    await connection.send_text(message_str)
-                except:
-                    disconnected.append(connection)
-            
-            # 清理断开的连接
-            for conn in disconnected:
-                self.disconnect_main(conn)
-    
-    def cache_audio(self, audio_id: str, audio_data: bytes):
-        """缓存音频数据"""
-        self.audio_cache[audio_id] = audio_data
-        
-    def get_cached_audio(self, audio_id: str) -> bytes:
-        """获取缓存的音频数据"""
-        return self.audio_cache.get(audio_id)
 
-# 创建连接管理器实例
+    async def broadcast_to_vrm(self, message: Union[str, bytes]):
+        """核心：同时支持字符串 JSON 和二进制 Blob 透传"""
+        if not self.vrm_connections:
+            return
+        disconnected = []
+        for connection in self.vrm_connections:
+            try:
+                if isinstance(message, bytes):
+                    await connection.send_bytes(message)
+                else:
+                    await connection.send_text(message)
+            except:
+                disconnected.append(connection)
+        for conn in disconnected:
+            self.disconnect_vrm(conn)
+
+    async def send_to_main(self, message: str):
+        if not self.main_connections:
+            return
+        disconnected = []
+        for connection in self.main_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                disconnected.append(connection)
+        for conn in disconnected:
+            self.disconnect_main(conn)
+
 tts_manager = TTSConnectionManager()
+
+async def broadcast_to_vrm(self, message: Union[str, bytes]):
+    if not self.vrm_connections:
+        return
+    disconnected = []
+    for connection in self.vrm_connections:
+        try:
+            if isinstance(message, bytes):
+                await connection.send_bytes(message)
+            else:
+                await connection.send_text(message)
+        except:
+            disconnected.append(connection)
+    for conn in disconnected:
+        self.disconnect_vrm(conn)
 
 @app.websocket("/ws/tts")
 async def tts_websocket_endpoint(websocket: WebSocket):
-    """主界面的WebSocket连接"""
     await tts_manager.connect_main(websocket)
     try:
         while True:
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            
-            logging.info(f"Received from main: {message['type']}")
-            
-            # 如果消息包含音频URL，需要特殊处理
-            if message['type'] == 'startSpeaking' and 'audioUrl' in message['data']:
-                # 获取音频数据并转换为base64
-                audio_url = message['data']['audioUrl']
-                chunk_index = message['data']['chunkIndex']
-                expressions = message['data']['expressions']
-                # 生成音频ID
-                audio_id = f"chunk_{chunk_index}_{message['data'].get('timestamp', '')}"
-                
-                # 修改消息，使用音频ID而不是URL
-                message['data']['audioId'] = audio_id
-                message['data']['useBase64'] = True
-                
-                # 如果有缓存的音频数据，直接发送
-                cached_audio = tts_manager.get_cached_audio(audio_id)
-                if cached_audio:
-                    message['data']['audioData'] = base64.b64encode(cached_audio).decode('utf-8')
-            
-            # 转发到所有VRM连接
-            await tts_manager.broadcast_to_vrm({
-                'type': message['type'],
-                'data': message['data'],
-                'timestamp': message.get('timestamp', None)
-            })
-            
+            msg = await websocket.receive()
+            # 透传所有数据，无论是 bytes 还是 text
+            if "bytes" in msg:
+                await tts_manager.broadcast_to_vrm(msg["bytes"])
+            elif "text" in msg:
+                await tts_manager.broadcast_to_vrm(msg["text"])
     except WebSocketDisconnect:
-        tts_manager.disconnect_main(websocket)
-    except Exception as e:
-        logging.error(f"WebSocket error in main connection: {e}")
         tts_manager.disconnect_main(websocket)
 
 @app.websocket("/ws/vrm")
 async def vrm_websocket_endpoint(websocket: WebSocket):
-    """VRM界面的WebSocket连接"""
+    """VRM 窗口 WebSocket：接收主窗口发来的数据"""
     await tts_manager.connect_vrm(websocket)
     try:
         while True:
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            
-            logging.info(f"Received from VRM: {message['type']}")
-            
-            # 处理VRM请求音频数据
-            if message['type'] == 'requestAudioData':
-                audio_id = message['data']['audioId']
-                expressions = message['data']['expressions']
-                text = message['data']['text']
-                cached_audio = tts_manager.get_cached_audio(audio_id)
-                
-                if cached_audio:
-                    await websocket.send_text(json.dumps({
-                        'type': 'audioData',
-                        'data': {
-                            'audioId': audio_id,
-                            'audioData': base64.b64encode(cached_audio).decode('utf-8'),
-                            'expressions':expressions,
-                            'text':text
-                        }
-                    }))
-            
-            # 可以处理VRM发送的状态信息
-            elif message['type'] == 'animationComplete':
-                await tts_manager.send_to_main({
-                    'type': 'vrmAnimationComplete',
-                    'data': message['data']
-                })
-            
+            msg = await websocket.receive()
+            if "text" in msg:
+                # 处理来自 VRM 的反馈（如 requestAudioData 或 animationComplete）
+                data = json.loads(msg["text"])
+                if data.get('type') == 'animationComplete':
+                    await tts_manager.send_to_main(msg["text"])
+            # VRM 窗口通常不主动给主窗口发二进制，所以这里暂不处理 bytes
     except WebSocketDisconnect:
         tts_manager.disconnect_vrm(websocket)
     except Exception as e:
-        logging.error(f"WebSocket error in VRM connection: {e}")
+        logging.error(f"WS error in VRM: {e}")
         tts_manager.disconnect_vrm(websocket)
-
 
 @app.get("/tts/status")
 async def get_tts_status():
