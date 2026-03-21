@@ -1,5 +1,5 @@
 const remoteMain = require('@electron/remote/main')
-const { app, BrowserWindow, ipcMain, screen, shell, dialog, Tray, Menu, session} = require('electron')
+const { app, BrowserWindow, ipcMain, screen, shell, dialog, Tray, Menu, session,globalShortcut} = require('electron')
 const { clipboard, nativeImage,desktopCapturer  } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
@@ -1675,9 +1675,51 @@ app.whenReady().then(async () => {
     dialog.showErrorBox('启动失败', `服务启动失败: ${err.message}`)
     app.quit()
   }
+
+
+  let currentGlobalKey = null;
+
+  ipcMain.handle('register-global-shortcut', (event, key) => {
+    // 如果之前有注册过的，先注销
+    if (currentGlobalKey) {
+      globalShortcut.unregister(currentGlobalKey);
+    }
+    try {
+      // 注册新的快捷键
+      const success = globalShortcut.register(key, () => {
+        // 当全局快捷键被按下时，通知主窗口前端
+        BrowserWindow.getAllWindows().forEach(w => {
+          if (!w.isDestroyed()) w.webContents.send('global-shortcut-triggered');
+        });
+      });
+      
+      if (success) {
+        currentGlobalKey = key;
+        console.log(`[ASR] 全局快捷键 ${key} 注册成功`);
+        return true;
+      } else {
+        console.warn(`[ASR] 全局快捷键 ${key} 注册失败，可能被系统或其他软件占用`);
+        return false;
+      }
+    } catch (e) {
+      console.error('[ASR] 全局快捷键异常:', e);
+      return false;
+    }
+  });
+
+  ipcMain.handle('unregister-global-shortcut', () => {
+    if (currentGlobalKey) {
+      globalShortcut.unregister(currentGlobalKey);
+      currentGlobalKey = null;
+    }
+    return true;
+  });
+
 })
 
-
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+});
 
 // 应用退出处理
 app.on('before-quit', async (event) => {
