@@ -1525,7 +1525,7 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
             content_append(request.messages, 'system', permission_message)
         elif permissionMode == "cowork":
             if not request.is_sub_agent:
-                permission_message += "你当前处于协作模式，create_subtask工具可以帮你完成几乎任何任务（比如查资料、写代码、生成报告等），当你遇到难题时，可以尝试把它分解成一个个小任务，交给create_subtask工具去完成！"
+                permission_message += "你当前处于协作模式，create_subtask工具可以帮你完成几乎任何任务（比如查资料、写代码、生成报告等），当你遇到难题时，可以尝试把它分解成一个个小任务，交给create_subtask工具去完成！当用户再次询问进度时，你可以用query_task_progress工具查询任务进度和获取详细结果\n\n"
                 content_append(request.messages, 'system', permission_message)
             else:
                 permission_message = "你当前处于执行模式，你可以自由地使用所有工具，但请注意不要滥用权限！如果有更安全的工具，请不要直接使用bash命令！"

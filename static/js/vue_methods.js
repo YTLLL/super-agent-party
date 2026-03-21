@@ -7459,7 +7459,7 @@ handleCreateSlackSeparator(val) {
   // 1. 按下：开始录音
   async handlePttPress(event) {
     this.stopAllAudioPlayback(); // 停止所有正在播放的音频
-    
+    this.TTSrunning = false; // 停止任何正在播放的 TTS
     // 手动阻止默认事件，解决 _withMods 报错
     if (event && event.preventDefault) {
       if (event.type !== 'touchstart') {
