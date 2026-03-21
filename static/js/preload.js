@@ -123,6 +123,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRemoteInstall: (callback) => ipcRenderer.on('remote-install-any', (_, payload) => callback(payload)),
   checkPendingInstall: () => ipcRenderer.invoke('check-pending-install'),
 
+  registerGlobalShortcut: (key) => ipcRenderer.invoke('register-global-shortcut', key),
+  unregisterGlobalShortcut: () => ipcRenderer.invoke('unregister-global-shortcut'),
+  onGlobalShortcutTriggered: (callback) => ipcRenderer.on('global-shortcut-triggered', callback),
+
 });
 
 contextBridge.exposeInMainWorld('vmcAPI', {

@@ -683,6 +683,28 @@ const app = Vue.createApp({
   },
   async mounted() {
     try {
+      if (window.electronAPI?.onGlobalShortcutTriggered) {
+          window.electronAPI.onGlobalShortcutTriggered(async () => {
+            // 只有启用了 ASR 且模式为全局快捷键时才生效
+            if (this.asrSettings.interactionMethod !== 'globalKeyTriggered') return;
+
+            if (!this.isGlobalRecording) {
+              // 第 1 次按下组合键：开始录音
+              this.isGlobalRecording = true;
+              await this.handlePttPress(); 
+              // 可选：给个提示，让用户知道在后台录音开始了
+              showNotification(this.t('globalRecordingStarted'), 'success')
+            } else {
+              // 第 2 次按下组合键：结束录音
+              this.isGlobalRecording = false;
+              await this.handlePttRelease(); 
+            }
+          });
+        }
+
+        // 初始化加载时，尝试注册全局快捷键
+        this.updateGlobalShortcut();
+
       if (window.electron && window.electron.ipcRenderer) {
           window.electron.ipcRenderer.on('trigger-search', (text) => {
               // 1. 将选中的文本填入地址栏变量
@@ -963,6 +985,9 @@ const handleRemoteInstall = (data) => {
     this.stopExtensionsPolling();
     clearInterval(this.nodeTimer);
     clearInterval(this.uvTimer); 
+    if (window.electronAPI?.unregisterGlobalShortcut) {
+      window.electronAPI.unregisterGlobalShortcut();
+    }
     if (isElectron) {
       delete window.stopQQBotHandler;
       delete window.stopFeishuBotHandler;
@@ -978,6 +1003,13 @@ const handleRemoteInstall = (data) => {
     window.removeEventListener('resize', this.handleResize);
   },
   watch: {
+    'asrSettings.interactionMethod': {
+      handler() { this.updateGlobalShortcut(); }
+    },
+    'asrSettings.enabled': {
+      handler() { this.updateGlobalShortcut(); }
+    },
+
     sidePanelOpen(val) {
         if (!val && this.taskRefreshTimer) {
             clearInterval(this.taskRefreshTimer);

@@ -20,7 +20,7 @@ class SubAgentExecutor:
         self,
         task_id: str,
         consensus_content: Optional[str] = None,
-        max_iterations: int = 100
+        max_iterations: int = 30
     ) -> Dict[str, Any]:
         """执行子任务的主循环"""
         task_center = await get_task_center(self.workspace_dir)
