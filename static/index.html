@@ -1744,9 +1744,8 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 <template #image>
                                     <i class="fa-solid fa-folder-minus" style="font-size: 48px; color: var(--el-text-color-secondary);"></i>
                                 </template>
-                                <p style="color: var(--el-text-color-secondary); font-size: 14px;">{{ t('workspaceNeedsCLI') || '请先选择工作区目录' }}</p>
                                 <el-button type="primary" @click="browseDirectory">
-                                    {{ t('selectWorkspace') || '选择文件夹' }}
+                                    {{ t('pleaseSelectWorkspaceFirst') || '选择文件夹' }}
                                 </el-button>
                             </el-empty>
                         </div>
