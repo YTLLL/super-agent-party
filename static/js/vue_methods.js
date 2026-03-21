@@ -15596,7 +15596,13 @@ async handleRefreshSkills() {
         if (this.taskRefreshTimer) clearInterval(this.taskRefreshTimer);
         this.taskRefreshTimer = setInterval(this.fetchTasks, 3000);
     },
-
+    openWorkspace() {
+        this.activeSideView = 'workspace'
+        this.sidePanelURL = ''; // 确保 iframe 关闭
+        this.currentExtension = null;
+        this.showExtensionsDialog = false; // 关闭对话框
+        this.expandSidePanel();
+    },
     // 关闭任务中心（返回列表）
     closeTaskCenter() {
         this.activeSideView = 'list';

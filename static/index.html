@@ -619,7 +619,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
           <el-card 
             class="extension-card workspace-card"
-            @click="activeSideView = 'workspace'"
+            @click="openWorkspace()"
             v-show="isElectron">
             <div class="extension-info">
               <h3>{{ t('workspace') || '工作区文件' }}</h3>
@@ -1845,7 +1845,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   
                   <el-card 
                     class="extension-card workspace-card"
-                    @click="activeSideView = 'workspace'"
+                    @click="openWorkspace()"
                     v-show="isElectron">
                     <div class="extension-info">
                       <h3>{{ t('workspace') || '工作区文件' }}</h3>
