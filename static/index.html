@@ -5494,7 +5494,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <div class="param-header">
                         <span>{{ t('extraParams') }}</span>
                         <el-button 
-                          @click="addParam"
+                          @click="addFastParam"
                           type="primary"
                           circle
                           size="small"
@@ -5519,7 +5519,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <el-select
                             v-model="param.type"
                             :placeholder="t('paramType')"
-                            @change="updateParamType(index)"
+                            @change="updateFastParamType(index)"
                             class="type-select"
                           >
                             <el-option
@@ -5563,7 +5563,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </div>
                       
                           <el-button
-                            @click="removeParam(index)"
+                            @click="removeFastParam(index)"
                             type="danger"
                             circle
                             size="small"

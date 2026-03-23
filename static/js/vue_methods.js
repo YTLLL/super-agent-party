@@ -275,6 +275,16 @@ let vue_methods = {
       });
       await this.autoSaveSettings();
     },
+
+    async addFastParam() {
+      this.fastSettings.extra_params.push({
+        name: '',
+        type: 'string',  // 默认类型
+        value: ''        // 根据类型自动初始化
+      });
+      await this.autoSaveSettings();
+    },
+
     async updateParamType(index) {
       const param = this.settings.extra_params[index];
       // 根据类型初始化值
@@ -291,10 +301,34 @@ let vue_methods = {
       }
       await this.autoSaveSettings();
     },
+
+    async updateFastParamType(index) {
+      const param = this.fastSettings.extra_params[index];
+      // 根据类型初始化值
+      switch(param.type) {
+        case 'boolean':
+          param.value = false;
+          break;
+        case 'integer':
+        case 'float':
+          param.value = 0;
+          break;
+        default:
+          param.value = '';
+      }
+      await this.autoSaveSettings();
+    },
+
+
     async removeParam(index) {
       this.settings.extra_params.splice(index, 1);
       await this.autoSaveSettings();
     },
+    async removeFastParam(index) {
+      this.fastSettings.extra_params.splice(index, 1);
+      await this.autoSaveSettings();
+    },
+
     switchTollmTools() {
       this.activeMenu = 'toolkit';
       this.subMenu = 'llmTool';
