@@ -426,7 +426,7 @@ function updateElement(el, rawMarkdown, formatFn) {
           text
           :title="isAssistantMode ?  t('maximize'):t('assistantMode')">
           <el-icon>
-            <i :class="isAssistantMode ?  'fa-solid fa-expand' : 'fa-solid fa-wand-magic-sparkles'"></i>
+            <i :class="isAssistantMode ?  'fa-solid fa-expand' : 'fa-solid fa-mobile-screen'"></i>
           </el-icon>
         </el-button>
         <el-button v-if="!isMac&&!isMobile" @click="minimizeWindow" class="top-bar-btn" text :title="t('minimize')">
