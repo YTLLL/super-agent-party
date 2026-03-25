@@ -9711,3 +9711,55 @@ hr.footnotes-sep {
   background-color: var(--el-fill-color) !important;
   transform: scale(1.1);
 }
+
+/* 1. 整体容器间距调整 */
+.workspace-tree-wrapper {
+    padding: 15px !important; /* 增加外边距 */
+}
+
+/* 2. 调整树节点的高度和文字大小 */
+.large-workspace-tree .el-tree-node__content {
+    height: 40px !important;   /* 增加每一行的高度 (默认通常是 26px) */
+    margin-bottom: 2px;        /* 节点之间留一点缝隙 */
+    border-radius: 6px;        /* 圆角看起来更现代 */
+}
+
+/* 3. 调整自定义节点内部布局 */
+.workspace-tree-node {
+    font-size: 15px !important; /* 放大文字大小 (从 13px -> 15px) */
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+/* 4. 放大图标尺寸 */
+.workspace-tree-node i {
+    font-size: 18px !important; /* 图标放大 (从 14px -> 18px) */
+    margin-right: 10px !important; /* 图标与文字的间距 */
+    width: 20px;
+    text-align: center;
+}
+
+/* 5. 调整节点标签 */
+.workspace-tree-node .node-label {
+    gap: 8px !important; 
+    font-weight: 500; /* 稍微加粗文字 */
+    color: var(--el-text-color-primary);
+}
+
+/* 6. 调整右侧操作按钮的大小 */
+.workspace-tree-node .node-actions .el-button {
+    font-size: 16px !important; /* 放大操作图标 */
+    padding: 4px 8px;
+}
+
+/* 7. 悬浮状态背景加深（可选） */
+.large-workspace-tree .el-tree-node__content:hover {
+    background-color: var(--el-fill-color-light) !important;
+}
+
+/* 8. 选中状态样式 */
+.large-workspace-tree .el-tree-node.is-current > .el-tree-node__content {
+    background-color: var(--el-color-primary-light-9) !important;
+    color: var(--el-color-primary) !important;
+}

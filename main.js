@@ -1715,6 +1715,48 @@ app.whenReady().then(async () => {
     return true;
   });
 
+// ================= [新增：工作区文件树后台逻辑] =================
+    // 1. 读取目录内容 (懒加载)
+    ipcMain.handle('read-directory', async (event, dirPath) => {
+      try {
+        if (!fs.existsSync(dirPath)) {
+          return { success: false, error: 'Directory does not exist' };
+        }
+        const items = await fs.promises.readdir(dirPath, { withFileTypes: true });
+        
+        const result = items.map(item => ({
+          name: item.name,
+          path: path.join(dirPath, item.name),
+          isDirectory: item.isDirectory()
+        }));
+
+        // 排序规则：文件夹排在前面，按字母顺序排列
+        result.sort((a, b) => {
+          if (a.isDirectory === b.isDirectory) {
+            return a.name.localeCompare(b.name);
+          }
+          return a.isDirectory ? -1 : 1;
+        });
+
+        return { success: true, data: result };
+      } catch (error) {
+        console.error('读取目录失败:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    // 2. 删除文件或文件夹 (移动到回收站以保安全)
+    ipcMain.handle('delete-workspace-file', async (event, filePath) => {
+      try {
+        await shell.trashItem(filePath); // 移动到系统回收站，比 fs.rm 更安全
+        return { success: true };
+      } catch (error) {
+        console.error('删除文件失败:', error);
+        return { success: false, error: error.message };
+      }
+    });
+    // ==============================================================
+
 })
 
 app.on('will-quit', () => {

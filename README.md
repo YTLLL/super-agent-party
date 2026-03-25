@@ -173,6 +173,7 @@ Added a brand-new extension system. You can check available plugins at [plugins 
 | AI RSS reader      | heshengtao  | This is an AI RSS reader extension for the Super Agent Party      | https://github.com/heshengtao/sap-rss  |
 | Remote      | heshengtao  | One-click expose Super Agent Party to the public internet             | https://github.com/heshengtao/sap-remote  |
 | Code Server      | heshengtao  | IDE extension for Super Agent Party          | https://github.com/heshengtao/sap-code-server  |
+| CLI      | heshengtao  |  CLI extension for Super Agent Party           | https://github.com/heshengtao/sap-cli  |
 
 ## Hardware requirements
 

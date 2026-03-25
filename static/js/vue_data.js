@@ -2051,4 +2051,10 @@ main();`,
     isPttMode: false,      // 控制输入框是否在【按住说话】模式
     isPttRecording: false, // 控制是否正在录制
     isGlobalRecording: false, 
+    workspaceTreeKey: 0, // 用于强制刷新整个树组件
+    workspaceTreeProps: {
+      label: 'name',
+      children: 'children',
+      isLeaf: (data) => !data.isDirectory // 告诉 el-tree 如果不是文件夹就是叶子节点（不可展开）
+    },
 };

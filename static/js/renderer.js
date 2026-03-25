@@ -1003,6 +1003,15 @@ const handleRemoteInstall = (data) => {
     window.removeEventListener('resize', this.handleResize);
   },
   watch: {
+    'CLISettings.cc_path': function(newVal, oldVal) {
+      if (newVal && newVal !== oldVal) {
+        // 路径发生变化时，如果当前正好在工作区视图，则刷新树
+        if (this.activeSideView === 'workspace') {
+          this.refreshWorkspaceTree();
+        }
+      }
+    },
+
     'asrSettings.interactionMethod': {
       handler() { this.updateGlobalShortcut(); }
     },

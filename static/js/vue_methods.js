@@ -275,6 +275,16 @@ let vue_methods = {
       });
       await this.autoSaveSettings();
     },
+
+    async addFastParam() {
+      this.fastSettings.extra_params.push({
+        name: '',
+        type: 'string',  // 默认类型
+        value: ''        // 根据类型自动初始化
+      });
+      await this.autoSaveSettings();
+    },
+
     async updateParamType(index) {
       const param = this.settings.extra_params[index];
       // 根据类型初始化值
@@ -291,10 +301,34 @@ let vue_methods = {
       }
       await this.autoSaveSettings();
     },
+
+    async updateFastParamType(index) {
+      const param = this.fastSettings.extra_params[index];
+      // 根据类型初始化值
+      switch(param.type) {
+        case 'boolean':
+          param.value = false;
+          break;
+        case 'integer':
+        case 'float':
+          param.value = 0;
+          break;
+        default:
+          param.value = '';
+      }
+      await this.autoSaveSettings();
+    },
+
+
     async removeParam(index) {
       this.settings.extra_params.splice(index, 1);
       await this.autoSaveSettings();
     },
+    async removeFastParam(index) {
+      this.fastSettings.extra_params.splice(index, 1);
+      await this.autoSaveSettings();
+    },
+
     switchTollmTools() {
       this.activeMenu = 'toolkit';
       this.subMenu = 'llmTool';
@@ -6931,9 +6965,8 @@ handleCreateSlackSeparator(val) {
     initWebSpeechAPI() {
       if(isElectron){
         showNotification(this.t('webSpeechNotSupportedInElectron'), 'error');
-        const url = this.partyURL;
-        window.electronAPI.openExternal(url);
         this.asrSettings.enabled = false;
+        this.autoSaveSettings();
         return false;
       }
 
@@ -15596,7 +15629,13 @@ async handleRefreshSkills() {
         if (this.taskRefreshTimer) clearInterval(this.taskRefreshTimer);
         this.taskRefreshTimer = setInterval(this.fetchTasks, 3000);
     },
-
+    openWorkspace() {
+        this.activeSideView = 'workspace'
+        this.sidePanelURL = ''; // 确保 iframe 关闭
+        this.currentExtension = null;
+        this.showExtensionsDialog = false; // 关闭对话框
+        this.expandSidePanel();
+    },
     // 关闭任务中心（返回列表）
     closeTaskCenter() {
         this.activeSideView = 'list';
@@ -15885,5 +15924,88 @@ closeTaskCenter() {
     // 校验通过或关闭开关，正常执行保存
     this.autoSaveSettings();
   },
+  // 1. 懒加载读取文件目录
+  async loadWorkspaceNode(node, resolve) {
+    // 顶层节点：加载工作区根目录
+    if (node.level === 0) {
+      if (!this.CLISettings || !this.CLISettings.cc_path) {
+        return resolve([]); 
+      }
+      try {
+        const res = await window.electronAPI.readDirectory(this.CLISettings.cc_path);
+        if (res.success) {
+          return resolve(res.data);
+        } else {
+          this.$message?.error(this.t('readDirError') || '读取工作区目录失败: ' + res.error);
+          return resolve([]);
+        }
+      } catch (error) {
+        console.error(error);
+        return resolve([]);
+      }
+    }
 
+    // 子节点：加载被点击的子目录
+    if (node.level > 0 && node.data.isDirectory) {
+      try {
+        const res = await window.electronAPI.readDirectory(node.data.path);
+        if (res.success) {
+          return resolve(res.data);
+        } else {
+          this.$message?.error(this.t('readDirError') || '读取子目录失败: ' + res.error);
+          return resolve([]);
+        }
+      } catch (error) {
+        console.error(error);
+        return resolve([]);
+      }
+    }
+    
+    resolve([]);
+  },
+
+  // 2. 使用系统默认程序打开文件
+  openWorkspaceFile(filePath) {
+    if (window.electronAPI && window.electronAPI.openPath) {
+      window.electronAPI.openPath(filePath);
+    }
+  },
+
+  // 3. 删除文件/文件夹
+  async deleteWorkspaceFile(data, node) {
+    try {
+      // 弹出确认框 (兼容 Element Plus 的 this.$confirm)
+      await this.$confirm(
+        (this.t('confirmDelete') || '确认将该文件放入回收站吗？') + `\n${data.name}`,
+        this.t('warning') || '警告',
+        { 
+          confirmButtonText: this.t('confirm') || '确定', 
+          cancelButtonText: this.t('cancel') || '取消', 
+          type: 'warning' 
+        }
+      );
+      
+      const res = await window.electronAPI.deleteWorkspaceFile(data.path);
+      if (res.success) {
+        this.$message?.success(this.t('deleteSuccess') || '删除成功');
+        // 从前端界面中动态移除该节点，避免重新读取整个目录树
+        const parent = node.parent;
+        const children = parent.data.children || parent.childNodes;
+        const index = children.findIndex(d => d.data.path === data.path);
+        if (index !== -1) {
+          children.splice(index, 1);
+        }
+      } else {
+        this.$message?.error((this.t('deleteFailed') || '删除失败: ') + res.error);
+      }
+    } catch (error) {
+      // 用户点击了取消，不做任何处理
+    }
+  },
+
+  // 5. 刷新整个工作区树
+  refreshWorkspaceTree() {
+    // 改变 key 值会让 Vue 销毁并重建 el-tree，从而重新触发 load()
+    this.workspaceTreeKey += 1;
+  },
 }

@@ -617,6 +617,16 @@ function updateElement(el, rawMarkdown, formatFn) {
             </div>
           </el-card>
 
+          <el-card 
+            class="extension-card workspace-card"
+            @click="openWorkspace()"
+            v-show="isElectron">
+            <div class="extension-info">
+              <h3>{{ t('workspace') || '工作区文件' }}</h3>
+              <p>{{ t('workspaceDescription') || '管理与查看本地工作区文件树' }}</p>
+            </div>
+          </el-card>
+          
           <!-- 分隔线 -->
           <div class="extensions-divider" v-if="extensions.length > 0">
             <span>
@@ -1711,6 +1721,90 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </div>
                 </div>
 
+                <!-- 1.5 工作区文件视图 (新增) -->
+                <div v-else-if="activeSideView === 'workspace'" class="workspace-center-container" style="height: 100%; display: flex; flex-direction: column;">
+                    
+                    <!-- 顶部 Header -->
+                    <div class="workspace-header" style="display: flex; align-items: center; padding: 10px; border-bottom: 1px solid var(--el-border-color-lighter);">
+                        <el-button link @click="activeSideView = 'list'">
+                            <i class="fa-solid fa-chevron-left"></i> {{ t('back') }}
+                        </el-button>
+                        <span class="header-title" style="flex: 1; text-align: center; font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ CLISettings.cc_path ? CLISettings.cc_path.split(/[/\\]/).filter(Boolean).pop() : (t('workspace') || '工作区') }}
+                        </span>
+                        <el-button link @click="refreshWorkspaceTree" style="width: 40px;">
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </el-button>
+                    </div>
+
+                    <div class="workspace-content-wrapper" style="flex: 1; overflow-y: auto; position: relative;">
+                        <!-- 未配置工作区路径时 -->
+                        <div v-if="!CLISettings.cc_path" class="task-empty-state" style="padding: 40px 20px; text-align: center;">
+                            <el-empty :description="t('noWorkspaceConfigured')">
+                                <template #image>
+                                    <i class="fa-solid fa-folder-minus" style="font-size: 48px; color: var(--el-text-color-secondary);"></i>
+                                </template>
+                                <el-button type="primary" @click="browseDirectory">
+                                    {{ t('pleaseSelectWorkspaceFirst') || '选择文件夹' }}
+                                </el-button>
+                            </el-empty>
+                        </div>
+
+                        <!-- 文件树及拖拽区域 -->
+                        <div v-else 
+                            class="workspace-tree-wrapper" 
+                            style="padding: 10px; height: 100%; box-sizing: border-box;">
+
+                            <!-- 文件树组件 (使用 Element Plus El-Tree) -->
+                            <!-- lazy 和 load 用于动态加载子文件夹，性能更好 -->
+                            <el-tree
+                                :key="workspaceTreeKey"
+                                ref="workspaceTreeRef"
+                                :data="workspaceTreeData"
+                                :props="workspaceTreeProps"
+                                node-key="path"
+                                lazy
+                                :load="loadWorkspaceNode"
+                                :expand-on-click-node="false"
+                                :indent="24" 
+                                class="large-workspace-tree"
+                                style="background: transparent;">
+                                
+                                <!-- 自定义节点渲染 -->
+                                <template #default="{ node, data }">
+                                    <div class="workspace-tree-node" style="display: flex; flex: 1; align-items: center; justify-content: space-between; font-size: 13px; padding-right: 8px;">
+                                        <!-- 文件名与图标 -->
+                                        <div class="node-label" 
+                                             style="display: flex; align-items: center; gap: 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
+                                             @dblclick="data.isDirectory ? null : openWorkspaceFile(data.path)"
+                                             @click="data.isDirectory ? node.expanded = !node.expanded : null">
+                                            
+                                            <!-- 图标：文件夹展开/收起，或者普通文件 -->
+                                            <i :class="data.isDirectory ? (node.expanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder') : 'fa-regular fa-file-lines'" 
+                                               :style="{ color: data.isDirectory ? '#E6A23C' : 'var(--el-text-color-regular)' }"></i>
+                                            <span :title="node.label">{{ node.label }}</span>
+                                        </div>
+
+                                        <!-- 操作按钮组 (鼠标悬浮显示) -->
+                                        <div class="node-actions">
+                                            <el-tooltip v-if="!data.isDirectory" :content="t('openDefault') || '默认应用打开'" placement="top">
+                                                <el-button link size="small" @click.stop="openWorkspaceFile(data.path)">
+                                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                                </el-button>
+                                            </el-tooltip>
+                                            <el-tooltip :content="t('delete') || '删除'" placement="top">
+                                                <el-button link type="danger" size="small" @click.stop="deleteWorkspaceFile(data, node)">
+                                                    <i class="fa-solid fa-trash-can"></i>
+                                                </el-button>
+                                            </el-tooltip>
+                                        </div>
+                                    </div>
+                                </template>
+                            </el-tree>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 2. 扩展 Iframe 视图 -->
                 <iframe class="side-panel-iframe" 
                         v-else-if="sidePanelURL" 
@@ -1749,6 +1843,16 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </div>
                   </el-card>
                   
+                  <el-card 
+                    class="extension-card workspace-card"
+                    @click="openWorkspace()"
+                    v-show="isElectron">
+                    <div class="extension-info">
+                      <h3>{{ t('workspace') || '工作区文件' }}</h3>
+                      <p>{{ t('workspaceDescription') || '管理与查看本地工作区文件树' }}</p>
+                    </div>
+                  </el-card>
+
                   <div class="extensions-divider" v-if="extensions.length > 0">
                     <span>
                       {{ t('availableExtensions') }}
@@ -5390,7 +5494,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <div class="param-header">
                         <span>{{ t('extraParams') }}</span>
                         <el-button 
-                          @click="addParam"
+                          @click="addFastParam"
                           type="primary"
                           circle
                           size="small"
@@ -5415,7 +5519,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <el-select
                             v-model="param.type"
                             :placeholder="t('paramType')"
-                            @change="updateParamType(index)"
+                            @change="updateFastParamType(index)"
                             class="type-select"
                           >
                             <el-option
@@ -5459,7 +5563,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </div>
                       
                           <el-button
-                            @click="removeParam(index)"
+                            @click="removeFastParam(index)"
                             type="danger"
                             circle
                             size="small"

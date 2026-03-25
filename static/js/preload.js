@@ -126,7 +126,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   registerGlobalShortcut: (key) => ipcRenderer.invoke('register-global-shortcut', key),
   unregisterGlobalShortcut: () => ipcRenderer.invoke('unregister-global-shortcut'),
   onGlobalShortcutTriggered: (callback) => ipcRenderer.on('global-shortcut-triggered', callback),
-
+  readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
+  deleteWorkspaceFile: (filePath) => ipcRenderer.invoke('delete-workspace-file', filePath),
 });
 
 contextBridge.exposeInMainWorld('vmcAPI', {
