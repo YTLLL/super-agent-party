@@ -1460,9 +1460,9 @@ body {
 }
 
 .system .message-content {
-  background: var(--el-color-primary-light-3);
-  border: 1px solid var(--el-border-color-light);
-  color: #ffffff;
+  background-color: var(--el-bg-color) !important;
+  border: 1px solid var(--el-border-color-lighter) !important;
+  color: var(--el-text-color-primary) !important; /* 增加文字颜色定义 */
   border-radius: 12px;
   padding: 5px;
   box-shadow: var(--el-box-shadow)!important;
