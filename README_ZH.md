@@ -7,6 +7,9 @@
   <a href="./README.md">
     <img src="https://img.shields.io/badge/English-Readme-0057D2?style=for-the-badge&logo=markdown"/>
   </a>
+  <a href="./README_JA.md">
+    <img src="https://img.shields.io/badge/日本語-Readme-FF69B4?style=for-the-badge&logo=markdown"/>
+  </a>
 </div>
 
 ####
