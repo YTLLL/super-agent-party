@@ -956,9 +956,11 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         mouse_click_async,
         mouse_drag_async,
         mouse_scroll_async,
+        mouse_hold_async,
         keyboard_type_async,
         keyboard_press_async,
         keyboard_hotkey_async,
+        keyboard_hold_async,
         wait_async
     )
 
@@ -1059,9 +1061,11 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "mouse_click_async":mouse_click_async,
         "mouse_drag_async":mouse_drag_async,
         "mouse_scroll_async":mouse_scroll_async,
+        "mouse_hold_async":mouse_hold_async,
         "keyboard_type_async":keyboard_type_async,
         "keyboard_press_async":keyboard_press_async,
         "keyboard_hotkey_async":keyboard_hotkey_async,
+        "keyboard_hold_async":keyboard_hold_async,
         "wait_async":wait_async
     }
     
@@ -5302,9 +5306,11 @@ async def execute_tool_manually(request: Request):
         mouse_click_async,
         mouse_drag_async,
         mouse_scroll_async,
+        mouse_hold_async,
         keyboard_type_async,
         keyboard_press_async,
         keyboard_hotkey_async,
+        keyboard_hold_async,
         wait_async
     )
 
@@ -5405,9 +5411,11 @@ async def execute_tool_manually(request: Request):
         "mouse_click_async":mouse_click_async,
         "mouse_drag_async":mouse_drag_async,
         "mouse_scroll_async":mouse_scroll_async,
+        "mouse_hold_async":mouse_hold_async,
         "keyboard_type_async":keyboard_type_async,
         "keyboard_press_async":keyboard_press_async,
         "keyboard_hotkey_async":keyboard_hotkey_async,
+        "keyboard_hold_async":keyboard_hold_async,
         "wait_async":wait_async
     }
     

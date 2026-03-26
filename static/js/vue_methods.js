@@ -2118,6 +2118,16 @@ let vue_methods = {
                             currentMsg.first_token_latency = this.elapsedTime;
                         }
 
+                        // ... (后续 reasoning, audio, token 处理保持原样)
+                        if (delta.reasoning_content) {
+                            if (!this.isThinkOpen) {
+                                currentMsg.content += '<div class="highlight-block-reasoning">';
+                                this.isThinkOpen = true;
+                            }
+                            currentMsg.content += delta.reasoning_content.replace(/\n/g, '<br>');
+                            this.scrollToBottom();
+                        }
+
                         // 1. 处理文本
                         if (delta.content) {
                             if (this.isThinkOpen) { 
@@ -2433,15 +2443,6 @@ let vue_methods = {
                                     }
                                 }
                             }
-                            this.scrollToBottom();
-                        }
-                        // ... (后续 reasoning, audio, token 处理保持原样)
-                        if (delta.reasoning_content) {
-                            if (!this.isThinkOpen) {
-                                currentMsg.content += '<div class="highlight-block-reasoning">';
-                                this.isThinkOpen = true;
-                            }
-                            currentMsg.content += delta.reasoning_content.replace(/\n/g, '<br>');
                             this.scrollToBottom();
                         }
 

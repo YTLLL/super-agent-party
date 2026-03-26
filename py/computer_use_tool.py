@@ -91,6 +91,43 @@ async def keyboard_hotkey_async(keys: List[str]) -> str:
     await asyncio.to_thread(pyautogui.hotkey, *keys)
     return f"已触发组合键：{' + '.join(keys)}。"
 
+async def keyboard_hold_async(keys: List[str], duration: float) -> str:
+    """
+    长按一个或多个按键一段时间后释放。
+    常用于游戏中控制角色移动（如长按 'w' 走 2 秒）。
+    """
+    def _hold_logic():
+        try:
+            # 按下所有指定的键
+            for key in keys:
+                pyautogui.keyDown(key)
+            # 等待指定时间
+            import time
+            time.sleep(duration)
+        finally:
+            # 无论是否发生异常，确保释放按键
+            for key in reversed(keys):
+                pyautogui.keyUp(key)
+
+    await asyncio.to_thread(_hold_logic)
+    return f"已成功长按组合键 {keys} 持续 {duration} 秒。"
+
+async def mouse_hold_async(button: str, duration: float) -> str:
+    """
+    长按鼠标按键一段时间后释放。
+    常用于游戏中开火、蓄力或 UI 中的长按操作。
+    """
+    def _hold_logic():
+        try:
+            pyautogui.mouseDown(button=button)
+            import time
+            time.sleep(duration)
+        finally:
+            pyautogui.mouseUp(button=button)
+
+    await asyncio.to_thread(_hold_logic)
+    return f"已成功按住鼠标 {button} 键持续 {duration} 秒。"
+
 async def wait_async(seconds: float) -> str:
     """等待一段时间，让页面或程序加载"""
     await asyncio.sleep(seconds)
@@ -231,14 +268,62 @@ wait_tool = {
     }
 }
 
+keyboard_hold_tool = {
+    "type": "function",
+    "function": {
+        "name": "keyboard_hold_async",
+        "description": "长按键盘上的一个或多个按键一段时间。这对于控制游戏角色移动或执行需要按住的操作非常有用。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "需要按住的按键列表。例如 ['w'] 或 ['w', 'shift']。"
+                },
+                "duration": {
+                    "type": "number", 
+                    "description": "按住的时长（秒）。"
+                }
+            },
+            "required": ["keys", "duration"]
+        }
+    }
+}
+
+mouse_hold_tool = {
+    "type": "function",
+    "function": {
+        "name": "mouse_hold_async",
+        "description": "长按鼠标某个按键一段时间。适用于游戏中的蓄力、持续开火或某些 UI 的长按菜单。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "button": {
+                    "type": "string", 
+                    "enum": ["left", "right", "middle"],
+                    "description": "要按住的鼠标按键。"
+                },
+                "duration": {
+                    "type": "number", 
+                    "description": "按住的时长（秒）。"
+                }
+            },
+            "required": ["button", "duration"]
+        }
+    }
+}
+
 # 导出所有工具到列表，方便主程序统一挂载
 computer_use_tools = [
     mouse_move_tool,
     mouse_click_tool,
     mouse_drag_tool,
     mouse_scroll_tool,
+    mouse_hold_tool,
     keyboard_type_tool,
     keyboard_press_tool,
     keyboard_hotkey_tool,
+    keyboard_hold_tool,
     wait_tool
 ]
