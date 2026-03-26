@@ -107,6 +107,68 @@ async def _get_current_cwd() -> str:
         raise ValueError("No workspace directory specified in settings (CLISettings.cc_path).")
     return cwd
 
+def get_detailed_exit_info(code: int, command: str) -> str:
+    """
+    根据退出码和操作系统，生成详细的诊断信息和建议。
+    """
+    cmd_name = command.strip().split()[0] if command.strip() else "unknown"
+    system = platform.system()
+    
+    # 基础映射
+    explanations = {
+        1: "常规错误 (权限不足、语法错误或逻辑失败)。",
+        2: "Shell 内置命令使用不当。",
+        126: "命令不可执行 (权限不足或不是可执行文件)。",
+        127: "找不到命令 (Linux/Unix)。",
+        130: "由 Control-C 终止。",
+        137: "进程被强制杀死 (可能触发了 OOM 内存溢出)。",
+        # Windows 特有
+        9009: f"Windows: 找不到命令 '{cmd_name}'。请检查程序是否已安装，或是否已加入 PATH 环境变量。",
+        5: "Windows: 拒绝访问 (权限不足)。",
+    }
+    
+    info = f"\n[诊断信息] 进程退出码: {code}\n"
+    info += f"[解释] {explanations.get(code, '未知错误类型')}\n"
+    
+    if code in [127, 9009]:
+        info += f"💡 建议:\n"
+        if system == "Windows":
+            info += f"  1. 运行 'where {cmd_name}' 检查程序位置。\n"
+            info += f"  2. 如果是刚安装的软件，可能需要重启 Agent 或使用绝对路径。\n"
+        else:
+            info += f"  1. 运行 'which {cmd_name}' 检查程序位置。\n"
+            info += f"  2. 检查环境变量: 'echo $PATH'\n"
+            
+    return info
+
+async def read_stream(stream, *, is_error: bool = False):
+    """
+    改进的流读取器：支持多编码回退，确保能抓取到系统原始报错。
+    """
+    if stream is None:
+        return
+    
+    prefix = "[ERROR] " if is_error else ""
+    
+    while True:
+        line_bytes = await stream.readline()
+        if not line_bytes:
+            break
+            
+        decoded = ""
+        # 依次尝试：UTF-8 -> GBK (Windows) -> CP437 -> 替换模式
+        for enc in ['utf-8', 'gbk', 'cp437']:
+            try:
+                decoded = line_bytes.decode(enc).rstrip()
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if not decoded:
+            decoded = line_bytes.decode('utf-8', errors='replace').rstrip()
+            
+        yield f"{prefix}{decoded}"
+
 # ==================== [新增] 核心基础设施：进程管理 ====================
 
 class ProcessManager:
@@ -435,10 +497,7 @@ async def _exec_docker_cmd_simple(cwd: str, cmd_list: list) -> str:
 # ==================== Docker 环境工具实现 (含新功能) ====================
 
 async def docker_sandbox_async(command: str, background: bool = False) -> str | AsyncIterator[str]:
-    """
-    [Docker] 在沙盒中执行命令
-    新增参数: background (True则后台运行并返回PID)
-    """
+    """[Docker] 在沙盒中执行命令，增强了错误捕获和诊断能力"""
     settings = await load_settings()
     cwd = settings.get("CLISettings", {}).get("cc_path")
     if not cwd: return "Error: No workspace directory specified in settings."
@@ -450,7 +509,7 @@ async def docker_sandbox_async(command: str, background: bool = False) -> str | 
 
     exec_cmd = [
         "docker", "exec",
-        "-i", # 保持stdin打开对某些交互式命令很重要
+        "-i", 
         container_name,
         "sh", "-c",
         f"cd /workspace && {command}"
@@ -463,30 +522,40 @@ async def docker_sandbox_async(command: str, background: bool = False) -> str | 
             stderr=asyncio.subprocess.PIPE,
         )
 
-        # === 后台模式 ===
         if background:
             pid = await process_manager.register_process(process, f"[Docker] {command}", "docker")
-            return f"[SUCCESS] Docker background process started.\nPID: {pid}\nContainer: {container_name}\nUse 'manage_processes' to view logs."
+            return f"[SUCCESS] Docker background process started.\nPID: {pid}\nUse 'manage_processes' to view logs."
 
-        # === 前台模式 (流式) ===
         async def _stream() -> AsyncIterator[str]:
             output_yielded = False
+            error_yielded = False
+            
             async for line in _merge_streams(
                 read_stream(process.stdout, is_error=False),
                 read_stream(process.stderr, is_error=True),
             ):
                 yield line
                 output_yielded = True
+                if line.startswith("[ERROR]"):
+                    error_yielded = True
             
             await process.wait()
+            
             if process.returncode != 0:
-                yield f"[EXIT CODE] {process.returncode}"
+                yield f"\n--- Docker 执行失败 ---"
+                # 合成 Docker 内部的 command not found
+                if not error_yielded and process.returncode == 127:
+                    cmd_name = command.strip().split()[0]
+                    yield f"[ERROR] sh: {cmd_name}: not found (命令在容器中不存在)"
+                
+                yield get_detailed_exit_info(process.returncode, command)
+                yield "💡 注意：您当前在 Docker 容器内，某些主机上的工具可能无法直接访问。"
             elif not output_yielded:
-                yield "[SUCCESS] 命令已成功执行未报错"
+                yield "[SUCCESS] 命令在 Docker 中成功执行，无输出。"
     
         return _stream()
     except Exception as e:
-        return f"[ERROR] Execution failed: {str(e)}"
+        return f"[ERROR] Docker 进程启动失败: {str(e)}"
 
 async def edit_file_patch_tool(path: str, old_string: str, new_string: str) -> str:
     """[Docker] 精确字符串替换"""
@@ -890,21 +959,19 @@ async def read_stream(stream, *, is_error: bool = False):
 
 
 async def shell_tool_local(command: str, background: bool = False) -> str | AsyncIterator[str]:
-    """[Local] 执行命令，支持后台"""
+    """[Local] 执行本地命令，增强了错误捕获和诊断能力"""
     settings = await load_settings()
     cwd = settings.get("CLISettings", {}).get("cc_path")
     perm = settings.get("localEnvSettings", {}).get("permissionMode", "default")
     
     if not cwd: 
-        return "Error: No workspace."
+        return "Error: No workspace directory specified."
     
-    # 安全检查（不再包装 cd 命令）
+    # 安全检查
     allowed, result = validate_bash_command(command, cwd, mode=perm)
     if not allowed:
         return f"[Security] Command blocked: {result}"
     
-    # 保持和原版完全一致：不修改 command，只检查
-
     system = platform.system()
     if system == "Windows":
         is_ps = any(x in command.lower() for x in ['get-', 'set-location', 'select-string'])
@@ -919,7 +986,7 @@ async def shell_tool_local(command: str, background: bool = False) -> str | Asyn
             exe, *args,
             stdout=asyncio.subprocess.PIPE, 
             stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,  # ← 原版逻辑：靠这个设置目录，不在命令里 cd
+            cwd=cwd,
             env=os.environ.copy()
         )
 
@@ -928,18 +995,40 @@ async def shell_tool_local(command: str, background: bool = False) -> str | Asyn
             return f"[SUCCESS] Background process started.\nPID: {pid}\nUse 'manage_processes_local' to check."
 
         async def _stream():
-            yielded = False
-            async for line in _merge_streams(read_stream(proc.stdout), read_stream(proc.stderr, is_error=True)):
+            output_received = False
+            error_received = False
+            
+            # 合并读取 stdout 和 stderr
+            async for line in _merge_streams(
+                read_stream(proc.stdout, is_error=False), 
+                read_stream(proc.stderr, is_error=True)
+            ):
                 yield line
-                yielded = True
+                output_received = True
+                if line.startswith("[ERROR]"):
+                    error_received = True
+            
             await proc.wait()
-            if proc.returncode != 0: 
-                yield f"[EXIT] {proc.returncode}"
-            elif not yielded: 
-                yield "[SUCCESS] No output."
+            
+            if proc.returncode != 0:
+                yield f"\n--- 运行失败 ---"
+                # 如果 stderr 为空，手动补全 shell 报错
+                if not error_received:
+                    cmd_name = command.strip().split()[0]
+                    if proc.returncode == 9009 and system == "Windows":
+                        yield f"[ERROR] '{cmd_name}' 不是内部或外部命令，也不是可运行的程序或批处理文件。"
+                    elif proc.returncode == 127:
+                        yield f"[ERROR] sh: {cmd_name}: command not found"
+                
+                # 输出深度诊断建议
+                yield get_detailed_exit_info(proc.returncode, command)
+                
+            elif not output_received:
+                yield "[SUCCESS] 命令已成功执行，但没有任何输出。"
+                
         return _stream()
     except Exception as e: 
-        return str(e)
+        return f"[系统错误] 无法启动进程: {str(e)}"
 
 # 恢复原有的 Local 文件工具
 async def list_files_tool_local(path: str = ".", show_all: bool = True) -> str:
