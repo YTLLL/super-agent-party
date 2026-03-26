@@ -9803,3 +9803,96 @@ hr.footnotes-sep {
     cursor: not-allowed;
   }
 }
+
+/* =========================================
+   Unified Attachment Markers - Perfect Centering
+   ========================================= */
+
+/* 1. 外部固定方块容器 */
+.user-msg-attachments .attachment-item-display {
+  width: 54px !important;
+  height: 54px !important;
+  flex: 0 0 54px !important;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-sizing: border-box;
+  padding: 0 !important;
+}
+
+/* 2. 内部内容包装盒 (关键：强制所有子元素居中) */
+.user-msg-attachments .file-card-box {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important; /* 图标在上文字在下 */
+  align-items: center !important;    /* 水平居中 */
+  justify-content: center !important; /* 垂直居中 */
+  text-align: center !important;      /* 文字内部居中 */
+  padding: 0 !important;              /* 清除内边距 */
+  margin: 0 !important;
+  background: transparent !important;
+}
+
+/* 3. 清除图标可能存在的默认边距 */
+.user-msg-attachments .file-icon {
+  font-size: 18px !important;
+  color: #ffffff !important;
+  margin: 0 0 2px 0 !important; /* 仅留底部微小间距给文字 */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* 4. 文字区域：确保宽度 100% 且居中 */
+.user-msg-attachments .file-info {
+  width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 4px !important; /* 左右留一点边距防止文字贴边 */
+  box-sizing: border-box;
+}
+
+.user-msg-attachments .file-name {
+  font-size: 9px !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  text-align: center !important;      /* 核心：强制居中 */
+  width: 100% !important;
+  display: block !important;
+  white-space: nowrap !important;     /* 不换行 */
+  overflow: hidden !important;        /* 超出隐藏 */
+  text-overflow: ellipsis !important; /* 省略号 */
+  line-height: 1.2 !important;
+  margin: 0 !important;
+}
+
+/* 5. 图片容器特殊处理（保持填满） */
+.user-msg-attachments .preview-image-box {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.user-msg-attachments .preview-image-box img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+/* 容器间距控制 */
+.user-msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  justify-content: flex-end;
+}

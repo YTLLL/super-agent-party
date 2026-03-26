@@ -500,15 +500,42 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <!-- 消息气泡主体 -->
                     <div class="message-content" v-if="!allBriefly||message.role !== 'system'||index === 0" :class="{ typing: message.role === 'assistant' && isTyping && index === messages.length - 1 }">
                       
-                      <!-- User -->
+                      <!-- User 消息主体 -->
                       <div v-if="message.role === 'user'" class="user-content" data-mjx-disabled="true">
-                        <div v-html="message.content" class = "user-msg"></div>
-                        <div v-if="message.fileLinks?.length" class="file-links">
-                          <a v-for="(link, linkIndex) in message.fileLinks" :key="linkIndex" :href="formatFileUrl(link.path)" target="_blank" class="file-link">@{{ link.name }}</a>
-                        </div>
-                        <div v-if="message.imageLinks?.length" class="image-links">
-                          <img v-for="(link, linkIndex) in message.imageLinks" :key="linkIndex" :src="formatFileUrl(link.path)" class="image-link"/>
-                        </div>
+                          <div v-html="message.content" class="user-msg"></div>
+
+                          <!-- 附件展示区：增加 user-msg-attachments 类名用于样式区分 -->
+                          <div class="message-attachments-display user-msg-attachments" 
+                              v-if="message.fileLinks?.length || message.imageLinks?.length || message.hasDesktopVision">
+                              
+                              <!-- 1. 桌面截图指示器 (反色版) -->
+                              <div v-if="message.hasDesktopVision" class="attachment-item-display vision-item">
+                                  <div class="file-card-box">
+                                      <div class="file-icon"><i class="fa-solid fa-desktop"></i></div>
+                                      <div class="file-info">
+                                          <span class="file-name">{{ t('desktopVisionIndicator') || '桌面截图' }}</span>
+                                      </div>
+                                  </div>
+                              </div>
+
+                              <!-- 2. 图片附件 (统一方块) -->
+                              <div v-for="(img, imgIdx) in message.imageLinks" :key="'img-'+imgIdx" class="attachment-item-display image-item">
+                                  <div class="preview-image-box">
+                                      <!-- 图片不需要反色，保持原样 -->
+                                      <img :src="formatFileUrl(img.path)" />
+                                  </div>
+                              </div>
+
+                              <!-- 3. 文件附件 (反色版) -->
+                              <div v-for="(file, fileIdx) in message.fileLinks" :key="'file-'+fileIdx" class="attachment-item-display file-item">
+                                  <div class="file-card-box">
+                                      <div class="file-icon"><i class="fa-solid fa-file-lines"></i></div>
+                                      <div class="file-info">
+                                          <span class="file-name" :title="file.name">{{ file.name }}</span>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
                       </div>
                       
                       <!-- Assistant -->

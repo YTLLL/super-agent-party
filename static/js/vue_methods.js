@@ -1765,34 +1765,17 @@ let vue_methods = {
             this.sendTTSStatusToVRM('ttsStarted', {});
         }
 
-        // --- 桌面截图逻辑 (Electron) ---
-        if (vue_data.isElectron && this.visionSettings?.desktopVision) {
-            if (this.visionSettings.enableWakeWord && this.visionSettings.wakeWord) {
-                const wakeWords = this.visionSettings.wakeWord.split('\n');
-                if (wakeWords.some(word => this.userInput.includes(word))) {
-                    try {
-                    const pngBuffer = await window.electronAPI.captureDesktop()
-                    const blob = new Blob([pngBuffer], { type: 'image/png' })
-                    const file = new File([blob], `desktop_${Date.now()}.png`, { type: 'image/png' })
-                    this.images.push({ file, name: file.name, path: '' })
-                    } catch (e) {
-                    console.error('桌面截图失败:', e)
-                    showNotification(this.t('desktop_capture_failed'), 'error')
-                    }
-                }
-            }
-            else {
-                try {
-                    const pngBuffer = await window.electronAPI.captureDesktop()
-                    const blob = new Blob([pngBuffer], { type: 'image/png' })
-                    const file = new File([blob], `desktop_${Date.now()}.png`, { type: 'image/png' })
-                    this.images.push({ file, name: file.name, path: '' })
-                } catch (e) {
-                    console.error('桌面截图失败:', e)
-                    showNotification(this.t('desktop_capture_failed'), 'error')
-                }
-            }
-        }
+      let captureFlag = false;
+      if (this.isElectron && this.visionSettings?.desktopVision) {
+          if (this.visionSettings.enableWakeWord && this.visionSettings.wakeWord) {
+              const wakeWords = this.visionSettings.wakeWord.split('\n');
+              if (wakeWords.some(word => this.userInput.includes(word.trim()))) {
+                  captureFlag = true;
+              }
+          } else {
+              captureFlag = true;
+          }
+      }
 
         // --- 文件上传处理 ---
         const userInput = this.userInput.trim();
@@ -1846,6 +1829,7 @@ let vue_methods = {
             fileLinks: fileLinks,
             fileLinks_content: fileLinks_content,
             imageLinks: imageLinks || [],
+            hasDesktopVision: captureFlag, // ✨ 新增标记：告诉 UI 这条消息触发了后端截图
             agentName: this.memorySettings.userName || 'User' 
         });
 

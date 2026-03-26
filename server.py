@@ -2169,6 +2169,58 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
         if len(request.messages) > 2:
             DRS_STAGE = 2
             
+        vision_cfg = settings.get('vision', {})
+        user_prompt = request.messages[-1].get('content') or ""
+        if vision_cfg.get('desktopVision'):
+            should_capture = False
+            
+            # 检查唤醒词
+            if vision_cfg.get('enableWakeWord'):
+                wake_words = [w.strip() for w in vision_cfg.get('wakeWord', "").split('\n') if w.strip()]
+                if any(word in user_prompt for word in wake_words):
+                    should_capture = True
+            else:
+                # 未开启唤醒词则默认每次捕获（或根据需求调整）
+                should_capture = True
+            
+            if should_capture:
+                try:
+                    import pyautogui
+                    
+                    print("正在执行后端桌面截图...")
+                    # 捕获屏幕
+                    screenshot = pyautogui.screenshot()
+                    
+                    # 生成唯一文件名并保存到缓存目录
+                    # 假设 IMAGE_CACHE_DIR 在你的全局变量中已定义，如果没有，可以使用临时目录
+                    desktop_img_name = f"desktop_{uuid.uuid4().hex}.png"
+                    desktop_img_path = os.path.join(UPLOAD_FILES_DIR, desktop_img_name)
+                    screenshot.save(desktop_img_path)
+                    
+                    # 构造一个类似前端传来的 fileLink 结构，或者直接注入到 images 列表
+                    desktop_url = f"{fastapi_base_url}uploaded_files/{desktop_img_name}"
+                    
+                    # 将截图注入到当前消息中，让视觉模型能看到
+                    # 我们直接修改 request.messages 的最后一条用户消息，添加图片引用
+                    current_user_msg = request.messages[-1]
+                    if isinstance(current_user_msg['content'], str):
+                        # 如果原本是纯文本，转为多模态格式
+                        original_text = current_user_msg['content']
+                        current_user_msg['content'] = [
+                            {"type": "text", "text": original_text},
+                            {"type": "image_url", "image_url": {"url": desktop_url}}
+                        ]
+                    elif isinstance(current_user_msg['content'], list):
+                        # 如果已经是列表，直接 append
+                        current_user_msg['content'].append(
+                            {"type": "image_url", "image_url": {"url": desktop_url}}
+                        )
+                    
+                    print(f"桌面截图已自动注入消息: {desktop_url}")
+                    
+                except Exception as e:
+                    print(f"后端桌面截图失败: {e}")
+
         max_rounds = settings.get("max_rounds", 0)
 
         if max_rounds > 0 and request.messages:
