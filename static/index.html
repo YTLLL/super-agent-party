@@ -11252,7 +11252,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <!-- 合并后的 IM 机器人聚合页面 -->
                   <div v-show="subMenu === 'im_bot'">
                     <el-tabs v-model="activeImBotTab" class="im-bot-tabs">
-                      
+
                       <!-- QQ 机器人子标签 -->
                       <el-tab-pane :label="t('qqBot')" name="qq">
                         <el-form class="settings-form" :model="qqBotConfig" label-position="top">
@@ -11472,6 +11472,86 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 <el-form-item label="APP Secret" required>
                                     <el-input @change="autoSaveSettings" v-model="qqBotConfig.secret" :placeholder="t('enter_qq_bot_secret')" show-password class="full-width-input"></el-input>
                                 </el-form-item>
+                            </div>
+                          </div>
+                        </el-form>
+                      </el-tab-pane>
+
+                      <!-- 微信 机器人子标签 -->
+                      <el-tab-pane :label="t('wechatBot')" name="wechat">
+                        <el-form class="settings-form" label-position="top">
+                          <div class="tool-item">
+                            <!-- 微信 机器人配置头部 -->
+                            <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
+                              <span>
+                                <el-icon><i class="fa-brands fa-weixin"></i></el-icon>
+                                {{ t('wechatBot') }}
+                              </span>
+                            </div>
+                            <div class="tool-content">
+                              <!-- 流程引导步骤 -->
+                              <div class="wechat-guide">
+
+                                <div class="guide-step">
+                                  <div class="step-num">1</div>
+                                  <div class="step-detail">
+                                    <p class="step-title">{{ t('wechatStep1Title') }}</p>
+                                    <p class="step-desc">{{ t('wechatStep1Desc') }}</p>
+                                    <el-link
+                                      type="primary"
+                                      :underline="false"
+                                      href="https://nodejs.org/en/download" 
+                                      target="_blank"
+                                      v-if="chromeMCPSettings.type=='external'"
+                                    >
+                                      <el-icon class="mr-1">
+                                        <i class="fa-solid fa-key"></i>
+                                      </el-icon>{{ t('downloadNodeJS') }}
+                                    </el-link>
+                                  </div>
+                                </div>
+
+                                <div class="guide-step">
+                                  <div class="step-num">2</div>
+                                  <div class="step-detail">
+                                    <p class="step-title">{{ t('wechatStep2Title') }}</p>
+                                    <p class="step-desc">{{ t('wechatStep2Desc') }}</p>
+                                    <el-link
+                                      type="primary"
+                                      :underline="false"
+                                      href="#" 
+                                      @click.stop.prevent="switchToExtensionPage();showExtensionsDialog = false" 
+                                    >
+                                      <el-icon class="mr-1">
+                                        <i class="fa-solid fa-puzzle-piece"></i>
+                                      </el-icon>{{ t('goToExtensionPage') }}
+                                    </el-link>
+                                  </div>
+                                </div>
+
+                                <div class="guide-step">
+                                  <div class="step-num">3</div>
+                                  <div class="step-detail">
+                                    <p class="step-title">{{ t('wechatStep3Title') }}</p>
+                                    <p class="step-desc">{{ t('wechatStep3Desc') }}</p>
+                                    <div class="code-block">
+                                      <div class="code-header">
+                                        <span class="code-lang">shell</span>
+                                        <button class="copy-button" @click.prevent="handleCopy"><i class="fa-solid fa-copy"></i></button>
+                                      </div>
+                                      <pre><code class="hljs" :class="'language-' + 'shell'">npx wechat-acp --agent sap</code></pre>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div class="guide-step">
+                                  <div class="step-num">4</div>
+                                  <div class="step-detail">
+                                    <p class="step-title">{{ t('wechatStep4Title') }}</p>
+                                    <p class="step-desc">{{ t('wechatStep4Desc') }}</p>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </el-form>
