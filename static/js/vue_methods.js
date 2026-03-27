@@ -15997,4 +15997,44 @@ closeTaskCenter() {
     // 改变 key 值会让 Vue 销毁并重建 el-tree，从而重新触发 load()
     this.workspaceTreeKey += 1;
   },
+
+    // 核心上传逻辑
+    async executeUpload(targetPath) {
+        try {
+            // 1. 调用选择文件对话框
+            const result = await window.electronAPI.openFileDialog();
+            
+            if (result.canceled || result.filePaths.length === 0) return;
+
+            // 2. 执行上传
+            const uploadRes = await window.electronAPI.uploadToWorkspace(targetPath, result.filePaths);
+            
+            if (uploadRes.success) {
+                showNotification(this.t('uploadSuccess'),'success');
+                this.refreshWorkspaceTree(); // 刷新显示新文件
+            } else {
+                showNotification(this.t('uploadFailed'),'error');
+            }
+        } catch (err) {
+            console.error('Upload Error:', err);
+            this.$message.error('操作失败，请检查控制台日志');
+        }
+    },
+
+    // 顶部按钮：上传到根目录
+    handleRootUpload() {
+        const rootPath = this.CLISettings.cc_path;
+        if (!rootPath) {
+            showNotification(this.t('pleaseConfigWorkspace'),'error');
+            return;
+        }
+        this.executeUpload(rootPath);
+    },
+
+    // 文件夹按钮：上传到子目录
+    handleFolderUpload(folderPath) {
+        console.log("正在上传到子目录:", folderPath);
+        this.executeUpload(folderPath);
+    },
+
 }

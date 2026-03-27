@@ -971,6 +971,26 @@ app.whenReady().then(async () => {
     });
 
 
+ipcMain.handle('upload-to-workspace', async (event, { targetDirPath, sourceFilePaths }) => {
+  try {
+    if (!fs.existsSync(targetDirPath)) {
+      return { success: false, error: '目标路径不存在' };
+    }
+
+    for (const source of sourceFilePaths) {
+      const fileName = path.basename(source);
+      const destPath = path.join(targetDirPath, fileName);
+      
+      // 原生同步拷贝（不支持直接拷贝整个文件夹，仅支持文件）
+      fs.copyFileSync(source, destPath);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('上传失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
     ipcMain.handle('start-vrm-window', async (_, windowConfig = {}) => {
       const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 

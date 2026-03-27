@@ -128,6 +128,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onGlobalShortcutTriggered: (callback) => ipcRenderer.on('global-shortcut-triggered', callback),
   readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
   deleteWorkspaceFile: (filePath) => ipcRenderer.invoke('delete-workspace-file', filePath),
+  uploadToWorkspace: (targetDirPath, sourceFilePaths) => ipcRenderer.invoke('upload-to-workspace', { targetDirPath, sourceFilePaths }),
 });
 
 contextBridge.exposeInMainWorld('vmcAPI', {

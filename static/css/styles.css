@@ -9896,3 +9896,65 @@ hr.footnotes-sep {
   margin-top: 10px;
   justify-content: flex-end;
 }
+
+
+.wechat-guide {
+  padding: 10px 5px;
+}
+.guide-step {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  position: relative;
+}
+/* 连接线 */
+.guide-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 30px;
+  bottom: -10px;
+  width: 2px;
+  background: var(--el-border-color-lighter);
+}
+.step-num {
+  width: 30px;
+  height: 30px;
+  background: var(--el-color-primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  flex-shrink: 0;
+  z-index: 1;
+}
+.step-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+.step-desc {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.code-wrapper {
+  background: #1a1b1e;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+code {
+  color: #00c2a8;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+}
+.mt-4 {
+  margin-top: 16px;
+}
