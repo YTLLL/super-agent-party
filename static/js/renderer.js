@@ -1180,6 +1180,25 @@ const handleRemoteInstall = (data) => {
     },
   },
   computed: {
+    // 动态过滤表格数据
+    filteredAffectionData() {
+      console.log("计算属性触发，当前数据长度:", this.affectionDataList.length);
+      // 检查基础数据是否存在
+      if (!this.affectionDataList || this.affectionDataList.length === 0) {
+        return [];
+      }
+      
+      // 如果没有搜索词，直接返回全量数组
+      if (!this.affectionSearchQuery) {
+        return this.affectionDataList;
+      }
+      
+      const query = this.affectionSearchQuery.toLowerCase();
+      return this.affectionDataList.filter(item => {
+        // 确保 userName 存在再进行过滤
+        return item.userName && item.userName.toLowerCase().includes(query);
+      });
+    },
     computedSkillsList() {
       const skillMap = new Map();
       

@@ -2461,7 +2461,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                               />
                             </el-select>
                           </el-form-item>
-                          <el-form-item :label="t('userName')" class="form-item-align">
+                          <el-form-item :label="t('userNameConfig')" class="form-item-align">
                             <el-input
                               v-model="memorySettings.userName"
                               :placeholder="t('userNamePlaceholder')"
@@ -4728,6 +4728,175 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <el-empty :description="t('webNotSupported')" />
                 </div>
               </div>
+              <!-- 羁绊与数值系统 (Affection System) -->
+              <div v-show="subMenu === 'affection'" class="page">
+                <el-tabs v-model="activeAffectionTab" @tab-change="handleAffectionTabChange">
+                  
+                  <!-- Tab 1: 系统配置 -->
+                  <el-tab-pane :label="t('affectionSettings') || '系统配置'" name="config">
+                    <el-form :model="loveSettings" class="settings-form" label-position="top">
+                      <div class="tool-item">
+                        <div class="tool-header">
+                          <div class="header-left">
+                            <span>
+                              <el-icon><i class="fa-solid fa-heart"></i></el-icon>
+                              {{ t('affectionSystem') || '羁绊与数值系统' }}
+                            </span>
+                          </div>
+                          <el-switch v-model="loveSettings.enabled" @change="autoSaveSettings"/>
+                        </div>
+                        
+                        <div class="tool-content">
+                          <el-alert type="info" :closable="false" class="mb-4">
+                            <template #default>
+                              <div class="alert-content">
+                                {{t('affectionSystemNotice')}}
+                              </div>
+                            </template>
+                          </el-alert>
+
+                          <el-form-item :label="t('affectionDimensions') || '数值维度设置 (Dimensions)'">
+                            <div class="events-management-list" style="width: 100%;">
+                              <div v-for="(dim, idx) in loveSettings.dimensions" :key="idx" class="event-row-item" style="margin-bottom: 10px; display: flex; gap: 10px;">
+                                <div class="input-col" style="flex: 1;">
+                                  <el-input
+                                    v-model="loveSettings.dimensions[idx]"
+                                    :placeholder="t('dimensionPlaceholder') || '例如：love, Familiarity, trust...'"
+                                    @change="autoSaveSettings"
+                                  />
+                                </div>
+                                <div class="action-col">
+                                  <el-button @click="removeLoveDimension(idx)" type="danger" circle :disabled="loveSettings.dimensions.length <= 1">
+                                    <i class="fa-solid fa-trash"></i>
+                                  </el-button>
+                                </div>
+                              </div>
+                              <el-button type="primary" class="add-server-btn" @click="addLoveDimension" style="margin-top: 5px;">
+                                <i class="fa-solid fa-plus"></i> {{ t('addDimension') || '添加维度' }}
+                              </el-button>
+                            </div>
+                          </el-form-item>
+                          <el-divider></el-divider>
+                          <el-form-item :label="t('affectionPrompt') || '系统更新规则 (Prompt)'">
+                            <el-input
+                              v-model="loveSettings.prompt"
+                              type="textarea"
+                              :rows="12"
+                              :placeholder="t('affectionPromptPlaceholder') || '请详细描述AI应该如何根据对话调整各个维度...'"
+                              @change="autoSaveSettings"
+                            />
+                          </el-form-item>
+                        </div>
+                      </div>
+                    </el-form>
+                  </el-tab-pane>
+
+                  <!-- Tab 2: 数据管理 -->
+                  <el-tab-pane :label="t('affectionData') || '数据管理'" name="data">
+                    <div class="tool-item">
+                      <div class="tool-content">
+                        <!-- 顶部工具栏 -->
+                        <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; gap: 15px;">
+                          <!-- 左侧搜索框：限制最大宽度，自适应剩余空间 -->
+                          <div style="flex: 1; max-width: 300px; min-width: 150px;">
+                            <el-input 
+                              v-model="affectionSearchQuery" 
+                              :placeholder="t('searchUser') || '搜索用户名...'" 
+                              clearable 
+                            >
+                              <template #prefix>
+                                <el-icon><i class="fa-solid fa-magnifying-glass"></i></el-icon>
+                              </template>
+                            </el-input>
+                          </div>
+                          
+                          <!-- 右侧按钮组：禁止缩放，强制不换行 -->
+                          <div style="flex-shrink: 0; display: flex; gap: 10px;">
+                            <el-button @click="fetchAffectionData" circle title="刷新数据">
+                              <i class="fa-solid fa-rotate-right"></i>
+                            </el-button>
+                            <el-button type="primary" @click="openAffectionDataDialog()">
+                              <i class="fa-solid fa-plus"></i> {{ t('addUserData') || '添加用户数据' }}
+                            </el-button>
+                          </div>
+                        </div>
+
+
+                        <!-- 动态数据表格 -->
+                        <el-table 
+                          :data="filteredAffectionData" 
+                          :key="affectionDataList.length + activeAffectionTab"
+                          stripe 
+                          height="500"
+                        >
+                          <!-- 固定列：用户名 -->
+                          <el-table-column prop="userName" :label="t('userName') || '用户名'" width="180" fixed="left">
+                            <template #default="scope">
+                              <strong>{{ scope.row.userName }}</strong>
+                            </template>
+                          </el-table-column>
+
+                          <!-- 动态列：根据维度自动生成 -->
+                          <el-table-column 
+                            v-for="dim in loveSettings.dimensions" 
+                            :key="dim" 
+                            :prop="dim" 
+                            :label="dim"
+                            align="center"
+                          >
+                            <template #default="scope">
+                              <el-tag :type="scope.row[dim] < 0 ? 'danger' : 'success'" disable-transitions>
+                                {{ scope.row[dim] || 0 }}
+                              </el-tag>
+                            </template>
+                          </el-table-column>
+
+                          <!-- 固定列：操作 -->
+                          <el-table-column :label="t('actions') || '操作'" width="120" fixed="right" align="center">
+                            <template #default="scope">
+                              <el-button circle size="small" type="primary" @click="openAffectionDataDialog(scope.row)">
+                                <i class="fa-solid fa-pen"></i>
+                              </el-button>
+                              <el-button circle size="small" type="danger" @click="deleteAffectionData(scope.row.userName)">
+                                <i class="fa-solid fa-trash"></i>
+                              </el-button>
+                            </template>
+                          </el-table-column>
+                        </el-table>
+                      </div>
+                    </div>
+                  </el-tab-pane>
+
+                </el-tabs>
+              </div>
+
+              <!-- 新增/编辑用户数据对话框 (放在 tabs 外面) -->
+              <el-dialog 
+                v-model="showAffectionDataDialog" 
+                :title="isEditingAffection ? (t('editData') || '编辑羁绊数据') : (t('addData') || '新增羁绊数据')" 
+                width="400px"
+              >
+                <el-form label-position="top">
+                  <el-form-item :label="t('userName') || '用户名'" required>
+                    <el-input v-model="currentAffectionForm.userName" :disabled="isEditingAffection" placeholder="请输入准确的用户名"/>
+                  </el-form-item>
+                  
+                  <!-- 动态渲染维度的数字输入框 -->
+                  <el-form-item 
+                    v-for="dim in loveSettings.dimensions" 
+                    :key="dim" 
+                    :label="dim"
+                  >
+                    <el-input-number v-model="currentAffectionForm[dim]" :step="1" style="width: 100%;" />
+                  </el-form-item>
+                </el-form>
+                <template #footer>
+                  <el-button @click="showAffectionDataDialog = false">{{ t('cancel') }}</el-button>
+                  <el-button type="primary" @click="saveAffectionData" :disabled="!currentAffectionForm.userName">
+                    {{ t('confirm') }}
+                  </el-button>
+                </template>
+              </el-dialog>
             </div>
           </div>
         </div>

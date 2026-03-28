@@ -1761,14 +1761,14 @@ loader.load(
         if (obj.isMesh && obj.material) {
             // 解决透明材质黑边问题
             if (obj.material.transparent) {
-            obj.material.alphaTest = 0.5;
-            obj.material.depthWrite = false;
-            obj.material.needsUpdate = true;
+                obj.material.alphaTest = 0.01;
+                obj.material.depthWrite = true;
+                obj.material.needsUpdate = true;
             }
             
             // 确保正确混合模式
             obj.material.blending = THREE.NormalBlending;
-            obj.material.premultipliedAlpha = true;
+            obj.material.premultipliedAlpha = false;
             
             // 设置渲染顺序
             obj.renderOrder = obj.material.transparent ? 1 : 0;
@@ -4679,14 +4679,14 @@ async function switchToModel(index,isRefresh = false) {
                 if (obj.isMesh && obj.material) {
                     // 解决透明材质黑边问题
                     if (obj.material.transparent) {
-                    obj.material.alphaTest = 0.5;
-                    obj.material.depthWrite = false;
-                    obj.material.needsUpdate = true;
+                        obj.material.alphaTest = 0.01;
+                        obj.material.depthWrite = true;
+                        obj.material.needsUpdate = true;
                     }
                     
                     // 确保正确混合模式
                     obj.material.blending = THREE.NormalBlending;
-                    obj.material.premultipliedAlpha = true;
+                    obj.material.premultipliedAlpha = false;
                     
                     // 设置渲染顺序
                     obj.renderOrder = obj.material.transparent ? 1 : 0;

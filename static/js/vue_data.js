@@ -1268,6 +1268,7 @@ let vue_data = {
         { id: 'appearance', title: 'CharacterAppearance', icon: 'fa-solid fa-person' },
         { id: 'behavior', title: 'CharacterBehavior', icon: 'fa-solid fa-person-running' },
         { id: 'vision', title: 'CharacterVision', icon: 'fa-solid fa-eye'},
+        { id: 'affection', title: 'affectionSystem', icon: 'fa-solid fa-heart' },
     ],
     modelTiles: [
       { id: 'service', title: 'modelService', icon: 'fa-solid fa-cloud' },
@@ -2067,4 +2068,22 @@ main();`,
       children: 'children',
       isLeaf: (data) => !data.isDirectory // 告诉 el-tree 如果不是文件夹就是叶子节点（不可展开）
     },
+    loveSettings: {
+      enabled: true,
+      dimensions: [
+          "love", 
+          "familiarity"
+      ],
+      prompt: "请根据用户的发言态度、情感色彩以及你的角色设定，动态管理以下羁绊数值：\n1. love（好感度）：代表你对用户的喜爱与亲密度。如果用户表达善意、关心或与你互动愉快，请增加（+1至+5）；如果用户冷漠、辱骂或做出让你反感的行为，请降低（-1至-5）。该数值最大为50，最小为-50。\n2. familiarity（熟悉度）：代表你与用户的了解程度。随着交流次数的增多和彼此信息的分享，该数值应缓慢稳步上升（每次+1至+2），通常不会下降。该数值最大为100，最小为0。\n\n*特殊说明：如果你在上方没有看到“目前的属性数值”，说明这是你与该用户的首次互动。请直接根据用户当前第一句话的语气和态度，自主决定一个合理的初始值（例如 0 到 10 之间），直接输出标签即可。聊天时请尽量按照羁绊数值来变换语气、内容、风格等*"
+    },
+    // 羁绊系统 UI 状态
+    activeAffectionTab: 'config', // 控制当前在哪个 Tab
+    affectionRawData: {},         // 存放后端返回的原始 JSON ( {"小包": {love:1}, "张三": {love:5}} )
+    affectionDataList: [],        // 转化为数组用于表格显示
+    affectionSearchQuery: '',     // 搜索栏绑定的值
+    
+    // 羁绊系统对话框状态
+    showAffectionDataDialog: false,
+    isEditingAffection: false,
+    currentAffectionForm: { userName: '' },
 };
