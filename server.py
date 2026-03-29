@@ -554,7 +554,8 @@ async def lifespan(app: FastAPI):
         sys_set = settings.get("systemSettings", {})
         mode = sys_set.get("proxyMode")
         manual_url = sys_set.get("proxy", "").strip()
-        
+        isChinaProxy = sys_set.get("isChinaProxy", False)
+
         if mode == "manual" and manual_url:
             # 手动模式：如果是 socks，由于没安装库，直接跳过并警告
             if manual_url.lower().startswith("socks"):
@@ -565,7 +566,15 @@ async def lifespan(app: FastAPI):
         elif mode == "system":
             # 系统模式：信任环境（此时环境里已经没有 socks 了，很安全）
             trust_env = True
-    
+        if isChinaProxy:
+            # 2. 注入 Node.js / NPM 镜像源 (重点)
+            # 设置这个环境变量后，所有的 npm install (包括你的 node_runner) 都会默认使用这个源
+            os.environ["npm_config_registry"] = "https://registry.npmmirror.com/"
+            
+            # 3. 注入 UV / Pip 镜像源 (重点)
+            # 这样后续如果调用 uv 或 pip，也会自动使用国内镜像
+            os.environ["UV_INDEX_URL"] = "https://mirrors.aliyun.com/pypi/simple/"
+
     # 初始化全局带连接池的 HTTP 客户端
     timeout_config = httpx.Timeout(None, connect=10.0)
     global_http_client = httpx.AsyncClient(
@@ -9303,22 +9312,64 @@ async def delete_text(memory_id: str, idx: int) -> dict:
     save_index_and_meta(memory_id, new_index, list_to_dict(meta_list))
     return {"message": "deleted", "idx": idx}
 
-@app.get("/api/update_proxy")
+@app.post("/api/update_proxy") # 建议改用 POST 表达状态变更
 async def update_proxy():
     try:
+        from py.get_setting import load_settings  # 确保引用正确
         settings = await load_settings()
-        if settings:
-            if settings["systemSettings"]["proxy"] and settings["systemSettings"]["proxyMode"] == "manual":
-                # 设置代理环境变量
-                os.environ['http_proxy'] = settings["systemSettings"]["proxy"].strip()
-                os.environ['https_proxy'] = settings["systemSettings"]["proxy"].strip()
-            elif settings["systemSettings"]["proxyMode"] == "system":
-                os.environ.pop('http_proxy', None)
-                os.environ.pop('https_proxy', None)
-            else:
-                os.environ['http_proxy'] = ""
-                os.environ['https_proxy'] = ""
-        return {"message": "Proxy updated successfully", "success": True}
+        
+        if not settings:
+            return {"message": "Settings not found", "success": False}
+
+        sys_set = settings.get("systemSettings", {})
+        mode = sys_set.get("proxyMode")
+        manual_url = sys_set.get("proxy", "").strip()
+        is_china_proxy = sys_set.get("isChinaProxy", False)
+
+        # 所有的代理相关环境变量键
+        proxy_keys = ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'all_proxy']
+
+        # --- 1. 处理 Node.js / UV 镜像源 (与 lifespan 一致) ---
+        if is_china_proxy:
+            os.environ["npm_config_registry"] = "https://registry.npmmirror.com/"
+            os.environ["UV_INDEX_URL"] = "https://mirrors.aliyun.com/pypi/simple/"
+        else:
+            # 如果关闭了中国加速，移除这些变量（恢复默认）
+            os.environ.pop("npm_config_registry", None)
+            os.environ.pop("UV_INDEX_URL", None)
+
+        # --- 2. 处理网络代理环境变量 ---
+        if mode == "manual" and manual_url:
+            # [防御] 如果是 socks，强制清理并警告，防止 httpx 崩溃
+            if manual_url.lower().startswith("socks"):
+                for key in proxy_keys:
+                    os.environ.pop(key, None)
+                return {"message": "Detected SOCKS proxy, disabled to prevent crash. Please use HTTP/HTTPS proxy.", "success": False}
+            
+            # 设置手动代理
+            for key in proxy_keys:
+                os.environ[key] = manual_url
+                
+        elif mode == "system":
+            # 系统模式：移除 Python 显式设置的环境变量，让底层读取系统全局配置
+            for key in proxy_keys:
+                os.environ.pop(key, None)
+        else:
+            # 关闭代理模式：将变量设为空字符串或直接移除
+            for key in proxy_keys:
+                os.environ[key] = "" 
+
+        # --- 3. [进阶] 尝试动态更新全局 global_http_client ---
+        # 注意：修改 os.environ 只对后续创建的子进程有效。
+        # 如果你想让当前运行中的 OpenAI 请求也立即切换代理，
+        # 最好在这里重新初始化你的 global_http_client（参考下文建议）。
+
+        return {
+            "message": "Proxy and mirrors updated successfully", 
+            "success": True, 
+            "current_mode": mode,
+            "china_mirror": is_china_proxy
+        }
     except Exception as e:
         return {"message": str(e), "success": False}
 

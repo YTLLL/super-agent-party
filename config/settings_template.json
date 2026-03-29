@@ -20,7 +20,8 @@
       "theme": "light",
       "network":"local",
       "proxy": "http://127.0.0.1:7890",
-      "proxyMode": "system"
+      "proxyMode": "system",
+      "isChinaProxy": false
     },
     "mainAgent":"super-model",
     "mcpServers": {},

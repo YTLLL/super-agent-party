@@ -10957,7 +10957,12 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </span>
               </div>
               <div class="tool-content">
-                <el-form-item class="form-item-align">
+
+                <el-form-item :label="t('isChinaProxy')" class="form-item-align" label-position="left">
+                  <el-switch v-model="systemSettings.isChinaProxy"  @change="autoSaveSettings"></el-switch>
+                </el-form-item>
+
+                <el-form-item :label="t('proxyMode')" class="form-item-align">
                   <el-select v-model="systemSettings.proxyMode" placeholder="Select method" @change="updateProxy">
                     <el-option :label="t('systemProxy')" value="system"></el-option>
                     <el-option :label="t('manualProxy')" value="manual"></el-option>
@@ -10973,6 +10978,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     @input="updateProxy"
                   ></el-input>
                 </el-form-item>
+                
               </div>
               <el-alert
                 type="info"

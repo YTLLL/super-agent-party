@@ -487,6 +487,7 @@ let vue_data = {
       network:"local",
       proxy: 'http://127.0.0.1:7890',
       proxyMode: 'system', //system or manual or none
+      isChinaProxy: false,
     },
     networkOptions:[
       { value: 'local', label: 'local' }, 
