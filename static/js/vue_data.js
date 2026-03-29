@@ -2072,7 +2072,7 @@ main();`,
       isLeaf: (data) => !data.isDirectory // 告诉 el-tree 如果不是文件夹就是叶子节点（不可展开）
     },
     loveSettings: {
-      enabled: true,
+      enabled: false,
       dimensions: [
           "love", 
           "familiarity"
