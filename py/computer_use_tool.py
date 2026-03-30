@@ -148,8 +148,8 @@ mouse_move_tool = {
         "parameters": {
             "type": "object",
             "properties": {
-                "x": {"type": "number", "description": "目标水平坐标(X轴)，范围 0.0 到 100.0 的百分比。例如 50.5 表示宽度正中间"},
-                "y": {"type": "number", "description": "目标垂直坐标(Y轴)，范围 0.0 到 100.0 的百分比。例如 50.5 表示高度正中间"},
+                "x": {"type": "number", "description": "目标水平坐标(X轴)，范围 0.0 到 100.0 的百分比。例如 50 表示宽度正中间","maximum": 100, "minimum": 0},
+                "y": {"type": "number", "description": "目标垂直坐标(Y轴)，范围 0.0 到 100.0 的百分比。例如 50 表示高度正中间","maximum": 100, "minimum": 0},
                 "duration": {"type": "number", "description": "移动耗时（秒），默认为0.5秒。为了拟真，建议不要设为0", "default": 0.5}
             },
             "required": ["x", "y"]
@@ -167,8 +167,8 @@ mouse_click_tool = {
             "properties": {
                 "button": {"type": "string", "enum": ["left", "right", "middle"], "description": "点击的按键，左键/右键/中键"},
                 "clicks": {"type": "integer", "description": "点击次数。1为单击，2为双击", "default": 1},
-                "x": {"type": "number", "description": "点击前的目标水平坐标（0.0 到 100.0 的百分比），可选"},
-                "y": {"type": "number", "description": "点击前的目标垂直坐标（0.0 到 100.0 的百分比），可选"}
+                "x": {"type": "number", "description": "点击前的目标水平坐标（0.0 到 100.0 的百分比），可选","maximum": 100, "minimum": 0},
+                "y": {"type": "number", "description": "点击前的目标垂直坐标（0.0 到 100.0 的百分比），可选","maximum": 100, "minimum": 0}
             },
             "required": ["button"]
         }
@@ -183,8 +183,8 @@ mouse_drag_tool = {
         "parameters": {
             "type": "object",
             "properties": {
-                "x": {"type": "number", "description": "拖拽终点水平坐标（0.0 到 100.0 的百分比）"},
-                "y": {"type": "number", "description": "拖拽终点垂直坐标（0.0 到 100.0 的百分比）"},
+                "x": {"type": "number", "description": "拖拽终点水平坐标（0.0 到 100.0 的百分比）","maximum": 100, "minimum": 0},
+                "y": {"type": "number", "description": "拖拽终点垂直坐标（0.0 到 100.0 的百分比）","maximum": 100, "minimum": 0},
                 "duration": {"type": "number", "description": "拖拽过程耗时（秒）", "default": 0.5},
                 "button": {"type": "string", "enum": ["left", "right"], "description": "按住哪个键拖拽，默认左键", "default": "left"}
             },
