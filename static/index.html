@@ -878,7 +878,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <el-tooltip :content="t('visionControl')" placement="top">
                       <el-button
                         :disabled="!isElectron"
-                        @click="visionControlSettings.enabled = !visionControlSettings.enabled; autoSaveSettings()"
+                        @click="visionControlSettings.enabled = !visionControlSettings.enabled; handleVisionControlEnableToggle(visionControlSettings.enabled)"
                         class="icon-btn web-search-btn"
                         :type="visionControlSettings.enabled ? 'primary' : 'default'"
                         v-if="isCapsuleMode"
@@ -1044,7 +1044,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                     <el-tooltip :content="t('vision')" placement="top">
                       <el-button
-                        @click="visionSettings.enabled = !visionSettings.enabled; autoSaveSettings()"
+                        @click="visionSettings.enabled = !visionSettings.enabled; handleVisionEnableToggle(visionSettings.enabled)"
                         class="icon-btn vision-btn"
                         :type="visionSettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'visionButton')?.enabled&&!isCapsuleMode"
@@ -1179,7 +1179,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <el-tooltip :content="t('visionControl')" placement="top">
                       <el-button
                         :disabled="!isElectron"
-                        @click="visionControlSettings.enabled = !visionControlSettings.enabled; autoSaveSettings()"
+                        @click="visionControlSettings.enabled = !visionControlSettings.enabled; handleVisionControlEnableToggle(visionControlSettings.enabled)"
                         class="icon-btn web-search-btn"
                         :type="visionControlSettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'visionControl')?.enabled&&!isCapsuleMode"
@@ -5979,7 +5979,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           {{ t('visionSettings') }}
                         </span>
                       </div>
-                      <el-switch v-model="visionSettings.enabled" @click.stop @change="autoSaveSettings"/>
+                      <el-switch v-model="visionSettings.enabled" @click.stop @change="handleVisionEnableToggle(visionSettings.enabled)"/>
                     </div>
                     <div class="tool-content">
                       <el-form-item :label="t('visionProvider')" class="form-item-align">
@@ -8312,7 +8312,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           {{ t('visionControl') }}
                         </span>
                       </div>
-                      <el-switch v-model="visionControlSettings.enabled" @click.stop @change="autoSaveSettings"/>
+                      <el-switch v-model="visionControlSettings.enabled" @click.stop @change="handleVisionControlEnableToggle(visionControlSettings.enabled)"/>
                     </div>
                     <div class="tool-content">
                       <el-form-item :label="t('mouseControl')" class="form-item-align" label-position="left">
