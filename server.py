@@ -342,7 +342,6 @@ from typing import Any, AsyncIterator, List, Dict,Optional, Tuple, Union
 import shortuuid
 from py.mcp_clients import McpClient
 from contextlib import asynccontextmanager
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import aiofiles
 import argparse
@@ -402,6 +401,48 @@ mimetypes.add_type("application/json", ".json")
 mimetypes.add_type("application/xml", ".xml")
 mimetypes.add_type("application/json", ".map")
 mimetypes.add_type("image/svg+xml", ".svg")
+
+import platform
+import ctypes
+from PIL import Image, ImageDraw, ImageFont
+import io
+if platform.system() == "Windows":
+    try:
+        # 设置 DPI 感知，确保截屏尺寸和 size() 返回的一致
+        ctypes.windll.shcore.SetProcessDpiAwareness(1) 
+    except Exception:
+        ctypes.windll.user32.SetProcessDPIAware()
+
+def draw_grid_on_image(image: Image.Image, grid_spacing: int = 10) -> Image.Image:
+    """
+    在图片上绘制百分比网格和坐标标签
+    grid_spacing: 每隔多少百分比画一根线，默认 10 (即 10x10 的网格)
+    """
+    draw = ImageDraw.Draw(image)
+    width, height = image.size
+    
+    # 颜色设置 (半透明红色或亮绿色，视情况而定)
+    line_color = (255, 0, 0, 128)  # 红色线
+    text_color = (255, 0, 0, 255)
+    
+    # 绘制垂直线
+    for x_pc in range(0, 101, grid_spacing):
+        x = int(width * (x_pc / 100.0))
+        # 确保不超出边界
+        x = min(x, width - 1)
+        draw.line([(x, 0), (x, height)], fill=line_color, width=1)
+        # 在顶部画数字坐标
+        draw.text((x + 2, 5), f"{x_pc}", fill=text_color)
+
+    # 绘制水平线
+    for y_pc in range(0, 101, grid_spacing):
+        y = int(height * (y_pc / 100.0))
+        y = min(y, height - 1)
+        draw.line([(0, y), (width, y)], fill=line_color, width=1)
+        # 在左侧画数字坐标
+        draw.text((5, y + 2), f"{y_pc}", fill=text_color)
+        
+    return image
 
 
 def _get_target_message(message, role):
@@ -2244,37 +2285,50 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
         if should_capture:
             try:
                 import pyautogui
-                import asyncio
+
+                print("正在执行带网格的桌面截图...")
                 
-                print("正在执行后端初始桌面截图...")
-                # 捕获屏幕 (改用异步方法，防止阻塞并发请求)
+                # 1. 获取逻辑尺寸
+                logical_width, logical_height = pyautogui.size()
+                
+                # 2. 捕获屏幕
                 screenshot = await asyncio.to_thread(pyautogui.screenshot)
                 
-                # 生成唯一文件名并保存到缓存目录
-                desktop_img_name = f"desktop_{uuid.uuid4().hex}.png"
-                desktop_img_path = os.path.join(UPLOAD_FILES_DIR, desktop_img_name)
-                await asyncio.to_thread(screenshot.save, desktop_img_path)
+                # 3. 强制 Resize 到逻辑坐标系 (解决 Windows 偏移的核心)
+                if screenshot.width != logical_width or screenshot.height != logical_height:
+                    screenshot = await asyncio.to_thread(
+                        screenshot.resize, (logical_width, logical_height), Image.Resampling.LANCZOS
+                    )
                 
-                # 构造一个类似前端传来的 fileLink 结构，或者直接注入到 images 列表
+                # 4. 【新增】绘制数字网格
+                # 我们在副本上画网格，以免破坏原始截图（如果以后需要的话）
+                grid_image = await asyncio.to_thread(draw_grid_on_image, screenshot.copy(), grid_spacing=10)
+                
+                # 5. 保存并注入
+                desktop_img_name = f"desktop_grid_{uuid.uuid4().hex}.png"
+                desktop_img_path = os.path.join(UPLOAD_FILES_DIR, desktop_img_name)
+                
+                # 保存处理后的带网格图片
+                await asyncio.to_thread(grid_image.save, desktop_img_path, optimize=True)
+                
                 desktop_url = f"{fastapi_base_url}uploaded_files/{desktop_img_name}"
                 
-                # 将截图注入到当前消息中，让视觉模型能看到
-                # 我们直接修改 request.messages 的最后一条用户消息，添加图片引用
+                # 6. 修改 Prompt，引导 AI 使用网格
+                grid_hint = " (图片已叠加 10x10 百分比网格，请参考红色数字和网格线准确定位坐标)"
+                
                 current_user_msg = request.messages[-1]
                 if isinstance(current_user_msg['content'], str):
-                    # 如果原本是纯文本，转为多模态格式
                     original_text = current_user_msg['content']
                     current_user_msg['content'] = [
-                        {"type": "text", "text": original_text},
+                        {"type": "text", "text": original_text + grid_hint},
                         {"type": "image_url", "image_url": {"url": desktop_url}}
                     ]
                 elif isinstance(current_user_msg['content'], list):
-                    # 如果已经是列表，直接 append
                     current_user_msg['content'].append(
                         {"type": "image_url", "image_url": {"url": desktop_url}}
                     )
                 
-                print(f"桌面截图已自动注入消息: {desktop_url}")
+                print(f"带网格截图已注入: {desktop_url}")
                 
             except Exception as e:
                 print(f"后端桌面截图失败: {e}")
@@ -3886,26 +3940,53 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     if vision_control_enabled and (results =='[Getting screenshot]' or settings.get('visionControlSettings', {}).get('desktopVision', False)):
                         try:
                             import pyautogui
-                            import asyncio
-                            print("正在执行循环中的桌面截图...")
+
+                            print("正在执行带网格的桌面截图...")
+                            
+                            # 1. 获取逻辑尺寸
+                            logical_width, logical_height = pyautogui.size()
+                            
+                            # 2. 捕获屏幕
                             screenshot = await asyncio.to_thread(pyautogui.screenshot)
-                            desktop_img_name = f"desktop_loop_{uuid.uuid4().hex}.png"
+                            
+                            # 3. 强制 Resize 到逻辑坐标系 (解决 Windows 偏移的核心)
+                            if screenshot.width != logical_width or screenshot.height != logical_height:
+                                screenshot = await asyncio.to_thread(
+                                    screenshot.resize, (logical_width, logical_height), Image.Resampling.LANCZOS
+                                )
+                            
+                            # 4. 【新增】绘制数字网格
+                            # 我们在副本上画网格，以免破坏原始截图（如果以后需要的话）
+                            grid_image = await asyncio.to_thread(draw_grid_on_image, screenshot.copy(), grid_spacing=10)
+                            
+                            # 5. 保存并注入
+                            desktop_img_name = f"desktop_grid_{uuid.uuid4().hex}.png"
                             desktop_img_path = os.path.join(UPLOAD_FILES_DIR, desktop_img_name)
-                            await asyncio.to_thread(screenshot.save, desktop_img_path)
+                            
+                            # 保存处理后的带网格图片
+                            await asyncio.to_thread(grid_image.save, desktop_img_path, optimize=True)
+                            
                             desktop_url = f"{fastapi_base_url}uploaded_files/{desktop_img_name}"
                             
-                            # 仅将新截图注入到主模型对应的 request.messages
-                            # 以全新的 user 角色追加，专门用于提供视觉反馈
-                            request.messages.append({
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": "[System] This is the latest desktop screenshot after performing the above operation. Please determine whether the previous step was successful based on the current state of the screen and decide on the next action."},
+                            # 6. 修改 Prompt，引导 AI 使用网格
+                            grid_hint = " (图片已叠加 10x10 百分比网格，请参考红色数字和网格线准确定位坐标)"
+                            
+                            current_user_msg = request.messages[-1]
+                            if isinstance(current_user_msg['content'], str):
+                                original_text = current_user_msg['content']
+                                current_user_msg['content'] = [
+                                    {"type": "text", "text": original_text + grid_hint},
                                     {"type": "image_url", "image_url": {"url": desktop_url}}
                                 ]
-                            })
-                            print(f"循环桌面截图已自动注入主模型消息: {desktop_url}")
+                            elif isinstance(current_user_msg['content'], list):
+                                current_user_msg['content'].append(
+                                    {"type": "image_url", "image_url": {"url": desktop_url}}
+                                )
+                            
+                            print(f"带网格截图已注入: {desktop_url}")
+                            
                         except Exception as e:
-                            print(f"循环桌面截图失败: {e}")
+                            print(f"后端桌面截图失败: {e}")
                         images = await images_in_messages(request.messages,fastapi_base_url)
                         request.messages = await message_without_images(request.messages)
                     msg = await images_add_in_messages(request.messages, images,settings)
