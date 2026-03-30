@@ -1768,7 +1768,7 @@ function showNotification(message, type = 'success', title = '') {
     }
 
     const iconClass = NOTIFICATION_ICONS[type] || NOTIFICATION_ICONS.info;
-    const duration = type === 'error' ? 5000 : 3000;
+    const duration = (type === 'error'|| type === 'warning') ? 5000 : 3000;
 
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;

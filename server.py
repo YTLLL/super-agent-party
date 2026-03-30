@@ -444,6 +444,18 @@ def draw_grid_on_image(image: Image.Image, grid_spacing: int = 10) -> Image.Imag
         
     return image
 
+def scale_to_fit(width: int, height: int, max_w: int = 1920, max_h: int = 1080) -> tuple[int, int]:
+    """计算等比例缩放后的尺寸"""
+    # 计算宽和高的缩放比例
+    scale_w = max_w / width
+    scale_h = max_h / height
+    
+    # 取较小的那个缩放比例，确保长宽都不超过限制
+    scale = min(scale_w, scale_h, 1.0) # 如果原图比 1920x1080 小，则不放大(1.0)
+    
+    new_width = int(width * scale)
+    new_height = int(height * scale)
+    return new_width, new_height
 
 def _get_target_message(message, role):
     """
@@ -2300,6 +2312,14 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         screenshot.resize, (logical_width, logical_height), Image.Resampling.LANCZOS
                     )
                 
+                target_w, target_h = scale_to_fit(logical_width, logical_height, 1920, 1080)
+                
+                if screenshot.width > target_w or screenshot.height > target_h:
+                    print(f"检测到高分辨率屏幕，正在从 {screenshot.size} 缩放到 {(target_w, target_h)}")
+                    screenshot = await asyncio.to_thread(
+                        screenshot.resize, (target_w, target_h), Image.Resampling.LANCZOS
+                    )
+
                 # 4. 【新增】绘制数字网格
                 # 我们在副本上画网格，以免破坏原始截图（如果以后需要的话）
                 grid_image = await asyncio.to_thread(draw_grid_on_image, screenshot.copy(), grid_spacing=10)
@@ -3955,6 +3975,14 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                     screenshot.resize, (logical_width, logical_height), Image.Resampling.LANCZOS
                                 )
                             
+                            target_w, target_h = scale_to_fit(logical_width, logical_height, 1920, 1080)
+                            
+                            if screenshot.width > target_w or screenshot.height > target_h:
+                                print(f"检测到高分辨率屏幕，正在从 {screenshot.size} 缩放到 {(target_w, target_h)}")
+                                screenshot = await asyncio.to_thread(
+                                    screenshot.resize, (target_w, target_h), Image.Resampling.LANCZOS
+                                )
+
                             # 4. 【新增】绘制数字网格
                             # 我们在副本上画网格，以免破坏原始截图（如果以后需要的话）
                             grid_image = await asyncio.to_thread(draw_grid_on_image, screenshot.copy(), grid_spacing=10)

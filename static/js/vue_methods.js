@@ -15804,6 +15804,21 @@ closeTaskCenter() {
     this.autoSaveSettings();
   },
 
+  handleVisionControlEnableToggle(newValue){
+    if (newValue === true && this.visionSettings.enabled === true) {
+      this.visionSettings.enabled = false;
+      showNotification(this.t('autoDisableVisionSettings'), 'warning');
+    }
+    this.autoSaveSettings();
+  },
+  handleVisionEnableToggle(newValue){
+    if (newValue === true && this.visionControlSettings.enabled === true) {
+      this.visionControlSettings.enabled = false;
+      showNotification(this.t('autoDisableVisionControlSettings'), 'warning');
+    }
+    this.autoSaveSettings();
+  },
+
   handleWebSearchToggle(newValue) {
     if (newValue === true) {
       const settings = this.webSearchSettings;
