@@ -702,9 +702,6 @@ const app = Vue.createApp({
           });
         }
 
-        // 初始化加载时，尝试注册全局快捷键
-        this.updateGlobalShortcut();
-
       if (window.electron && window.electron.ipcRenderer) {
           window.electron.ipcRenderer.on('trigger-search', (text) => {
               // 1. 将选中的文本填入地址栏变量
@@ -977,7 +974,11 @@ const handleRemoteInstall = (data) => {
     }, 1000);
   }
 
-
+    this.$nextTick(() => {
+      setTimeout(() => {
+        this.updateGlobalShortcut();
+      }, 1000); // 延迟 500ms 确保主进程完全 Ready
+    });
   },
   beforeUnmount() {
     this.stopEdgeScroll();

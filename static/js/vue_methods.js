@@ -1522,7 +1522,6 @@ let vue_methods = {
           if (this.asrSettings.enabled && this.asrSettings.interactionMethod != 'globalKeyTriggered' && this.asrSettings.interactionMethod != 'keyTriggered') {
             this.startASR();
           }
-          
           if (this.activeMenu === 'home') this.startDriverGuide();
         } 
         else if (data.type === 'settings_saved') {

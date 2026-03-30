@@ -875,14 +875,15 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </el-button>
                     </el-tooltip>
 
-                    <el-tooltip :content="t('desktopVisionButton')" placement="top">
+                    <el-tooltip :content="t('visionControl')" placement="top">
                       <el-button
-                        @click="visionSettings.desktopVision = !visionSettings.desktopVision; autoSaveSettings()"
-                        class="icon-btn vision-btn"
-                        :type="visionSettings.desktopVision ? 'primary' : 'default'"
-                        v-if="isElectron&&(MoreButtonDict.find(b => b.name === 'desktopVisionButton')?.enabled||isCapsuleMode)"
+                        :disabled="!isElectron"
+                        @click="visionControlSettings.enabled = !visionControlSettings.enabled; autoSaveSettings()"
+                        class="icon-btn web-search-btn"
+                        :type="visionControlSettings.enabled ? 'primary' : 'default'"
+                        v-if="isCapsuleMode"
                         circle>
-                        <i class="fa-solid fa-eye"></i>
+                        <i class="fa-solid fa-arrow-pointer"></i>
                       </el-button>
                     </el-tooltip>
 
