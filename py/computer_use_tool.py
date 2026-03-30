@@ -27,6 +27,8 @@ def _percent_to_pixel(x_percent: float, y_percent: float) -> Tuple[int, int]:
 
 async def mouse_move_async(x: float, y: float, duration: float = 0.5) -> str:
     """移动鼠标到屏幕百分比位置"""
+    if x < 0 or x > 100 or y < 0 or y > 100:
+        return "百分比坐标超出范围，请输入 0 到 100 之间的值。"
     px, py = _percent_to_pixel(x, y)
     await asyncio.to_thread(pyautogui.moveTo, px, py, duration)
     return f"鼠标已成功移动到屏幕位置 ({x}%, {y}%)，实际像素坐标 ({px}, {py})，耗时 {duration} 秒。"
@@ -34,6 +36,8 @@ async def mouse_move_async(x: float, y: float, duration: float = 0.5) -> str:
 async def mouse_click_async(button: str = "left", clicks: int = 1, x: Optional[float] = None, y: Optional[float] = None) -> str:
     """点击鼠标（支持百分比坐标）"""
     if x is not None and y is not None:
+        if x < 0 or x > 100 or y < 0 or y > 100:    
+            return "百分比坐标超出范围，请输入 0 到 100 之间的值。"
         px, py = _percent_to_pixel(x, y)
         await asyncio.to_thread(pyautogui.click, x=px, y=py, clicks=clicks, button=button)
         return f"鼠标已移动到 ({x}%, {y}%) 并使用 {button} 键点击了 {clicks} 次。"
@@ -43,6 +47,8 @@ async def mouse_click_async(button: str = "left", clicks: int = 1, x: Optional[f
 
 async def mouse_drag_async(x: float, y: float, duration: float = 0.5, button: str = "left") -> str:
     """拖拽鼠标到指定百分比位置"""
+    if x < 0 or x > 100 or y < 0 or y > 100:    
+        return "百分比坐标超出范围，请输入 0 到 100 之间的值。"
     px, py = _percent_to_pixel(x, y)
     await asyncio.to_thread(pyautogui.dragTo, px, py, duration, button=button)
     return f"鼠标已按住 {button} 键拖拽到了位置 ({x}%, {y}%)。"
@@ -166,7 +172,7 @@ mouse_click_tool = {
             "type": "object",
             "properties": {
                 "button": {"type": "string", "enum": ["left", "right", "middle"], "description": "点击的按键，左键/右键/中键"},
-                "clicks": {"type": "integer", "description": "点击次数。1为单击，2为双击", "default": 1},
+                "clicks": {"type": "integer", "description": "点击次数。1为单击，2为双击，当你需要打开链接或文件时，建议使用双击。如果单击某个图标没有任何反应，也要优先考虑双击。", "default": 1},
                 "x": {"type": "number", "description": "点击前的目标水平坐标（0.0 到 100.0 的百分比），可选","maximum": 100, "minimum": 0},
                 "y": {"type": "number", "description": "点击前的目标垂直坐标（0.0 到 100.0 的百分比），可选","maximum": 100, "minimum": 0}
             },
