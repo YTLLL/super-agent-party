@@ -10,42 +10,60 @@ pyautogui.FAILSAFE = True
 
 def _percent_to_pixel(x_percent: float, y_percent: float) -> Tuple[int, int]:
     """
-    内部辅助函数：将百分比 (0.0 到 100.0) 转换为当前屏幕的实际像素坐标。
+    内部辅助函数：将千分比 (0 到 1000) 转换为当前屏幕的实际像素坐标。
     处理了边界限制，防止坐标超出屏幕。
     """
     width, height = pyautogui.size()
     
-    # 限制在 0 到 100 之间
-    x_percent = max(0.0, min(100.0, float(x_percent)))
-    y_percent = max(0.0, min(100.0, float(y_percent)))
+    # 限制在 0 到 1000 之间
+    x_percent = max(0, min(1000, float(x_percent)))
+    y_percent = max(0, min(1000, float(y_percent)))
     
     # 转换为像素（最大值为 分辨率 - 1，因为像素是从 0 开始计算的）
-    px = min(int(width * (x_percent / 100.0)), width - 1)
-    py = min(int(height * (y_percent / 100.0)), height - 1)
+    px = min(int(width * (x_percent / 1000)), width - 1)
+    py = min(int(height * (y_percent / 1000)), height - 1)
     
     return px, py
 
 async def mouse_move_async(x: float, y: float, duration: float = 0.5) -> str:
-    """移动鼠标到屏幕百分比位置"""
+    """移动鼠标到屏幕千分比位置"""
+    if x < 0 or x > 1000 or y < 0 or y > 1000:
+        return "千分比坐标超出范围，请输入 0 到 1000 之间的值。"
     px, py = _percent_to_pixel(x, y)
     await asyncio.to_thread(pyautogui.moveTo, px, py, duration)
-    return f"鼠标已成功移动到屏幕位置 ({x}%, {y}%)，实际像素坐标 ({px}, {py})，耗时 {duration} 秒。"
+    return f"鼠标已成功移动到屏幕位置 ({x}‰, {y}‰)，实际像素坐标 ({px}, {py})，耗时 {duration} 秒。"
 
 async def mouse_click_async(button: str = "left", clicks: int = 1, x: Optional[float] = None, y: Optional[float] = None) -> str:
-    """点击鼠标（支持百分比坐标）"""
+    """点击鼠标（支持千分比坐标）"""
     if x is not None and y is not None:
+        if x < 0 or x > 1000 or y < 0 or y > 1000:    
+            return "千分比坐标超出范围，请输入 0 到 1000 之间的值。"
         px, py = _percent_to_pixel(x, y)
         await asyncio.to_thread(pyautogui.click, x=px, y=py, clicks=clicks, button=button)
-        return f"鼠标已移动到 ({x}%, {y}%) 并使用 {button} 键点击了 {clicks} 次。"
+        return f"鼠标已移动到 ({x}‰, {y}‰) 并使用 {button} 键点击了 {clicks} 次。"
+    else:
+        await asyncio.to_thread(pyautogui.click, clicks=clicks, button=button)
+        return f"鼠标在当前位置使用 {button} 键点击了 {clicks} 次。"
+
+async def mouse_double_click_async(button: str = "left", clicks: int = 1, x: Optional[float] = None, y: Optional[float] = None) -> str:
+    """点击鼠标（支持千分比坐标）"""
+    if x is not None and y is not None:
+        if x < 0 or x > 1000 or y < 0 or y > 1000:    
+            return "千分比坐标超出范围，请输入 0 到 1000 之间的值。"
+        px, py = _percent_to_pixel(x, y)
+        await asyncio.to_thread(pyautogui.click, x=px, y=py, clicks=clicks, button=button)
+        return f"鼠标已移动到 ({x}‰, {y}‰) 并使用 {button} 键点击了 {clicks} 次。"
     else:
         await asyncio.to_thread(pyautogui.click, clicks=clicks, button=button)
         return f"鼠标在当前位置使用 {button} 键点击了 {clicks} 次。"
 
 async def mouse_drag_async(x: float, y: float, duration: float = 0.5, button: str = "left") -> str:
-    """拖拽鼠标到指定百分比位置"""
+    """拖拽鼠标到指定千分比位置"""
+    if x < 0 or x > 1000 or y < 0 or y > 1000:    
+        return "千分比坐标超出范围，请输入 0 到 1000 之间的值。"
     px, py = _percent_to_pixel(x, y)
     await asyncio.to_thread(pyautogui.dragTo, px, py, duration, button=button)
-    return f"鼠标已按住 {button} 键拖拽到了位置 ({x}%, {y}%)。"
+    return f"鼠标已按住 {button} 键拖拽到了位置 ({x}‰, {y}‰)。"
 
 async def mouse_scroll_async(clicks: int) -> str:
     """
@@ -144,12 +162,12 @@ mouse_move_tool = {
     "type": "function",
     "function": {
         "name": "mouse_move_async",
-        "description": "将鼠标移动到屏幕上的指定位置。坐标使用百分比表示（0.0到100.0）。(0,0)是屏幕左上角，(100,100)是右下角，(50,50)是屏幕正中心。",
+        "description": "将鼠标移动到屏幕上的指定位置。坐标使用千分比表示（0到1000）。(0,0)是屏幕左上角，(1000,1000)是右下角，(500,500)是屏幕正中心。",
         "parameters": {
             "type": "object",
             "properties": {
-                "x": {"type": "number", "description": "目标水平坐标(X轴)，范围 0.0 到 100.0 的百分比。例如 50 表示宽度正中间","maximum": 100, "minimum": 0},
-                "y": {"type": "number", "description": "目标垂直坐标(Y轴)，范围 0.0 到 100.0 的百分比。例如 50 表示高度正中间","maximum": 100, "minimum": 0},
+                "x": {"type": "number", "description": "目标水平坐标(X轴)，范围 0 到 1000 的千分比。例如 500 表示宽度正中间","maximum": 1000, "minimum": 0},
+                "y": {"type": "number", "description": "目标垂直坐标(Y轴)，范围 0 到 1000 的千分比。例如 500 表示高度正中间","maximum": 1000, "minimum": 0},
                 "duration": {"type": "number", "description": "移动耗时（秒），默认为0.5秒。为了拟真，建议不要设为0", "default": 0.5}
             },
             "required": ["x", "y"]
@@ -161,30 +179,48 @@ mouse_click_tool = {
     "type": "function",
     "function": {
         "name": "mouse_click_async",
-        "description": "点击鼠标。如果传入百分比坐标，则会先移动到该位置再点击；如果不传坐标则在当前位置点击。",
+        "description": "点击鼠标。如果传入千分比坐标，则会先移动到该位置再点击；如果不传坐标则在当前位置点击。",
         "parameters": {
             "type": "object",
             "properties": {
                 "button": {"type": "string", "enum": ["left", "right", "middle"], "description": "点击的按键，左键/右键/中键"},
-                "clicks": {"type": "integer", "description": "点击次数。1为单击，2为双击", "default": 1},
-                "x": {"type": "number", "description": "点击前的目标水平坐标（0.0 到 100.0 的百分比），可选","maximum": 100, "minimum": 0},
-                "y": {"type": "number", "description": "点击前的目标垂直坐标（0.0 到 100.0 的百分比），可选","maximum": 100, "minimum": 0}
+                "clicks": {"type": "integer", "description": "点击次数。1为单击，2为双击，当你需要打开链接或文件时，建议使用双击。如果单击某个图标没有任何反应，也要优先考虑双击。", "default": 1},
+                "x": {"type": "number", "description": "点击前的目标水平坐标（0 到 1000 的千分比），可选","maximum": 1000, "minimum": 0},
+                "y": {"type": "number", "description": "点击前的目标垂直坐标（0 到 1000 的千分比），可选","maximum": 1000, "minimum": 0}
             },
             "required": ["button"]
         }
     }
 }
 
+mouse_double_click_tool = {
+    "type": "function",
+    "function": {
+        "name": "mouse_double_click_async",
+        "description": "双击鼠标以快速打开链接、文件、应用等。如果传入千分比坐标，则会先移动到该位置再点击；如果不传坐标则在当前位置点击。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "button": {"type": "string", "enum": ["left", "right", "middle"], "description": "点击的按键，左键/右键/中键"},
+                "x": {"type": "number", "description": "点击前的目标水平坐标（0 到 1000 的千分比），可选","maximum": 1000, "minimum": 0},
+                "y": {"type": "number", "description": "点击前的目标垂直坐标（0 到 1000 的千分比），可选","maximum": 1000, "minimum": 0}
+            },
+            "required": ["button"]
+        }
+    }
+}
+
+
 mouse_drag_tool = {
     "type": "function",
     "function": {
         "name": "mouse_drag_async",
-        "description": "按住鼠标按键并拖拽到指定百分比位置。常用于拖动窗口、滑块、框选等操作。",
+        "description": "按住鼠标按键并拖拽到指定千分比位置。常用于拖动窗口、滑块、框选等操作。",
         "parameters": {
             "type": "object",
             "properties": {
-                "x": {"type": "number", "description": "拖拽终点水平坐标（0.0 到 100.0 的百分比）","maximum": 100, "minimum": 0},
-                "y": {"type": "number", "description": "拖拽终点垂直坐标（0.0 到 100.0 的百分比）","maximum": 100, "minimum": 0},
+                "x": {"type": "number", "description": "拖拽终点水平坐标（0 到 1000 的千分比）","maximum": 1000, "minimum": 0},
+                "y": {"type": "number", "description": "拖拽终点垂直坐标（0 到 1000 的千分比）","maximum": 1000, "minimum": 0},
                 "duration": {"type": "number", "description": "拖拽过程耗时（秒）", "default": 0.5},
                 "button": {"type": "string", "enum": ["left", "right"], "description": "按住哪个键拖拽，默认左键", "default": "left"}
             },
@@ -323,7 +359,7 @@ screenshot_async_tool = {
     "type": "function",
     "function": {
         "name": "screenshot_async",
-        "description": "截取当前桌面的图像"
+        "description": "截取带有千分比辅助网格的当前桌面的图像"
     }
 }
 
@@ -340,6 +376,7 @@ desktopVision_use_tools = [
 mouse_use_tools = [
     mouse_move_tool,
     mouse_click_tool,
+    mouse_double_click_tool,
     mouse_drag_tool,
     mouse_scroll_tool,
     mouse_hold_tool,
