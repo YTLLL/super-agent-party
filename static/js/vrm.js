@@ -3489,7 +3489,11 @@ function addcontrolPanel() {
         controlPanel.appendChild(hideButton);          // 模型不遮挡
         controlPanel.appendChild(prevModelButton);     // 上一个模型
         controlPanel.appendChild(nextModelButton);     // 下一个模型
-        controlPanel.appendChild(voiceControlBtn); 
+
+        if (!isElectron) {
+            controlPanel.appendChild(voiceControlBtn);            // 语音控制
+        }
+        
         controlPanel.appendChild(moreButton);          // 🌟 更多按钮
         controlPanel.appendChild(refreshButton);       // 刷新
         controlPanel.appendChild(closeButton);         // 关闭
