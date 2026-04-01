@@ -1869,7 +1869,7 @@ function initSubtitleElement() {
     subtitleElement.id = 'subtitle-container';
     subtitleElement.style.cssText = `
         position: fixed;
-        top: 70%;  
+        top: 50%;  
         left: 50%;
         width: auto;
         max-width: 80%;
@@ -2436,6 +2436,194 @@ function disablePointerLockMovement() {
     document.removeEventListener('keyup', onKeyUp);
     // 清空按键缓存
     for (const k in keyState) delete keyState[k];
+}
+
+const pttStyle = document.createElement('style');
+pttStyle.textContent = `
+    #ptt-floating-btn {
+        position: fixed;
+        bottom: 40px; /* 稍微下移一点，更贴合大拇指 */
+        left: 50%;
+        transform: translateX(-50%) scale(0);
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #ff6b35, #ff8c5a);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* 阴影更精细，匹配小尺寸 */
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3); 
+        cursor: pointer;
+        z-index: 10002;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        user-select: none;
+        touch-action: none;
+        opacity: 0;
+        pointer-events: none;
+    }
+    #ptt-floating-btn.visible { 
+        transform: translateX(-50%) scale(1); 
+        opacity: 1;
+        pointer-events: auto;
+    }
+    #ptt-floating-btn:active { 
+        transform: translateX(-50%) scale(0.92); 
+        background: #ff5010; /* 按下时颜色加深 */
+    }
+    
+    /* 图标调小到 20-22px，看起来比例最舒服 */
+    #ptt-floating-btn i { 
+        color: white; 
+        font-size: 20px; 
+    }
+    
+    .ptt-recording-pulse {
+        position: absolute;
+        width: 100%; height: 100%;
+        border-radius: 50%;
+        background: rgba(255, 107, 53, 0.5);
+        animation: ptt-pulse-ring 1.2s infinite;
+        z-index: -1;
+    }
+    @keyframes ptt-pulse-ring {
+        0% { transform: scale(1); opacity: 0.5; }
+        100% { transform: scale(2.2); opacity: 0; }
+    }
+`;
+document.head.appendChild(pttStyle);
+
+// 全局状态
+let pttMainWs = null;
+let pttAsrWs = null;
+let pttMediaRecorder = null;
+let pttAudioChunks = [];
+let isPttActive = false;
+
+// 初始化通往主界面的控制 WS
+function initPttMainWs() {
+    if (pttMainWs && pttMainWs.readyState === WebSocket.OPEN) return;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    pttMainWs = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    pttMainWs.onclose = () => setTimeout(initPttMainWs, 3000);
+}
+
+// 初始化 ASR WS
+async function initPttAsrWs() {
+    if (pttAsrWs && pttAsrWs.readyState === WebSocket.OPEN) return pttAsrWs;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    pttAsrWs = new WebSocket(`${protocol}//${window.location.host}/ws/asr`);
+    
+    return new Promise((resolve) => {
+        pttAsrWs.onopen = () => {
+            pttAsrWs.send(JSON.stringify({ type: "init" }));
+            resolve(pttAsrWs);
+        };
+        pttAsrWs.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === "transcription" && msg.text && msg.is_final) {
+                // 识别成功，通过控制 WS 发送给主界面
+                if (pttMainWs && pttMainWs.readyState === WebSocket.OPEN) {
+                    pttMainWs.send(JSON.stringify({ type: "set_user_input", data: { text: msg.text } }));
+                    setTimeout(() => {
+                        pttMainWs.send(JSON.stringify({ type: "trigger_send_message", data: {} }));
+                    }, 300);
+                }
+            }
+        };
+    });
+}
+
+// 核心转码：WebM -> 16kHz WAV (Sherpa 专用)
+async function pttEncodeWav(blob) {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    const channelData = audioBuffer.getChannelData(0);
+    
+    const wavBuffer = new ArrayBuffer(44 + channelData.length * 2);
+    const view = new DataView(wavBuffer);
+    
+    const writeString = (offset, string) => {
+        for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + channelData.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, 16000, true);
+    view.setUint32(28, 16000 * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, channelData.length * 2, true);
+
+    for (let i = 0; i < channelData.length; i++) {
+        const s = Math.max(-1, Math.min(1, channelData[i]));
+        view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    return new Blob([view], { type: 'audio/wav' });
+}
+
+// 初始化 PTT 按钮与录音逻辑
+function setupPttInteraction() {
+    const floatingBtn = document.createElement('div');
+    floatingBtn.id = 'ptt-floating-btn';
+    floatingBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+    document.body.appendChild(floatingBtn);
+
+    const startRecording = async (e) => {
+        if (e.cancelable) e.preventDefault();
+        if (isPttActive) return;
+        isPttActive = true;
+        pttAudioChunks = [];
+        floatingBtn.innerHTML = '<i class="fa-solid fa-microphone"></i><div class="ptt-recording-pulse"></div>';
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            pttMediaRecorder = new MediaRecorder(stream);
+            pttMediaRecorder.ondataavailable = (ev) => pttAudioChunks.push(ev.data);
+            pttMediaRecorder.onstop = async () => {
+                const webmBlob = new Blob(pttAudioChunks, { type: 'audio/webm' });
+                const wavBlob = await pttEncodeWav(webmBlob);
+                
+                const ws = await initPttAsrWs();
+                const reader = new FileReader();
+                reader.readAsDataURL(wavBlob);
+                reader.onloadend = () => {
+                    ws.send(JSON.stringify({
+                        type: 'audio_complete',
+                        audio: reader.result.split(',')[1],
+                        format: 'wav'
+                    }));
+                };
+                stream.getTracks().forEach(t => t.stop());
+            };
+            pttMediaRecorder.start();
+        } catch (err) {
+            console.error("Mic error:", err);
+            isPttActive = false;
+        }
+    };
+
+    const stopRecording = (e) => {
+        if (e.cancelable) e.preventDefault();
+        if (!isPttActive) return;
+        isPttActive = false;
+        floatingBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+        if (pttMediaRecorder) pttMediaRecorder.stop();
+    };
+
+    floatingBtn.addEventListener('mousedown', startRecording);
+    window.addEventListener('mouseup', stopRecording);
+    floatingBtn.addEventListener('touchstart', startRecording);
+    window.addEventListener('touchend', stopRecording);
+    
+    initPttMainWs();
 }
 
 const btn_width = 28;
@@ -3213,6 +3401,54 @@ function addcontrolPanel() {
             if (document.pointerLockElement !== renderer.domElement && pointerLocked) toggleControls();
         });
 
+        // 1. 创建按钮并设置初始属性
+        const voiceControlBtn = document.createElement('div');
+        voiceControlBtn.id = 'voice-toggle-handle';
+        voiceControlBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+        voiceControlBtn.style.cssText = `
+            width: ${btn_width}px; height: ${btn_height}px; background: rgba(255,255,255,0.95);
+            border: 2px solid rgba(0,0,0,0.1); border-radius: 50%; color: #000000; cursor: pointer;
+            -webkit-app-region: no-drag; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform 0.2s;
+            user-select: none; pointer-events: auto; backdrop-filter: blur(10px);
+        `;
+
+        // 2. 初始 Hover 提示 (使用你代码里的翻译函数 t)
+        (async () => {
+            const initialTitle = await t('EnableVoiceInput') || '开启语音输入';
+            voiceControlBtn.title = initialTitle;
+            addHoverEffect(voiceControlBtn, initialTitle); // 调用你现有的提示增强函数
+        })();
+
+        // 3. 点击事件中增加标题动态更新
+        let pttVisible = false;
+        voiceControlBtn.addEventListener('click', async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            pttVisible = !pttVisible;
+            const fBtn = document.getElementById('ptt-floating-btn');
+            
+            // 获取新的标题文本
+            const activeTitle = pttVisible 
+                ? (await t('DisableVoiceInput') || '关闭语音输入') 
+                : (await t('EnableVoiceInput') || '开启语音输入');
+
+           if (pttVisible) {
+                fBtn.classList.add('visible');
+                voiceControlBtn.style.background = '#ff6b35';
+                voiceControlBtn.style.color = '#ff6b35';
+            } else {
+                fBtn.classList.remove('visible');
+                voiceControlBtn.style.background = '#000000';
+                voiceControlBtn.style.color = '#000000';
+            }
+
+            // 更新原生标题和自定义 Tooltip
+            voiceControlBtn.title = activeTitle;
+            showTooltip(voiceControlBtn, activeTitle); // 立即更新当前显示的黑色气泡
+        });
+
+
+
         // ==========================================
         // ======= 组装所有面板与按钮 ===================
         // ==========================================
@@ -3223,6 +3459,7 @@ function addcontrolPanel() {
         controlPanel.appendChild(hideButton);          // 模型不遮挡
         controlPanel.appendChild(prevModelButton);     // 上一个模型
         controlPanel.appendChild(nextModelButton);     // 下一个模型
+        controlPanel.appendChild(voiceControlBtn); 
         controlPanel.appendChild(moreButton);          // 🌟 更多按钮
         controlPanel.appendChild(refreshButton);       // 刷新
         controlPanel.appendChild(closeButton);         // 关闭
@@ -3247,6 +3484,7 @@ function addcontrolPanel() {
             hideButton,
             prevModelButton, 
             nextModelButton, 
+            voiceControlBtn,
             moreButton,          // 让"更多"按钮受锁定控制
             refreshButton, 
             closeButton,
@@ -3302,6 +3540,8 @@ function addcontrolPanel() {
                 case 2: moveModeBtn.title = await t('ModeRotate') || 'Rotate Mode'; break;
                 case 3: moveModeBtn.title = await t('ModeScale') || 'Scale Mode'; break;
             }
+            const vText = pttVisible ? await t('DisableVoiceInput') : await t('EnableVoiceInput');
+            addHoverEffect(voiceControlBtn, vText || (pttVisible ? '关闭语音输入' : '开启语音输入'));
         }
         setInterval(updateButtonTooltips, 1000);
 
@@ -3362,6 +3602,7 @@ function addcontrolPanel() {
         });
         
         scheduleHide();
+        setupPttInteraction();
         console.log('控制面板已加载，更多功能折叠完毕。');
 
     }, 1000);
