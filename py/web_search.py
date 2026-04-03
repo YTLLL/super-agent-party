@@ -46,13 +46,21 @@ duckduckgo_tool = {
     },
 }
 
-async def searxng_async(query):
+async def searxng_async(query,categories="general"):
     settings = await load_settings()
     def sync_search(query):
         max_results = settings['webSearch']['searxng_max_results'] or 10
         api_url = settings['webSearch']['searxng_url'] or "http://127.0.0.1:8080"
+        engines = settings['webSearch']['searxng_engines'] or None
+        is_select = settings['webSearch']['searxng_is_select'] or False
         headers = {"User-Agent": "Mozilla/5.0"}
-        params = {"q": query, "categories": "general","count": max_results}
+        params = {
+            "q": query, 
+            "categories": categories,
+            "count": max_results
+        }
+        if engines and is_select:
+            params["engines"] = engines
 
         try:
             response = requests.get(api_url + "/search", headers=headers, params=params)
@@ -85,14 +93,14 @@ async def searxng_async(query):
             
         except Exception as e:
             print(f"Search error: {e}")
-            return ""
+            return f"Search error: {e}"
 
     try:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, sync_search, query)
     except Exception as e:
         print(f"Async error: {e}")
-        return ""
+        return f"Async error: {e}"
 
 searxng_tool = {
     "type": "function",
@@ -106,12 +114,17 @@ searxng_tool = {
                     "type": "string",
                     "description": "搜索关键词，支持自然语言和多关键词组合查询",
                 },
+                "categories": {
+                    "type": "string",
+                    "description": "搜索类别，请根据用户意图选择最合适的分类。可选值：'general'(综合/默认，适合大部分百科与常识查询), 'news'(新闻，适合搜近期发生的事件), 'images'(图片，适合找图), 'videos'(视频，适合找视频资源), 'it'(IT技术，适合搜代码报错、编程开发相关), 'science'(科学，适合搜学术论文与科学资料)。",
+                    "enum": ["general", "news", "images", "videos", "it", "science"],
+                    "default": "general"
+                },
             },
             "required": ["query"],
         },
     },
 }
-
 
 async def bochaai_search_async(query):
     settings = await load_settings()

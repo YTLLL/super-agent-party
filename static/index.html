@@ -9099,6 +9099,25 @@ function updateElement(el, rawMarkdown, formatFn) {
                           class="full-width-input"
                         />
                       </el-form-item>
+                      <el-form-item :label="t('searxngCustomEngine')" class="form-item-align" label-position="left">
+                        <el-switch
+                          v-model="webSearchSettings.searxng_is_select"
+                          @change="autoSaveSettings"
+                        />
+                      </el-form-item>
+                      <el-form-item 
+                        v-show="webSearchSettings.searxng_is_select"
+                        :label="t('searxngEngines')" 
+                        class="form-item-align"
+                      >
+                        <el-input
+                          v-model="webSearchSettings.searxng_engines"
+                          :placeholder="t('searxngEnginesPlaceholder')"
+                          @input="autoSaveSettings"
+                          class="full-width-input"
+                        />
+                      </el-form-item>
+
                     </div>
                   </div>
                   <div class="tool-item" v-show="webSearchSettings.engine === 'tavily'">

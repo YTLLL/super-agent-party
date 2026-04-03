@@ -324,6 +324,8 @@ let vue_data = {
       when: 'after_thinking',
       duckduckgo_max_results: 10, // 默认值
       searxng_url: `http://127.0.0.1:8080`,
+      searxng_engines: "baidu,bing,sogou,360search,quark",
+      searxng_is_select:false,
       searxng_max_results: 10, // 默认值
       tavily_max_results: 10, // 默认值
       tavily_api_key: '',
