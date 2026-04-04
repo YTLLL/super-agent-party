@@ -2102,4 +2102,5 @@ main();`,
     isEditingAffection: false,
     currentAffectionForm: { userName: '' },
     isForceScrollToBottom: false,
+    activeAgentTab: 'settings',
 };

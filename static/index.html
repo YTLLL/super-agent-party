@@ -14505,52 +14505,124 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
               <!-- 智能体页面 -->
               <div v-show="subMenu === 'agents'" class="page agents-container">
-                <!-- 磁贴网格 -->
-                <div class="provider-grid">
-                  <!-- 已有智能体 -->
-                  <div class="provider-card agent-card" v-for="agent in agents" :key="agent.id">
-                    <div class="card-header">
-                      <el-switch v-model="agent.enabled" @change="autoSaveSettings"></el-switch>
-                      <div class="card-actions">
-                        <!-- 更新删除按钮样式 -->
-                        <el-button @click="removeAgent(agent.id)" type="danger" circle size="small">
-                          <i class="fa-solid fa-trash"></i>
-                        </el-button>
+                <el-tabs v-model="activeAgentTab">
+                  
+                  <!-- 第一个 Tab：智能体设置 (原弹窗内容) -->
+                  <el-tab-pane :label="t('agentSettings')" name="settings">
+                    <el-form class="settings-form" label-position="top">
+                      <div class="tool-item">
+                        <div class="tool-header">
+                          <div class="header-left">
+                            <span>
+                              <el-icon>
+                                <i class="fa-solid fa-robot"></i>
+                              </el-icon>
+                              {{ t('agentSettings') }}
+                            </span>
+                          </div>
+                        </div>
+                        <div class="tool-content">
+                          
+                          <!-- 主智能体选择 -->
+                          <div class="agent-section">
+                            <h5>{{ t('mainAgent') }}</h5>
+                            <el-select 
+                              v-model="mainAgent"
+                              @change="changeMainAgent">
+                              <el-option
+                                :label="t('defaultAgent')"
+                                value="super-model"
+                              >
+                              </el-option>
+                              <el-option
+                                v-for="(agent, id) in agents"
+                                :key="id"
+                                :label="agent.name"
+                                :value="id"
+                              >
+                              </el-option>
+                            </el-select>
+                          </div>
+                          <!-- 工具智能体选择 -->
+                          <div class="agent-section">
+                            <h5>{{ t('toolAgents') }}</h5>
+                            <div 
+                              v-for="(agent, id) in agents" 
+                              :key="id"
+                              class="knowledge-item">
+                              <el-switch 
+                                v-model="agent.enabled"
+                                @change="autoSaveSettings">
+                              </el-switch>
+                              <div class="knowledge-info">
+                                <div class="knowledge-name">{{ agent.name }}</div>
+                              </div>
+                            </div>
+                            <div v-if="Object.keys(agents).length === 0" class="empty-tip">
+                              {{ t('noagents') }}
+                              <a href="#" @click.stop.prevent="switchToagents">{{ t('goToagents') }}</a>
+                              {{ t('add') }}
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>
+                    </el-form>
+                  </el-tab-pane>
+
+                  <!-- 第二个 Tab：管理与添加智能体 (原磁贴网格) -->
+                  <el-tab-pane :label="t('manageAgents')" name="add">
+                    <!-- 磁贴网格 -->
+                    <div class="provider-grid">
+                      <!-- 已有智能体 -->
+                      <div class="provider-card agent-card" v-for="agent in agents" :key="agent.id">
+                        <div class="card-header">
+                          <span></span>
+                          <div class="card-actions">
+                            <!-- 删除按钮 -->
+                            <el-button @click="removeAgent(agent.id)" type="danger" circle size="small">
+                              <i class="fa-solid fa-trash"></i>
+                            </el-button>
+                          </div>
+                        </div>
+                        
+                        <div class="agent-content">
+                          <div class="agent-header">
+                            <span class="agent-name">{{ agent.name }}</span>
+                            <!-- 复制功能 -->
+                            <el-button
+                              size="small"
+                              type="info"
+                              @click="copyAgentName(agent.name)"
+                            >
+                              <i class="fa-regular fa-copy"></i>
+                            </el-button>
+                          </div>
+                          <!-- 带复制功能的ID展示 -->
+                          <el-tag 
+                            type="info" 
+                            size="small" 
+                            class="agent-id clickable"
+                            @click="copyAgentId(agent.id)"
+                          >
+                            {{ agent.id }}
+                            <i class="fa-regular fa-copy"></i>
+                          </el-tag>
+                          <p class="agent-prompt">{{ agent.system_prompt }}</p>
+                        </div>
+                      </div>
+                      
+                      <!-- 添加新智能体 -->
+                      <div class="provider-card add-tile" @click="showAgentForm = true; newAgent.system_prompt = this.system_prompt">
+                        <el-icon :size="40" color="#909399"><i class="fa-solid fa-plus"></i></el-icon>
+                        <div style="color: #606266; margin-top: 10px;">{{ t('addNewAgent') }}</div>
                       </div>
                     </div>
-                    
-                    <div class="agent-content">
-                      <div class="agent-header">
-                        <span class="agent-name">{{ agent.name }}</span>
-                        <!-- 添加复制功能 -->
-                        <el-button
-                          size="small"
-                          type="info"
-                          @click="copyAgentName(agent.name)"
-                        >
-                          <i class="fa-regular fa-copy"></i>
-                        </el-button>
-                      </div>
-                      <!-- 带复制功能的ID展示 -->
-                      <el-tag 
-                        type="info" 
-                        size="small" 
-                        class="agent-id clickable"
-                        @click="copyAgentId(agent.id)"
-                      >
-                        {{ agent.id }}
-                        <i class="fa-regular fa-copy"></i>
-                      </el-tag>
-                      <p class="agent-prompt">{{ agent.system_prompt }}</p>
-                    </div>
-                  </div>
-                  <!-- 添加新智能体 -->
-                  <div class="provider-card add-tile" @click="showAgentForm = true;newAgent.system_prompt = this.system_prompt">
-                    <el-icon :size="40" color="#909399"><i class="fa-solid fa-plus"></i></el-icon>
-                    <div style="color: #606266; margin-top: 10px;">{{ t('addNewAgent') }}</div>
-                  </div>
-                </div>
-                <!-- 智能体编辑对话框 -->
+                  </el-tab-pane>
+
+                </el-tabs>
+
+                <!-- 智能体编辑对话框 (保持原样，放在 tabs 外面但在页面内) -->
                 <el-dialog v-model="showAgentForm" :title="editingAgent ? t('editAgent') : t('addAgent')" width="80%">
                   <el-form label-position="top">
                     <el-form-item :label="t('agentName')" required>

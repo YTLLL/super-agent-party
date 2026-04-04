@@ -548,6 +548,7 @@ let vue_methods = {
     switchToagents() {
       this.activeMenu = 'api-group';
       this.subMenu = 'agents';
+      this.activeAgentTab = 'add'
     },
     switchToa2aServers() {
       this.activeMenu = 'toolkit';

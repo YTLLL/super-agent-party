@@ -1391,6 +1391,7 @@ function stopChunkAnimation(chunkId) {
     if (chunkAnimations.size === 0 && currentVrm && currentVrm.expressionManager) {
         console.log('所有语音块播放完毕，重置表情。');
         currentVrm.expressionManager.resetValues();
+        currentVrm.expressionManager.setValue('neutral', 1.0);
     }
 }
 
@@ -1405,6 +1406,7 @@ function stopAllChunkAnimations() {
     chunkAnimations.clear();
     if (currentVrm && currentVrm.expressionManager) {
         currentVrm.expressionManager.resetValues();
+        currentVrm.expressionManager.setValue('neutral', 1.0);
     }
 }
 
@@ -1812,6 +1814,10 @@ loader.load(
         });
         // 设置自然姿势
         setNaturalPose(vrm);
+
+        if (vrm.expressionManager) {
+            vrm.expressionManager.setValue('neutral', 1.0);
+        }
 
         const breathClip = createBreathClip(vrm);
         breathAction = currentMixer.clipAction(breathClip);
@@ -4372,6 +4378,10 @@ async function switchToModel(index,isRefresh = false) {
                 });
                 // 设置自然姿势
                 setNaturalPose(vrm);
+
+                if (vrm.expressionManager) {
+                    vrm.expressionManager.setValue('neutral', 1.0);
+                }
 
                 const breathClip = createBreathClip(vrm);
                 breathAction = currentMixer.clipAction(breathClip);
