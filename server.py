@@ -2409,7 +2409,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         screenshot.resize, (logical_width, logical_height), Image.Resampling.LANCZOS
                     )
                 
-                target_w, target_h = scale_to_fit(logical_width, logical_height, 1920, 1080)
+                target_w, target_h = scale_to_fit(logical_width, logical_height, 1280, 720)
                 
                 if screenshot.width > target_w or screenshot.height > target_h:
                     print(f"检测到高分辨率屏幕，正在从 {screenshot.size} 缩放到 {(target_w, target_h)}")
