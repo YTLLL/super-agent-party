@@ -258,17 +258,34 @@ async def wait_for(text, timeout=1000):
 # Debugging Tools
 # ------------------------------------------
 
-async def evaluate_script(function, args=None):
-    """执行 JS"""
-    if "submit()" in function or "location" in function:
-        safe_function = f"""
-        setTimeout(function() {{
-            {function}
-        }}, 100);
-        'Command scheduled (Async execution for navigation safety)';
+async def evaluate_script(script_code, args=None):
+    """执行 JS (极强容错版)"""
+    
+    # 1. 清理字符串前后的空白和反引号（AI有时候会自作聪明加上 ```javascript 的Markdown代码块）
+    clean_code = script_code.strip().strip('`')
+    if clean_code.startswith('javascript'):
+        clean_code = clean_code[10:].strip()
+
+    # 2. 兜底容错：如果 AI 还是只输出了函数体（比如包含 return 但没写 function）
+    if not clean_code.startswith("function") and not clean_code.startswith("() =>") and not clean_code.startswith("async function"):
+        print(f"[Agent Warning] AI forgot to wrap function, auto-wrapping it...")
+        # 帮它包一层标准函数
+        clean_code = f"function() {{\n{clean_code}\n}}"
+        
+    # 3. 导航安全拦截：防止执行页面跳转后，原页面上下文丢失导致 WebSocket 断开
+    if "submit()" in clean_code or "location" in clean_code:
+        safe_code = f"""
+        function() {{
+            setTimeout(function() {{
+                ({clean_code})();
+            }}, 100);
+            return 'Command scheduled (Async execution for navigation safety)';
+        }}
         """
-        return await call_vue_method('executeInActiveWebview', [safe_function, args or []])
-    return await call_vue_method('executeInActiveWebview', [function, args or []])
+        return await call_vue_method('executeInActiveWebview', [safe_code, args or []])
+    
+    # 4. 正常执行
+    return await call_vue_method('executeInActiveWebview', [clean_code, args or []])
 
 async def take_screenshot(fullPage=False, uid=None):
     """
@@ -408,14 +425,21 @@ all_cdp_tools = [
         "type": "function",
         "function": {
             "name": "evaluate_script",
-            "description": "Run JS in the current page.",
+            "description": "Run JS in the current page. You MUST wrap your code in a valid Javascript function expression.\n\nGOOD Example:\n`function() { return document.title; }`\n\nBAD Example (DO NOT DO THIS):\n`return document.title;`",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "function": {"type": "string", "description": "JS function body"},
-                    "args": {"type": "array","items": {"type": "string"}}
+                    "script_code": {
+                        "type": "string", 
+                        "description": "The complete JS function expression to execute."
+                    },
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Arguments to pass into the function."
+                    }
                 },
-                "required": ["function"]
+                "required": ["script_code"]
             }
         }
     },
