@@ -6305,7 +6305,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                           @change="autoSaveSettings();handleASRchange();"
                           class="full-width-input"
                         >
-                          <el-option v-if="isWindows" :label="t('systemASR')" value="system" ></el-option>
                           <el-option :label="t('sherpa-onnx-sense-voice')" value="sherpa" ></el-option>
                           <el-option :label="t('webSpeech')" value="webSpeech" ></el-option>
                           <el-option label="FunASR" value="funasr" ></el-option>
