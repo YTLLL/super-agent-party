@@ -1690,20 +1690,19 @@ const handleRemoteInstall = (data) => {
         return this.browserTabs.find(t => t.id === this.currentTabId);
     },
     allItems() {
-      // 1. 给文件列表添加 type 标识
+      // 1. 文档类
       const filesWithType = (this.files || []).map(f => ({
         ...f,
-        type: 'file'
+        uiCategory: 'file' // 改个名字，避免跟 file.type 冲突
       }));
 
-      // 2. 给图片列表添加 type 标识
-      const imagesWithType = (this.images || []).map(img => ({
+      // 2. 视觉类（包含图片和视频）
+      const visualsWithType = (this.images || []).map(img => ({
         ...img,
-        type: 'image'
+        uiCategory: 'image' 
       }));
 
-      // 3. 合并：文件在前，图片在后（对应你的 removeItem 逻辑）
-      return [...filesWithType, ...imagesWithType];
+      return [...filesWithType, ...visualsWithType];
     },
     hasAttachments() {
       return this.allItems && this.allItems.length > 0;

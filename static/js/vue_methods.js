@@ -125,42 +125,43 @@ if (window.markdownitContainer) {
 const LATEX_PLACEHOLDER_PREFIX = 'LATEX_PLACEHOLDER_';
 let latexPlaceholderCounter = 0;
 
-const ALLOWED_EXTENSIONS = [
-// 办公文档
-    'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'pdf', 'pages', 
-    'numbers', 'key', 'rtf', 'odt', 'epub',
+const ALLOWED_EXTENSIONS =[
+  // 办公文档
+  'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'pdf', 'pages', 
+  'numbers', 'key', 'rtf', 'odt', 'epub',
 
-// 编程开发
-'js', 'ts', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs',
-'swift', 'kt', 'dart', 'rb', 'php', 'html', 'css', 'scss', 'less',
-'vue', 'svelte', 'jsx', 'tsx', 'json', 'xml', 'yml', 'yaml', 
-'sql', 'sh',
+  // 编程开发
+  'js', 'ts', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs',
+  'swift', 'kt', 'dart', 'rb', 'php', 'html', 'css', 'scss', 'less',
+  'vue', 'svelte', 'jsx', 'tsx', 'json', 'xml', 'yml', 'yaml', 
+  'sql', 'sh',
 
-// 数据配置
-'csv', 'tsv', 'txt', 'md', 'log', 'conf', 'ini', 'env', 'toml'
-]
+  // 数据配置
+  'csv', 'tsv', 'txt', 'md', 'log', 'conf', 'ini', 'env', 'toml'
+];
+
 // MIME类型白名单
-const MIME_WHITELIST = [
-'text/plain',
-'application/msword',
-'application/vnd.openxmlformats-officedocument',
-'application/pdf',
-'application/json',
-'text/csv',
-'text/x-python',
-'application/xml',
-'text/x-go',
-'text/x-rust',
-'text/x-swift',
-'text/x-kotlin',
-'text/x-dart',
-'text/x-ruby',
-'text/x-php'
-]
+const MIME_WHITELIST =[
+  'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument',
+  'application/pdf',
+  'application/json',
+  'text/csv',
+  'text/x-python',
+  'application/xml',
+  'text/x-go',
+  'text/x-rust',
+  'text/x-swift',
+  'text/x-kotlin',
+  'text/x-dart',
+  'text/x-ruby',
+  'text/x-php'
+];
 
 // 图片上传相关配置
-const ALLOWED_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'];
-const IMAGE_MIME_WHITELIST = [
+const ALLOWED_IMAGE_EXTENSIONS =['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'];
+const IMAGE_MIME_WHITELIST =[
   'image/png',
   'image/jpeg',
   'image/gif',
@@ -168,8 +169,23 @@ const IMAGE_MIME_WHITELIST = [
   'image/bmp'
 ];
 
+// ✨ 新增：视频上传相关配置
+const ALLOWED_VIDEO_EXTENSIONS =['mp4', 'webm', 'ogg', 'mov', 'avi'];
+const VIDEO_MIME_WHITELIST =[
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'video/quicktime',
+  'video/x-msvideo'
+];
 
-const ALL_ALLOWED_EXTENSIONS = [...new Set([...ALLOWED_EXTENSIONS, ...ALLOWED_IMAGE_EXTENSIONS])];
+// ✨ 修改：将视频扩展名合并到总允许列表中
+const ALL_ALLOWED_EXTENSIONS = [...new Set([
+  ...ALLOWED_EXTENSIONS, 
+  ...ALLOWED_IMAGE_EXTENSIONS, 
+  ...ALLOWED_VIDEO_EXTENSIONS // 加入这里
+])];
+
 let vue_methods = {
   handleUpdateAction() {
     if (this.updateDownloaded) {
@@ -1808,7 +1824,7 @@ let vue_methods = {
             const formData = new FormData();
               for (const file of imageLinks) {
                   if (file.file instanceof Blob) { 
-                      formData.append('files', file.file, file.name); 
+                      formData.append('files', file.file, file.name , file.detectedType); 
                   } 
               }
               try {
@@ -1927,7 +1943,16 @@ let vue_methods = {
                     if (msg.imageLinks && msg.imageLinks.length > 0) {
                         const contentArray = [{ type: "text", text: finalContent }];
                         msg.imageLinks.forEach(imageLink => {
-                            contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                            const ext = imageLink.path.split('.').pop().toLowerCase();
+                            const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi'];
+                            
+                            if (videoExts.includes(ext)) {
+                                // 让大模型知道这是视频输入
+                                contentArray.push({ type: "video_url", video_url: { url: imageLink.path } });
+                            } else {
+                                // 普通图片输入
+                                contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                            }
                         });
                         return [{ role: 'user', content: contentArray }];
                     } else {
@@ -1943,7 +1968,16 @@ let vue_methods = {
                     if (msg.imageLinks && msg.imageLinks.length > 0) {
                         const contentArray = [{ type: "text", text: finalContent }];
                         msg.imageLinks.forEach(imageLink => {
-                            contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                            const ext = imageLink.path.split('.').pop().toLowerCase();
+                            const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi'];
+                            
+                            if (videoExts.includes(ext)) {
+                                // 让大模型知道这是视频输入
+                                contentArray.push({ type: "video_url", video_url: { url: imageLink.path } });
+                            } else {
+                                // 普通图片输入
+                                contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                            }
                         });
                         return [{ role: 'user', content: contentArray }];
                     } else {
@@ -1966,7 +2000,16 @@ let vue_methods = {
                 if (msg.imageLinks && msg.imageLinks.length > 0) {
                     const contentArray = [{ type: "text", text: textContent }];
                     msg.imageLinks.forEach(imageLink => {
-                        contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                        const ext = imageLink.path.split('.').pop().toLowerCase();
+                        const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi'];
+                        
+                        if (videoExts.includes(ext)) {
+                            // 让大模型知道这是视频输入
+                            contentArray.push({ type: "video_url", video_url: { url: imageLink.path } });
+                        } else {
+                            // 普通图片输入
+                            contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                        }
                     });
                     return [{ role: apiRole, content: contentArray }];
                 } else {
@@ -2694,14 +2737,15 @@ let vue_methods = {
     async handleInputPaste(event) {
       const items = (event.clipboardData || window.clipboardData).items;
       
-      // --- 🆕 新增配置: 超过多少字符转为文件 ---
+      // 🆕 配置: 超过多少字符转为文件
       const TEXT_TO_FILE_THRESHOLD = 2000; 
 
       const imageFiles = []; // 待上传的图片列表
+      const videoFiles = []; // 🆕 待上传的视频列表
       const docFiles = [];   // 待上传的普通文件列表
       let hasValidContent = false;
 
-      // 1. 遍历剪贴板中的“文件”项目 (图片或复制的文件)
+      // 1. 遍历剪贴板中的项目
       for (const item of items) {
         if (item.kind === 'file') {
           const file = item.getAsFile();
@@ -2709,9 +2753,15 @@ let vue_methods = {
 
           const ext = (file.name.split('.').pop() || '').toLowerCase();
           const isImageMime = item.type.startsWith('image/');
+          const isVideoMime = item.type.startsWith('video/'); // 🆕 识别视频MIME
 
-          // --- existing logic for images ---
-          if (isImageMime || ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
+          // --- 视频处理逻辑 ---
+          if (isVideoMime || ALLOWED_VIDEO_EXTENSIONS.includes(ext)) {
+            videoFiles.push(file);
+            hasValidContent = true;
+          } 
+          // --- 图片处理逻辑 ---
+          else if (isImageMime || ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
             if (file.name === 'image.png' || !file.name.includes('.')) {
               const fileExtension = file.type.split('/')[1] || 'png';
               const namedFile = new File([file], `pasted_image_${Date.now()}.${fileExtension}`, { type: file.type });
@@ -2721,7 +2771,7 @@ let vue_methods = {
             }
             hasValidContent = true;
           } 
-          // --- existing logic for docs ---
+          // --- 普通文档处理逻辑 ---
           else if (ALLOWED_EXTENSIONS.includes(ext)) {
             docFiles.push(file);
             hasValidContent = true;
@@ -2729,36 +2779,31 @@ let vue_methods = {
         }
       }
 
-      // --- 🆕 2. 如果没有检测到实体文件，检查纯文本是否过长 ---
+      // 2. 如果没有检测到实体文件，检查纯文本是否过长
       if (!hasValidContent) {
           const pastedText = event.clipboardData.getData('text');
-          
           if (pastedText && pastedText.length > TEXT_TO_FILE_THRESHOLD) {
-              // 生成一个临时的 txt 文件
-              // 使用 Date.now() 确保文件名唯一
               const fileName = `paste_text_${Date.now()}.txt`;
               const textFile = new File([pastedText], fileName, { type: 'text/plain' });
-
-              // 将其视为普通文档处理
               docFiles.push(textFile);
               hasValidContent = true;
-              
-              // 可选：提示用户
-              // this.$message.info(this.t('textToAttachmentHint') || '文本过长，已自动转换为附件发送');
           }
       }
 
-      // 3. 如果找到了有效内容 (图片、文件 或 刚刚生成的长文本文件)
+      // 3. 如果找到了有效内容
       if (hasValidContent) {
-        // 阻止默认粘贴行为 (这对于防止长文本进入输入框至关重要)
         event.preventDefault();
+
+        // 🆕 处理视频
+        if (videoFiles.length > 0) {
+          this.addFiles(videoFiles, 'video');
+        }
 
         if (imageFiles.length > 0) {
           this.addFiles(imageFiles, 'image');
         }
 
         if (docFiles.length > 0) {
-          // 这里会调用你现有的上传逻辑，后端会接收到一个标准的 .txt 文件
           this.addFiles(docFiles, 'file');
         }
       }
@@ -3485,7 +3530,7 @@ let vue_methods = {
     // 统一处理文件
     async handleFiles(files) {
       // 1. 合并所有允许的后缀，用于初步过滤
-      const allAllowed = [...ALLOWED_IMAGE_EXTENSIONS, ...ALLOWED_EXTENSIONS];
+      const allAllowed = [...ALLOWED_VIDEO_EXTENSIONS, ...ALLOWED_IMAGE_EXTENSIONS, ...ALLOWED_EXTENSIONS];
       
       // 2. 遍历处理每一个选中的文件
       files.forEach(file => {
@@ -3497,6 +3542,9 @@ let vue_methods = {
           if (ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
             // 如果是图片，按图片逻辑添加
             this.addFiles([file], 'image');
+          } else if (ALLOWED_VIDEO_EXTENSIONS.includes(ext)) {
+            // 如果是文档，按文件逻辑添加
+            this.addFiles([file], 'video');
           } else if (ALLOWED_EXTENSIONS.includes(ext)) {
             // 如果是文档，按文件逻辑添加
             this.addFiles([file], 'file');
@@ -3611,13 +3659,21 @@ let vue_methods = {
 
     // 添加文件到列表
     addFiles(files, type = 'file') {
-      const targetArray = type === 'image' ? this.images : this.files;
-  
-      const newFiles = files.map(file => ({
-        path: URL.createObjectURL(file),
-        name: file.name,
-        file: file,
-      }));
+      // 决定存入哪个展示数组 (图片和视频都进入 this.images 用于视觉预览)
+      const targetArray = type === 'image' || type === 'video' ? this.images : this.files;
+
+      const newFiles = files.map(file => {
+        // ✨ 在这里进行精准类型判定
+        let detectedType = type; 
+
+        return {
+          path: URL.createObjectURL(file),
+          name: file.name,
+          file: file,
+          detectedType: detectedType // 存入具体的类型：'video', 'image' 或 'file'
+        };
+      });
+
       targetArray.push(...newFiles);
       this.showUploadDialog = false;
     },

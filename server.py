@@ -388,7 +388,7 @@ ALLOWED_EXTENSIONS = [
 ]
 ALLOWED_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']
 
-ALLOWED_VIDEO_EXTENSIONS = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm', '3gp', 'm4v']
+ALLOWED_VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'mov', 'avi']
 
 # 1. 先清空系统可能给错的条目
 for ext in ("js", "mjs", "css", "html", "htm", "json", "xml", "map", "svg"):
@@ -1323,80 +1323,108 @@ async def message_without_images(messages: List[Dict]) -> List[Dict]:
     if messages:
         for message in messages:
             if 'content' in message:
-                # message['content'] 是一个列表
                 if isinstance(message['content'], list):
                     for item in message['content']:
-                        if isinstance(item, dict) and item['type'] == 'text':
+                        # 剥离包含图像和视频的内容，只保留文本传递（用于快速生成请求或剥离富媒体阶段）
+                        if isinstance(item, dict) and item.get('type') == 'text':
                             message['content'] = item['text']
                             break
     return messages
 
-async def images_in_messages(messages: List[Dict],fastapi_base_url: str) -> List[Dict]:
-    import hashlib
-    images = []
+async def images_in_messages(messages: List[Dict], fastapi_base_url: str) -> List[Dict]:
+    media_items = []
     index = 0
     for message in messages:
-        image_urls = []
+        extracted_media =[]
         if 'content' in message:
-            # message['content'] 是一个列表
             if isinstance(message['content'], list):
                 for item in message['content']:
-                    if isinstance(item, dict) and item['type'] == 'image_url':
-                        # 如果item["image_url"]["url"]是http或https开头，则转换成base64
-                        if item["image_url"]["url"].startswith("http"):
-                            image_url = item["image_url"]["url"]
-                            # 对image_url分解出baseURL，与fastapi_base_url比较，如果相同，将image_url的baseURL替换成127.0.0.1:PORT
-                            if fastapi_base_url in image_url:
-                                image_url = image_url.replace(fastapi_base_url, f"http://127.0.0.1:{PORT}/")
-                            base64_image = await get_image_base64(image_url)
-                            media_type = await get_image_media_type(image_url)
-                            item["image_url"]["url"] = f"data:{media_type};base64,{base64_image}"
-                            item["image_url"]["hash"] = hashlib.md5(item["image_url"]["url"].encode()).hexdigest()
+                    # 动态捕获图片或视频
+                    if isinstance(item, dict) and item.get('type') in ['image_url', 'video_url']:
+                        media_key = item['type']  # 'image_url' 或 'video_url'
+                        
+                        if item[media_key]["url"].startswith("http"):
+                            media_url = item[media_key]["url"]
+                            if fastapi_base_url in media_url:
+                                media_url = media_url.replace(fastapi_base_url, f"http://127.0.0.1:{PORT}/")
+                            
+                            # 假设你的 get_image_base64 同样可以将视频流转为 Base64
+                            base64_data = await get_image_base64(media_url)
+                            # 假设 get_image_media_type 也能正常返回 video/mp4, video/webm 等
+                            mime_type = await get_image_media_type(media_url)
+                            
+                            item[media_key]["url"] = f"data:{mime_type};base64,{base64_data}"
+                            item[media_key]["hash"] = hashlib.md5(item[media_key]["url"].encode()).hexdigest()
                         else:
-                            item["image_url"]["hash"] = hashlib.md5(item["image_url"]["url"].encode()).hexdigest()
+                            item[media_key]["hash"] = hashlib.md5(item[media_key]["url"].encode()).hexdigest()
 
-                        image_urls.append(item)
-        if image_urls:
-            images.append({'index': index, 'images': image_urls})
+                        extracted_media.append(item)
+        if extracted_media:
+            # 保持原来的字典结构向下兼容，images 实际上装载了 media
+            media_items.append({'index': index, 'images': extracted_media})
         index += 1
-    return images
+    return media_items
 
 async def images_add_in_messages(request_messages: List[Dict], images: List[Dict], settings: dict) -> List[Dict]:
-    messages=copy.deepcopy(request_messages)
+    messages = copy.deepcopy(request_messages)
+    
     if settings['vision']['enabled']:
         for image in images:
             index = image['index']
             if index < len(messages):
                 if 'content' in messages[index]:
                     for item in image['images']:
-                        # 如果uploaded_files/{item['image_url']['hash']}.txt存在，则读取文件内容，否则调用vision api
-                        if os.path.exists(os.path.join(UPLOAD_FILES_DIR, f"{item['image_url']['hash']}.txt")):
-                            with open(os.path.join(UPLOAD_FILES_DIR, f"{item['image_url']['hash']}.txt"), "r", encoding='utf-8') as f:
-                                messages[index]['content'] += f"\n\nsystem: 用户发送的图片(哈希值：{item['image_url']['hash']})信息如下：\n\n"+str(f.read())+"\n\n"
+                        media_key = item['type']  # 'image_url' 或 'video_url'
+                        file_hash = item[media_key]['hash']
+                        media_name = "视频" if media_key == "video_url" else "图片"
+                        
+                        # 统一缓存处理，如果是视频就是视频文本解析记录
+                        cache_file = os.path.join(UPLOAD_FILES_DIR, f"{file_hash}.txt")
+                        if os.path.exists(cache_file):
+                            with open(cache_file, "r", encoding='utf-8') as f:
+                                messages[index]['content'] += f"\n\nsystem: 用户发送的{media_name}(哈希值：{file_hash})信息如下：\n\n{f.read()}\n\n"
                         else:
-                            images_content = [{"type": "text", "text": "请仔细描述图片中的内容，包含图片中可能存在的文字、数字、颜色、形状、大小、位置、人物、物体、场景等信息。"},{"type": "image_url", "image_url": {"url": item['image_url']['url']}}]
-                            client = AsyncOpenAI(api_key=settings['vision']['api_key'],base_url=settings['vision']['base_url'])
+                            # 根据输入类型调整提示词
+                            prompt_text = "请仔细描述这段视频中的内容，包含视频中发生的事件、场景变化、人物动作以及关键细节等信息。" if media_key == "video_url" else "请仔细描述图片中的内容，包含图片中可能存在的文字、数字、颜色、形状、大小、位置、人物、物体、场景等信息。"
+                            
+                            media_content =[
+                                {"type": "text", "text": prompt_text},
+                                {"type": media_key, media_key: {"url": item[media_key]['url']}}
+                            ]
+                            
+                            # 直接交给视觉模型（视觉模型需原生支持视频）
+                            client = AsyncOpenAI(api_key=settings['vision']['api_key'], base_url=settings['vision']['base_url'])
                             response = await client.chat.completions.create(
                                 model=settings['vision']['model'],
-                                messages = [{"role": "user", "content": images_content}],
+                                messages=[{"role": "user", "content": media_content}],
                                 temperature=settings['vision']['temperature'],
                             )
-                            messages[index]['content'] += f"\n\nsystem: 用户发送的图片(哈希值：{item['image_url']['hash']})信息如下：\n\n"+str(response.choices[0].message.content)+"\n\n"
-                            with open(os.path.join(UPLOAD_FILES_DIR, f"{item['image_url']['hash']}.txt"), "w", encoding='utf-8') as f:
-                                f.write(str(response.choices[0].message.content))
+                            result_text = str(response.choices[0].message.content)
+                            messages[index]['content'] += f"\n\nsystem: 用户发送的{media_name}(哈希值：{file_hash})信息如下：\n\n{result_text}\n\n"
+                            
+                            with open(cache_file, "w", encoding='utf-8') as f:
+                                f.write(result_text)
     else:           
         for image in images:
             index = image['index']
             if index < len(messages):
                 if 'content' in messages[index]:
                     for item in image['images']:
-                        # 如果uploaded_files/{item['image_url']['hash']}.txt存在，则读取文件内容，否则调用vision api
-                        if os.path.exists(os.path.join(UPLOAD_FILES_DIR, f"{item['image_url']['hash']}.txt")):
-                            with open(os.path.join(UPLOAD_FILES_DIR, f"{item['image_url']['hash']}.txt"), "r", encoding='utf-8') as f:
-                                messages[index]['content'] += f"\n\nsystem: 用户发送的图片(哈希值：{item['image_url']['hash']})信息如下：\n\n"+str(f.read())+"\n\n"
+                        media_key = item['type']  # 'image_url' 或 'video_url'
+                        file_hash = item[media_key]['hash']
+                        media_name = "视频" if media_key == "video_url" else "图片"
+                        
+                        cache_file = os.path.join(UPLOAD_FILES_DIR, f"{file_hash}.txt")
+                        if os.path.exists(cache_file):
+                            with open(cache_file, "r", encoding='utf-8') as f:
+                                messages[index]['content'] += f"\n\nsystem: 用户发送的{media_name}(哈希值：{file_hash})信息如下：\n\n{f.read()}\n\n"
                         else:
-                            messages[index]['content'] = [{"type": "text", "text": messages[index]['content']}]
-                            messages[index]['content'].append({"type": "image_url", "image_url": {"url": item['image_url']['url']}})
+                            if isinstance(messages[index]['content'], str):
+                                messages[index]['content'] =[{"type": "text", "text": messages[index]['content']}]
+                            
+                            # 未开启视觉模型，直接以原生的 `video_url` 或 `image_url` 拼入请求，让当前大模型自行读取理解
+                            messages[index]['content'].append({"type": media_key, media_key: {"url": item[media_key]['url']}})
+                            
     return messages
 
 async def read_todos_local(cwd: str) -> list:
@@ -8455,87 +8483,84 @@ async def health_check():
 @app.post("/load_file")
 async def load_file_endpoint(request: Request, files: List[UploadFile] = File(None)):
     fastapi_base_url = str(request.base_url)
-    logger.info(f"Received request with content type: {request.headers.get('Content-Type')}")
     file_links = []
     textFiles = []
     imageFiles = []
+    
+    # 辅助函数：根据后缀名判断类型
+    def get_file_type(ext):
+        ext = ext.lower().lstrip('.')
+        if ext in ALLOWED_IMAGE_EXTENSIONS:
+            return 'image'
+        if ext in ALLOWED_VIDEO_EXTENSIONS:
+            return 'video'
+        return 'file'
+
     content_type = request.headers.get('Content-Type', '')
     try:
         if 'multipart/form-data' in content_type:
-            # 处理浏览器上传的文件
-            if not files:
-                raise HTTPException(status_code=400, detail="No files provided")
-            
             for file in files:
                 file_extension = os.path.splitext(file.filename)[1]
                 unique_filename = f"{uuid.uuid4()}{file_extension}"
                 destination = os.path.join(UPLOAD_FILES_DIR, unique_filename)
                 
-                # 保存上传的文件
                 with open(destination, "wb") as buffer:
                     content = await file.read()
                     buffer.write(content)
                 
+                # ✨ 修改点：根据后缀决定 type
+                current_type = get_file_type(file_extension)
+                
                 file_link = {
                     "path": f"{fastapi_base_url}uploaded_files/{unique_filename}",
-                    "name": file.filename
+                    "name": file.filename,
+                    "type": current_type  # 返回给前端
                 }
                 file_links.append(file_link)
-                file_meta = {
-                    "unique_filename": unique_filename,
-                    "original_filename": file.filename,
-                }
-                # file_extension移除点号
-                file_extension = file_extension[1:]
-                if file_extension in ALLOWED_EXTENSIONS:
+                
+                # 兼容原有的分类列表
+                file_meta = {"unique_filename": unique_filename, "original_filename": file.filename}
+                ext_clean = file_extension[1:].lower()
+                if ext_clean in ALLOWED_EXTENSIONS:
                     textFiles.append(file_meta)
-                elif file_extension in ALLOWED_IMAGE_EXTENSIONS:
+                elif ext_clean in ALLOWED_IMAGE_EXTENSIONS or ext_clean in ALLOWED_VIDEO_EXTENSIONS:
                     imageFiles.append(file_meta)
+
         elif 'application/json' in content_type:
-            # 处理Electron发送的JSON文件路径
             data = await request.json()
-            logger.info(f"Processing JSON data: {data}")
-            
             for file_info in data.get("files", []):
                 file_path = file_info.get("path")
                 file_name = file_info.get("name", os.path.basename(file_path))
-                
-                if not os.path.isfile(file_path):
-                    logger.error(f"File not found: {file_path}")
-                    continue
-                
-                # 生成唯一文件名
                 file_extension = os.path.splitext(file_name)[1]
+                
                 unique_filename = f"{uuid.uuid4()}{file_extension}"
                 destination = os.path.join(UPLOAD_FILES_DIR, unique_filename)
                 
-                # 复制文件到上传目录
                 with open(file_path, "rb") as src, open(destination, "wb") as dst:
                     dst.write(src.read())
                 
+                # ✨ 修改点：根据后缀决定 type
+                current_type = get_file_type(file_extension)
+                
                 file_link = {
                     "path": f"{fastapi_base_url}uploaded_files/{unique_filename}",
-                    "name": file_name
+                    "name": file_name,
+                    "type": current_type
                 }
                 file_links.append(file_link)
-                file_meta = {
-                    "unique_filename": unique_filename,
-                    "original_filename": file_name,
-                }
-                # file_extension移除点号
-                file_extension = file_extension[1:]
-                if file_extension in ALLOWED_EXTENSIONS:
+                
+                file_meta = {"unique_filename": unique_filename, "original_filename": file_name}
+                ext_clean = file_extension[1:].lower()
+                if ext_clean in ALLOWED_EXTENSIONS:
                     textFiles.append(file_meta)
-                elif file_extension in ALLOWED_IMAGE_EXTENSIONS:
+                elif ext_clean in ALLOWED_IMAGE_EXTENSIONS or ext_clean in ALLOWED_VIDEO_EXTENSIONS:
                     imageFiles.append(file_meta)
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported Content-Type")
-        return JSONResponse(content={"success": True, "fileLinks": file_links , "textFiles": textFiles, "imageFiles": imageFiles})
+
+        return JSONResponse(content={"success": True, "fileLinks": file_links, "textFiles": textFiles, "imageFiles": imageFiles})
     
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.delete("/delete_file")
 async def delete_file_endpoint(request: Request):

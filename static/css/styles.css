@@ -9803,98 +9803,121 @@ hr.footnotes-sep {
 }
 
 /* =========================================
-   Unified Attachment Markers - Perfect Centering
+   Enhanced Media Attachments (Adaptive Ratio)
    ========================================= */
 
-/* 1. 外部固定方块容器 */
-.user-msg-attachments .attachment-item-display {
-  width: 54px !important;
-  height: 54px !important;
-  flex: 0 0 54px !important;
-  border-radius: 10px;
-  overflow: hidden;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-sizing: border-box;
-  padding: 0 !important;
+/* 1. 容器：允许内容根据大小自动换行 */
+.user-msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  justify-content: flex-end; /* 用户消息靠右 */
 }
 
-/* 2. 内部内容包装盒 (关键：强制所有子元素居中) */
-.user-msg-attachments .file-card-box {
-  width: 100% !important;
-  height: 100% !important;
-  display: flex !important;
-  flex-direction: column !important; /* 图标在上文字在下 */
-  align-items: center !important;    /* 水平居中 */
-  justify-content: center !important; /* 垂直居中 */
-  text-align: center !important;      /* 文字内部居中 */
-  padding: 0 !important;              /* 清除内边距 */
-  margin: 0 !important;
-  background: transparent !important;
+/* 助手消息里的附件靠左 */
+.message.assistant .user-msg-attachments {
+  justify-content: flex-start;
+}
+
+/* 2. 基础项重置：取消 54px 固定尺寸 */
+.user-msg-attachments .attachment-item-display {
+  width: auto !important; 
+  height: auto !important;
+  flex: 0 1 auto !important; /* 允许根据内容收缩 */
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(128, 128, 128, 0.2) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: transform 0.2s ease;
+}
+
+/* 3. 图片尺寸：适中 */
+.image-item-wrapper {
+  max-width: 90px; /* 图片最大宽度 */
+  max-height: 90px;
+}
+
+/* 4. 视频尺寸：明显比图片大一些，突出视觉重心 */
+.video-item-wrapper {
+  max-width: 160px; /* 视频最大宽度 */
+  max-height: 90px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* 5. 媒体渲染核心：保持原比例 */
+.preview-media-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.preview-media-box img,
+.preview-media-box video {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 300px; /* 强制最高上限 */
+  display: block;
+  object-fit: contain; /* 确保不被裁切 */
+}
+
+/* 针对视频的黑色底色，防止比例不匹配时露白 */
+.video-item-wrapper .preview-media-box {
+  background-color: #000;
+}
+
+/* 6. 视频特有修饰：播放标识 */
+.video-indicator {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 24px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 10px;
+  pointer-events: none;
+  border: 1px solid rgba(255,255,255,0.3);
 }
 
 /* 3. 清除图标可能存在的默认边距 */
 .user-msg-attachments .file-icon {
-  font-size: 18px !important;
   color: #ffffff !important;
-  margin: 0 0 2px 0 !important; /* 仅留底部微小间距给文字 */
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
 }
 
 /* 4. 文字区域：确保宽度 100% 且居中 */
-.user-msg-attachments .file-info {
-  width: 100% !important;
-  display: flex !important;
-  justify-content: center !important;
-  margin: 0 !important;
-  padding: 0 4px !important; /* 左右留一点边距防止文字贴边 */
-  box-sizing: border-box;
+.user-msg-attachments .file-info .file-name {
+  color: #ffffff !important; /* 文字颜色 */
 }
 
-.user-msg-attachments .file-name {
-  font-size: 9px !important;
-  color: rgba(255, 255, 255, 0.95) !important;
-  text-align: center !important;      /* 核心：强制居中 */
-  width: 100% !important;
-  display: block !important;
-  white-space: nowrap !important;     /* 不换行 */
-  overflow: hidden !important;        /* 超出隐藏 */
-  text-overflow: ellipsis !important; /* 省略号 */
-  line-height: 1.2 !important;
-  margin: 0 !important;
-}
-
-/* 5. 图片容器特殊处理（保持填满） */
-.user-msg-attachments .preview-image-box {
-  width: 100% !important;
-  height: 100% !important;
+/* 7. 文件附件 (保持 54px 方块) */
+.user-msg-attachments .attachment-item-display .file-item {
+  width: 90px !important;
+  height: 90px !important;
   padding: 0 !important;
-  margin: 0 !important;
 }
 
-.user-msg-attachments .preview-image-box img {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover;
-  display: block;
+.user-msg-attachments .attachment-item-display .file-item .file-card-box{
+  width: 90px !important;
+  height: 90px !important;
+  padding: 0 !important;
 }
 
-/* 容器间距控制 */
-.user-msg-attachments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
-  justify-content: flex-end;
+/* 8. 悬停交互 */
+.attachment-item-display:hover {
+  transform: scale(1.02);
+  border-color: var(--el-color-primary) !important;
 }
-
 
 .wechat-guide {
   padding: 10px 5px;
@@ -9955,4 +9978,106 @@ code {
 }
 .mt-4 {
   margin-top: 16px;
+}
+
+/* =========================================
+   视频库布局优化
+   ========================================= */
+
+/* 1. 视频网格容器：自适应排列 */
+.video-list {
+  display: grid;
+  /* 自动填充，每个视频最小 280px，最大占满一份 */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  padding: 10px 0;
+}
+
+/* 2. 视频项卡片 */
+.video-item {
+  background: var(--el-bg-color);
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+}
+
+.video-item:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--el-color-primary-light-5);
+}
+
+/* 3. 视频包装盒：固定比例防止高度跳动 */
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  /* 采用 16:9 比例，也可以改为 auto */
+  aspect-ratio: 16 / 9; 
+  background-color: #000; /* 视频未加载时的背景色 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 4. 核心：限制视频标签不超出 */
+.video-wrapper video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain; /* 保持原比例，不足处留黑 */
+}
+
+/* 5. 悬浮按钮定位优化 */
+.video-wrapper .delete-overlay-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  opacity: 0; /* 默认隐藏，悬停显示 */
+  transform: scale(0.8);
+  transition: all 0.2s ease;
+  /* 强制按钮样式 */
+  background-color: rgba(245, 108, 108, 0.9) !important;
+  border: none !important;
+  color: white !important;
+}
+
+.video-wrapper .checkbox-no-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  margin: 0;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  height: auto;
+  line-height: 1;
+}
+
+/* 悬停时显示删除按钮 */
+.video-item:hover .delete-overlay-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 6. 底部信息区 (可选，如果你想显示文件名) */
+.video-info-footer {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  background: var(--el-bg-color);
+  border-top: 1px solid var(--el-border-color-lighter);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 移动端适配 */
+@media (max-width: 600px) {
+  .video-list {
+    grid-template-columns: 1fr; /* 手机上一行一个 */
+  }
 }

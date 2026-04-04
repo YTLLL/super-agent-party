@@ -278,6 +278,7 @@ const ALLOWED_EXTENSIONS = [
   'csv', 'tsv', 'txt', 'md', 'log', 'conf', 'ini', 'env', 'toml'
   ];
 const ALLOWED_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'];
+const ALLOWED_VIDEO_EXTENSIONS =['mp4', 'webm', 'ogg', 'mov', 'avi'];
 let currentLanguage = 'zh-CN';
 
 // 构建菜单项
@@ -1662,7 +1663,7 @@ ipcMain.handle('upload-to-workspace', async (event, { targetDirPath, sourceFileP
     });
     // 文件对话框处理器
     ipcMain.handle('open-file-dialog', async (options) => {
-      const allAllowed = [...ALLOWED_EXTENSIONS, ...ALLOWED_IMAGE_EXTENSIONS];
+      const allAllowed = [...ALLOWED_EXTENSIONS, ...ALLOWED_IMAGE_EXTENSIONS, ...ALLOWED_VIDEO_EXTENSIONS];
       const result = await dialog.showOpenDialog({
         properties: ['openFile', 'multiSelections'],
         filters: [

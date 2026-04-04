@@ -777,11 +777,20 @@ function updateElement(el, rawMarkdown, formatFn) {
                               v-if="message.fileLinks?.length || message.imageLinks?.length">
                             
 
-                              <!-- 2. 图片附件 (统一方块) -->
-                              <div v-for="(img, imgIdx) in message.imageLinks" :key="'img-'+imgIdx" class="attachment-item-display image-item">
-                                  <div class="preview-image-box">
-                                      <!-- 图片不需要反色，保持原样 -->
-                                      <img :src="formatFileUrl(img.path)" />
+                              <!-- 1. 视频/图片附件 -->
+                              <div v-for="(img, imgIdx) in message.imageLinks" :key="'img-'+imgIdx" 
+                                  :class="['attachment-item-display', img.type === 'video' ? 'video-item-wrapper' : 'image-item-wrapper']">
+                                  
+                                  <div class="preview-media-box">
+                                      <template v-if="img.type === 'video'">
+                                          <!-- 视频预览 -->
+                                          <video :src="formatFileUrl(img.path)" preload="metadata" controls></video>
+                                      </template>
+                                      
+                                      <template v-else>
+                                          <!-- 图片预览 -->
+                                          <img :src="formatFileUrl(img.path)" />
+                                      </template>
                                   </div>
                               </div>
 
@@ -1356,14 +1365,19 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <div v-for="(item, index) in allItems" :key="index" class="attachment-item">
                       
                       <!-- 图片类型 -->
-                      <div v-if="item.type === 'image'" class="preview-image-box">
-                        <img :src="item.path" alt="preview" />
+                      <div v-if="item.uiCategory === 'image'" class="preview-image-box">
+                        <video v-if="item.detectedType === 'video'" 
+                              :src="formatFileUrl(item.path)" 
+                              controls 
+                              style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                        </video>
+                        <img v-else :src="formatFileUrl(item.path)" />
                         <div class="overlay">
                           <el-button 
                             type="danger" 
                             circle 
                             size="small" 
-                            @click.stop="removeItem(index, item.type)"
+                            @click.stop="removeItem(index, item.uiCategory)"
                           >
                             <i class="fa-solid fa-trash"></i>
                           </el-button>
@@ -1378,7 +1392,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                         <div class="file-info">
                           <span class="file-name" :title="item.name">{{ item.name }}</span>
                         </div>
-                        <div class="remove-btn" @click.stop="removeItem(index, item.type)">
+                        <div class="remove-btn" @click.stop="removeItem(index, item.uiCategory)">
                           <i class="fa-solid fa-xmark"></i>
                         </div>
                       </div>
@@ -11290,46 +11304,31 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </el-dialog>
               </div>
               <!-- 视频存储 -->
-              <div v-show="subMenu === 'video'" class="page video-container">
-                <!-- 新增顶部工具栏 -->
-                <div class="toolbar">
-                  <el-checkbox
-                    v-model="allVideosChecked"
-                    :indeterminate="indeterminateVideos"
-                    @change="toggleAllVideos">
-                    {{ t('selectAll') }}
-                  </el-checkbox>
-                  <el-button
-                    type="danger"
-                    :disabled="selectedVideos.length === 0"
-                    @click="batchDeleteVideos">
-                    <i class="fa-solid fa-trash"></i>
-                    {{ t('batchDelete') }}
-                  </el-button>
-                </div>
-                <div class="video-list">
-                  <div class="video-item" v-for="(video, index) in videoFiles" :key="index">
-                    <div class="video-wrapper">
-                      <!-- 视频播放器 -->
-                      <video controls>
-                        <source :src="`${partyURL}/uploaded_files/${video.unique_filename}`" type="video/mp4">
-                        Your browser does not support the video tag.
-                      </video>
-                      <!-- 复选框 -->
-                      <el-checkbox
-                        v-model="selectedVideos"
-                        :label="video.unique_filename"
-                        class="checkbox-no-label">
-                      </el-checkbox>
-                      <!-- 删除按钮定位在视频右上角 -->
-                      <el-button class="delete-overlay-btn" type="danger" circle @click="deleteVideo(video)">
-                        <i class="fa-solid fa-trash"></i>
-                      </el-button>
-                    </div>
+              <div class="video-list">
+                <div class="video-item" v-for="(video, index) in videoFiles" :key="index">
+                  <div class="video-wrapper">
+                    <!-- 视频播放器 -->
+                    <video controls preload="metadata">
+                      <source :src="`${partyURL}/uploaded_files/${video.unique_filename}`" type="video/mp4">
+                    </video>
+                    
+                    <!-- 复选框 -->
+                    <el-checkbox
+                      v-model="selectedVideos"
+                      :label="video.unique_filename"
+                      class="checkbox-no-label">
+                    </el-checkbox>
+                    
+                    <!-- 删除按钮 -->
+                    <el-button class="delete-overlay-btn" type="danger" circle size="small" @click="deleteVideo(video)">
+                      <i class="fa-solid fa-trash"></i>
+                    </el-button>
                   </div>
-                </div>
-                <div v-if="videoFiles.length === 0" class="no-Videos">
-                  <el-empty :description="t('noVideos')" />
+                  
+                  <!-- 新增：文件名展示区 -->
+                  <div class="video-info-footer" :title="video.original_filename">
+                    {{ video.original_filename }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -15484,34 +15483,43 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <!-- 消息气泡主体 -->
                     <div class="message-content" v-if="!allBriefly||message.role !== 'system'||index === 0" :class="{ typing: message.role === 'assistant' && isTyping && index === messages.length - 1 }">
                       
-                    <!-- User 消息主体 -->
-                    <div v-if="message.role === 'user'" class="user-content" data-mjx-disabled="true">
-                        <div v-html="message.content" class="user-msg"></div>
+                      <!-- User 消息主体 -->
+                      <div v-if="message.role === 'user'" class="user-content" data-mjx-disabled="true">
+                          <div v-html="message.content" class="user-msg"></div>
 
-                        <!-- 附件展示区：增加 user-msg-attachments 类名用于样式区分 -->
-                        <div class="message-attachments-display user-msg-attachments" 
-                            v-if="message.fileLinks?.length || message.imageLinks?.length">
+                          <!-- 附件展示区：增加 user-msg-attachments 类名用于样式区分 -->
+                          <div class="message-attachments-display user-msg-attachments" 
+                              v-if="message.fileLinks?.length || message.imageLinks?.length">
                             
 
-                            <!-- 2. 图片附件 (统一方块) -->
-                            <div v-for="(img, imgIdx) in message.imageLinks" :key="'img-'+imgIdx" class="attachment-item-display image-item">
-                                <div class="preview-image-box">
-                                    <!-- 图片不需要反色，保持原样 -->
-                                    <img :src="formatFileUrl(img.path)" />
-                                </div>
-                            </div>
+                              <!-- 1. 视频/图片附件 -->
+                              <div v-for="(img, imgIdx) in message.imageLinks" :key="'img-'+imgIdx" 
+                                  :class="['attachment-item-display', img.type === 'video' ? 'video-item-wrapper' : 'image-item-wrapper']">
+                                  
+                                  <div class="preview-media-box">
+                                      <template v-if="img.type === 'video'">
+                                          <!-- 视频预览 -->
+                                          <video :src="formatFileUrl(img.path)" preload="metadata" controls></video>
+                                      </template>
+                                      
+                                      <template v-else>
+                                          <!-- 图片预览 -->
+                                          <img :src="formatFileUrl(img.path)" />
+                                      </template>
+                                  </div>
+                              </div>
 
-                            <!-- 3. 文件附件 (反色版) -->
-                            <div v-for="(file, fileIdx) in message.fileLinks" :key="'file-'+fileIdx" class="attachment-item-display file-item">
-                                <div class="file-card-box">
-                                    <div class="file-icon"><i class="fa-solid fa-file-lines"></i></div>
-                                    <div class="file-info">
-                                        <span class="file-name" :title="file.name">{{ file.name }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                              <!-- 3. 文件附件 (反色版) -->
+                              <div v-for="(file, fileIdx) in message.fileLinks" :key="'file-'+fileIdx" class="attachment-item-display file-item">
+                                  <div class="file-card-box">
+                                      <div class="file-icon"><i class="fa-solid fa-file-lines"></i></div>
+                                      <div class="file-info">
+                                          <span class="file-name" :title="file.name">{{ file.name }}</span>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
                       
                       <!-- Assistant -->
                       <div v-else-if="message.role === 'assistant'" class="markdown-body">
@@ -15696,14 +15704,19 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <div v-for="(item, index) in allItems" :key="index" class="attachment-item">
                             
                             <!-- 图片类型 -->
-                            <div v-if="item.type === 'image'" class="preview-image-box">
-                              <img :src="item.path" alt="preview" />
+                            <div v-if="item.uiCategory === 'image'" class="preview-image-box">
+                              <video v-if="item.detectedType === 'video'" 
+                                    :src="formatFileUrl(item.path)" 
+                                    controls 
+                                    style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                              </video>
+                              <img v-else :src="formatFileUrl(item.path)" />
                               <div class="overlay">
                                 <el-button 
                                   type="danger" 
                                   circle 
                                   size="small" 
-                                  @click.stop="removeItem(index, item.type)"
+                                  @click.stop="removeItem(index, item.uiCategory)"
                                 >
                                   <i class="fa-solid fa-trash"></i>
                                 </el-button>
