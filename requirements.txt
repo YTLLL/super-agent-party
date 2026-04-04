@@ -52,3 +52,8 @@ imageio_ffmpeg
 discord.py
 xlrd
 tetos
+langchain-classic
+slack-sdk
+dingtalk-stream
+pyautogui
+elevenlabs
