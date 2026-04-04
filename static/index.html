@@ -5310,7 +5310,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <el-form-item :label="t('enableOmniTTS')" class="form-item-align" label-position="left">
                         <el-switch 
                           v-model="settings.enableOmniTTS" 
-                          @change="autoSaveSettings"
+                          @change="handleOmniTTSenabled(settings.enableOmniTTS)"
                         ></el-switch>
                       </el-form-item>
                       <el-form-item v-if="settings.enableOmniTTS" :label="t('enabledInterruption')" class="form-item-align" label-position="left">

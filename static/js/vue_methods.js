@@ -7843,6 +7843,10 @@ handleCreateSlackSeparator(val) {
       if (!this.ttsSettings.enabled) {
         this.TTSrunning = false;
       }
+      if (this.ttsSettings.enabled === true && this.settings.enableOmniTTS === true) {
+        this.settings.enableOmniTTS = false;
+        showNotification(this.t('autoDisableOmniControlSettings'), 'warning');
+      }
       await this.autoSaveSettings();
     },
     /**
@@ -16257,6 +16261,14 @@ closeTaskCenter() {
                 else this.$refs.chatInput.focus();
             }
         });
+    },
+
+    handleOmniTTSenabled(newValue){
+      if (newValue === true && this.ttsSettings.enabled === true) {
+        this.ttsSettings.enabled = false;
+        showNotification(this.t('autoDisableTtsSettings'), 'warning');
+      }
+      this.autoSaveSettings();
     },
 
 }
