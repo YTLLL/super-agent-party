@@ -11304,31 +11304,71 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </el-dialog>
               </div>
               <!-- 视频存储 -->
-              <div v-show="subMenu === 'video'" class="video-list">
-                <div class="video-item" v-for="(video, index) in videoFiles" :key="index">
-                  <div class="video-wrapper">
-                    <!-- 视频播放器 -->
-                    <video controls preload="metadata">
-                      <source :src="`${partyURL}/uploaded_files/${video.unique_filename}`" type="video/mp4">
-                    </video>
+              <div v-show="subMenu === 'video'" class="page video-container">
+                <!-- 顶部工具条 -->
+                <div class="toolbar">
+                  <el-checkbox
+                    v-model="allVideosChecked"
+                    :indeterminate="indeterminateVideos"
+                    @change="toggleAllVideos">
+                    {{ t('selectAll') }}
+                  </el-checkbox>
+                  <el-button
+                    type="danger"
+                    :disabled="selectedVideos.length === 0"
+                    @click="batchDeleteVideos">
+                    <i class="fa-solid fa-trash"></i>
+                    {{ t('batchDelete') }}
+                  </el-button>
+                </div>
+
+                <!-- 视频列表 -->
+                <div class="video-grid" v-if="videoFiles.length > 0">
+                  <div class="video-item" v-for="(video, index) in videoFiles" :key="index">
+                    <div class="video-wrapper">
+                      <!-- 原生视频控件 -->
+                      <video 
+                        controls 
+                        preload="metadata"
+                        class="video-player">
+                        <source :src="`${partyURL}/uploaded_files/${video.unique_filename}`" type="video/mp4">
+                      </video>
+                      
+                      <!-- 顶部操作层 (不遮挡底部的进度条) -->
+                      <div class="video-top-overlay">
+                        <el-checkbox
+                          v-model="selectedVideos"
+                          :label="video.unique_filename"
+                          class="checkbox-no-label">
+                        </el-checkbox>
+                        
+                        <div class="video-quick-actions">
+                          <!-- 复制链接 -->
+                          <el-button circle size="small" class="video-mini-btn" @click="copyLink(video.unique_filename)">
+                            <i class="fa-solid fa-link"></i>
+                          </el-button>
+                          <!-- 下载 -->
+                          <el-button circle size="small" class="video-mini-btn" @click="handleDownload(video)">
+                            <i class="fa-solid fa-download"></i>
+                          </el-button>
+                          <!-- 删除 -->
+                          <el-button type="danger" circle size="small" class="video-mini-btn" @click="deleteVideo(video)">
+                            <i class="fa-solid fa-trash"></i>
+                          </el-button>
+                        </div>
+                      </div>
+                    </div>
                     
-                    <!-- 复选框 -->
-                    <el-checkbox
-                      v-model="selectedVideos"
-                      :label="video.unique_filename"
-                      class="checkbox-no-label">
-                    </el-checkbox>
-                    
-                    <!-- 删除按钮 -->
-                    <el-button class="delete-overlay-btn" type="danger" circle size="small" @click="deleteVideo(video)">
-                      <i class="fa-solid fa-trash"></i>
-                    </el-button>
+                    <!-- 文件名展示区 -->
+                    <div class="video-info-footer" :title="video.original_filename">
+                      {{ video.original_filename }}
+                    </div>
                   </div>
-                  
-                  <!-- 新增：文件名展示区 -->
-                  <div class="video-info-footer" :title="video.original_filename">
-                    {{ video.original_filename }}
-                  </div>
+                </div>
+
+                <!-- 空状态 -->
+                <div v-if="videoFiles.length === 0" class="no-files">
+                  <el-empty :description="t('noVideos') || '暂无视频'" />
                 </div>
               </div>
             </div>

@@ -1378,6 +1378,14 @@ const handleRemoteInstall = (data) => {
       }
     },
     
+    // 图片半选状态：选中数量大于0且小于总数
+    indeterminateImages() {
+      return (
+        this.selectedImages.length > 0 &&
+        this.selectedImages.length < this.imageFiles.length
+      );
+    },
+
     // 视频全选状态
     allVideosChecked: {
       get() {
@@ -1389,6 +1397,13 @@ const handleRemoteInstall = (data) => {
           ? this.videoFiles.map(v => v.unique_filename) 
           : []
       }
+    },
+    // 全选框的半选状态
+    indeterminateVideos() {
+      return (
+        this.selectedVideos.length > 0 &&
+        this.selectedVideos.length < this.videoFiles.length
+      );
     },
     sidebarStyle() {
       return {
