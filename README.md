@@ -38,7 +38,7 @@
 #### Multi-Role Group Chat: Supports tavern character cards and long-term memory, allowing you to chat with multiple characters simultaneously!
 ![image](doc/image/img-2/group.jpeg)
 
-#### Instant Messaging Bot: Supports one-click deployment to QQ, Feishu, DingTalk, Telegram, Discord, Slack
+#### Instant Messaging Bot: Supports one-click deployment to QQ, WeChat, Feishu, DingTalk, Telegram, Discord, Slack
 ![image](doc/image/img-2/im.jpeg)
 
 #### Live Streaming Bot: Supports one-click deployment to Bilibili, YouTube, Twitch, and enables 360-degree panoramic live streaming.
@@ -59,23 +59,23 @@
 
 ### Windows portable package (Recommended! Installation-free source version, support one-click synchronization to the latest version of the warehouse, no need to wait for the desktop version to be packaged)
 
-  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/super-agent-party-win-v0.3.9.7z)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.9/super-agent-party-win-v0.3.9.7z)
+  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-win-v0.4.0.7z)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/super-agent-party-win-v0.4.0.7z)
 
 ⭐ Note!  You can double-click `一键更新(update).bat` to update the software, or you can double-click `一键启动(start).bat` to start the software.The operating system must be **Windows 10/11, Windows Server 2025**, or a later version!
 
 ### Windows Desktop Installation
 
-  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-Setup-0.3.9.exe)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.9/Super-Agent-Party-Setup-0.3.9.exe)
+  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-Setup-0.4.0.exe)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/Super-Agent-Party-Setup-0.4.0.exe)
 
 ⭐ Note! Choose to install only for the current user during installation, otherwise, administrator privileges will be required to start.The operating system must be **Windows 10/11, Windows Server 2025**, or a later version!
 
 ### MacOS Integrated Package (Currently only supports M chips, no-install source code version, supports one-click sync to the latest repository version, no need to wait for desktop version packaging)
 > **Suitable for developers/advanced users**: No-install source code version, supports one-click sync to the latest repository version, no need to wait for desktop version packaging.
 
-👉 [International users click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/super-agent-party-mac-v0.3.9.7z)  
-👉 [Chinese users click to download](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.9/super-agent-party-mac-v0.3.9.7z)
+👉 [International users click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-mac-v0.4.0.7z)  
+👉 [Chinese users click to download](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/super-agent-party-mac-v0.4.0.7z)
 
 #### 🚀 Usage Steps
 
@@ -98,8 +98,8 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 
 ### MacOS Desktop Installation (Currently only M chips are supported.)
 
-  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-0.3.9-Mac.dmg)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.9/Super-Agent-Party-0.3.9-Mac.dmg)
+  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
 
 ⭐Attention! After downloading, drag the app file of the dmg file into the `/Applications` directory, then open end point, execute the following command and enter the root password to remove the attached Quarantine attribute from the network download:
 
@@ -115,11 +115,11 @@ We provide two mainstream Linux installation package formats for your convenienc
 
 `.AppImage` is a Linux application format that does not require installation and can be used immediately. Suitable for most Linux distributions.
 
-  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-0.3.9-Linux.AppImage)
+  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Linux.AppImage)
 
 #### 2. Install using `.deb` package (Suitable for Ubuntu/Debian systems)
 
-  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-0.3.9-Linux.deb)
+  👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Linux.deb)
 
 ### Docker Deployment (This version of the table pet can only be viewed through the browser.)
 
@@ -242,7 +242,7 @@ Please refer to the following document for the main functions:
 | Supported Model Service Providers | Supports common local deployment engine interfaces and cloud service provider interfaces, such as: openai/ollama/dify, etc. |
 | Multimodal Model Integration | Integrates various types of models including role-playing, reasoning, vision, image generation, speech recognition, and speech synthesis for combined use. |
 | VRM Desktop Pet Robot | Highly customizable with support for custom avatars, custom animations, voice interaction, and dialogue interruption.It can be streamed transparently to screen recording software such as OBS, and supports bidirectional VMC protocol! |
-| Messaging Platform Bots | Currently supports QQ, Feishu, Telegram, Discord, Slack, with more platforms to be added later |
+| Messaging Platform Bots | Currently supports QQ, WeChat, Feishu, Telegram, Discord, Slack, with more platforms to be added later |
 | Live Streaming Bots | Currently supports Bilibili, YouTube, Twitch, with more platforms to be added later |
 | Announcer Bot | Supports long text narration, multi-voice narration, digital human video narration, batch conversion of ultra-long texts to speech (with download capability), and parsing of common ebook formats like EPUB. Chapter-based conversion will be developed later. |
 | Chat Interface | The chat interface supports front-end rendering features such as A2UI, mathematical formulas, mermaid diagrams, and HTML code graphics. Images can be downloaded or copied.Supports capsule mode and assistant mode, making it easy to shrink and dock the conversation interface. Combined with desktop vision and screenshots, it seamlessly integrates into work and entertainment |

@@ -37,7 +37,7 @@
 #### 多角色群聊：支持酒馆角色卡，支持长期记忆，你可以同时和多个角色一起聊天！
 ![image](doc/image/img-1/group.jpeg)
 
-#### 即时通讯机器人：支持一键部署到QQ、飞书、钉钉、Telegram、Discord、Slack
+#### 即时通讯机器人：支持一键部署到QQ、微信、飞书、钉钉、Telegram、Discord、Slack
 ![image](doc/image/img-1/im.jpeg)
 
 #### 直播机器人：支持一键部署到B站、YouTube、twitch，支持360度全景直播
@@ -58,24 +58,24 @@
 
 ### windows整合包（推荐！免安装源码版本，支持一键同步到仓库最新版本，无需等待桌面版打包）
 
-  👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/super-agent-party-win-v0.3.9.7z)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.9/super-agent-party-win-v0.3.9.7z)
+  👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-win-v0.4.0.7z)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/super-agent-party-win-v0.4.0.7z)
 
 
 ⭐注意！你可以双击`一键更新(update).bat`更新软件，也可以双击`一键启动(start).bat`启动软件。操作系统需要是**Windows 10/11、Window Server 2025**或者后续版本！
 
 ### windows桌面版安装
 
-  👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-Setup-0.3.9.exe)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.9/Super-Agent-Party-Setup-0.3.9.exe)
+  👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-Setup-0.4.0.exe)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/Super-Agent-Party-Setup-0.4.0.exe)
 
 ⭐注意！安装时选择仅为当前用户安装，否则启动时需要管理员权限。操作系统需要是**Windows 10/11、Window Server 2025**或者后续版本！
 
 ### MacOS 整合包（目前只支持 M 芯片，免安装源码版本，支持一键同步到仓库最新版本，无需等待桌面版打包）
 > **适合开发者/进阶用户**：免安装源码版本，支持一键同步到仓库最新版本，无需等待桌面版打包。
 
-👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/super-agent-party-mac-v0.3.9.7z)  
-👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.9/super-agent-party-mac-v0.3.9.7z)
+👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-mac-v0.4.0.7z)  
+👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/super-agent-party-mac-v0.4.0.7z)
 
 #### 🚀 使用步骤
 
@@ -98,8 +98,8 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 
 ### MacOS桌面版安装（目前只支持M芯片）
 
-  👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-0.3.9-Mac.dmg)
-  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.9/Super-Agent-Party-0.3.9-Mac.dmg)
+  👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
+  👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
 
 ⭐注意！下载后将dmg文件的app文件拖入`/Applications`目录下，然后打开终端，执行以下命令并输入root密码，从而移除从网络下载附加的Quarantine属性：
 
@@ -115,11 +115,11 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 
 `.AppImage` 是一种无需安装、即开即用的 Linux 应用格式。适用于大多数 Linux 发行版。
 
-  👉 [点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-0.3.9-Linux.AppImage)
+  👉 [点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Linux.AppImage)
 
 #### 2. 使用 `.deb` 包安装（适用于 Ubuntu / Debian 系统）
 
-  👉 [点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-0.3.9-Linux.deb)
+  👉 [点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Linux.deb)
 
 ### docker部署（该版本桌宠只能通过浏览器查看）
 
@@ -243,7 +243,7 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 | 常见模型服务商支持 | 已支持市面上常见的本地部署引擎接口及云服务商接口，如：openai/ollama/dify等 |
 | 多模态模型融合 | 支持将角色扮演、推理、视觉、绘图、语音识别、语音合成等多种类型的模型融合在一起使用 |
 | VRM桌宠机器人 | 高度自由，支持自定义形象、自定义动作、可语音交互、对话打断等功能，可以透明推流到OBS等录屏软件中，支持双向VMC协议！ |
-| 消息平台机器人 | 目前已支持QQ、飞书、Telegram、Discord、Slack，后续会支持更多平台 |
+| 消息平台机器人 | 目前已支持QQ、微信、飞书、Telegram、Discord、Slack，后续会支持更多平台 |
 | 直播机器人 | 目前已支持B站、YouTube、twitch，后续会支持更多平台 |
 | 播报机器人 | 支持长文播报，多语音播报，数字人口播，超长文本批量转语音（可下载），支持常见电子书epub等格式解析，后续开发分章节转录功能 |
 | 对话界面 | 对话界面已支持A2UI、公式、mermaid绘图、HTML代码绘图等前端渲染功能，图像支持下载和复制。支持胶囊模式和小助手模式，方便将对话界面缩小停靠，配合桌面视觉和截图，无缝融入工作娱乐 |
