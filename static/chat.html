@@ -224,7 +224,7 @@ function updateElement(el, rawMarkdown, formatFn) {
         width="90%"> 
         <!-- logo页面 -->
           <div class="license-notice">
-            <h1>Super Agent Party v0.4.0-beta.1</h1>
+            <h1>Super Agent Party v0.4.0</h1>
             <h3>开源协议声明 / Open Source License</h3>
             <div class="notice-section">
               <p>❗ 注意！本项目是基于AGPL协议开源的，请遵守AGPL协议，以避免不必要的法律问题！</p>
@@ -481,12 +481,13 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <template v-else>
                         <div class="omni-progress-wrapper" style="margin-left: 20px;">
                           <el-slider 
+                            class="omni-slider"
                             v-model="message.omniCurrentTime" 
                             :max="message.omniDuration > 0 ? message.omniDuration : 0.1" 
                             :step="0.01"
                             :show-tooltip="false"
                             @change="(val) => seekOmniTTS(message, val)"
-                          />
+                          ></el-slider>
                           <span class="tts-status-time">
                             {{ (message.omniCurrentTime || 0).toFixed(1) }}s / {{ (message.omniDuration || 0).toFixed(1) }}s
                           </span>
@@ -507,12 +508,22 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <!-- 附件展示区：增加 user-msg-attachments 类名用于样式区分 -->
                           <div class="message-attachments-display user-msg-attachments" 
                               v-if="message.fileLinks?.length || message.imageLinks?.length">
+                            
 
-                              <!-- 2. 图片附件 (统一方块) -->
-                              <div v-for="(img, imgIdx) in message.imageLinks" :key="'img-'+imgIdx" class="attachment-item-display image-item">
-                                  <div class="preview-image-box">
-                                      <!-- 图片不需要反色，保持原样 -->
-                                      <img :src="formatFileUrl(img.path)" />
+                              <!-- 1. 视频/图片附件 -->
+                              <div v-for="(img, imgIdx) in message.imageLinks" :key="'img-'+imgIdx" 
+                                  :class="['attachment-item-display', img.type === 'video' ? 'video-item-wrapper' : 'image-item-wrapper']">
+                                  
+                                  <div class="preview-media-box">
+                                      <template v-if="img.type === 'video'">
+                                          <!-- 视频预览 -->
+                                          <video :src="formatFileUrl(img.path)" preload="metadata" controls></video>
+                                      </template>
+                                      
+                                      <template v-else>
+                                          <!-- 图片预览 -->
+                                          <img :src="formatFileUrl(img.path)" />
+                                      </template>
                                   </div>
                               </div>
 
@@ -527,6 +538,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                               </div>
                           </div>
                       </div>
+
                       
                       <!-- Assistant -->
                       <div v-else-if="message.role === 'assistant'" class="markdown-body">
@@ -605,14 +617,15 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </el-button>
                     </el-tooltip>
 
-                    <el-tooltip :content="t('desktopVisionButton')" placement="top">
+                    <el-tooltip :content="t('visionControl')" placement="top">
                       <el-button
-                        @click="visionSettings.desktopVision = !visionSettings.desktopVision; autoSaveSettings()"
-                        class="icon-btn vision-btn"
-                        :type="visionSettings.desktopVision ? 'primary' : 'default'"
-                        v-if="isElectron&&(MoreButtonDict.find(b => b.name === 'desktopVisionButton')?.enabled||isCapsuleMode)"
+                        :disabled="!isElectron"
+                        @click="visionControlSettings.enabled = !visionControlSettings.enabled; handleVisionControlEnableToggle(visionControlSettings.enabled)"
+                        class="icon-btn web-search-btn"
+                        :type="visionControlSettings.enabled ? 'primary' : 'default'"
+                        v-if="isCapsuleMode"
                         circle>
-                        <i class="fa-solid fa-eye"></i>
+                        <i class="fa-solid fa-arrow-pointer"></i>
                       </el-button>
                     </el-tooltip>
 
@@ -705,6 +718,17 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </el-button>
                     </el-tooltip>
 
+                    <el-tooltip :content="t('forceScrollButton')" placement="top">
+                      <el-button
+                        @click="isForceScrollToBottom = !isForceScrollToBottom; autoSaveSettings()"
+                        class="icon-btn history-btn"
+                        v-if="MoreButtonDict.find(b => b.name === 'forceScrollButton')?.enabled&&!isCapsuleMode"
+                        :type="isForceScrollToBottom ? 'primary' : 'default'"
+                        circle>
+                        <i class="fa-solid fa-scroll"></i>
+                      </el-button>
+                    </el-tooltip>
+
                     <el-tooltip :content="isInputExpanded ? t('collapseInput') : t('expandInput')" placement="top">
                         <el-button 
                             @click="toggleInputExpand"
@@ -762,7 +786,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                     <el-tooltip :content="t('vision')" placement="top">
                       <el-button
-                        @click="visionSettings.enabled = !visionSettings.enabled; autoSaveSettings()"
+                        @click="visionSettings.enabled = !visionSettings.enabled; handleVisionEnableToggle(visionSettings.enabled)"
                         class="icon-btn vision-btn"
                         :type="visionSettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'visionButton')?.enabled&&!isCapsuleMode"
@@ -840,7 +864,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                     <el-tooltip :content="t('webSearch')" placement="top">
                       <el-button
-                        @click="webSearchSettings.enabled = !webSearchSettings.enabled; autoSaveSettings()"
+                        @click="webSearchSettings.enabled = !webSearchSettings.enabled; handleWebSearchToggle(webSearchSettings.enabled)"
                         class="icon-btn web-search-btn"
                         :type="webSearchSettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'webSearchButton')?.enabled&&!isCapsuleMode"
@@ -873,7 +897,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                     <el-tooltip :content="t('interpreter')" placement="top">
                       <el-button
-                        @click="codeSettings.enabled = !codeSettings.enabled; autoSaveSettings()"
+                        @click="codeSettings.enabled = !codeSettings.enabled; handleInterpreterToggle(codeSettings.enabled)"
                         class="icon-btn web-search-btn"
                         :type="codeSettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'codeButton')?.enabled&&!isCapsuleMode"
@@ -885,12 +909,24 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <el-tooltip :content="t('CLItool')" placement="top">
                       <el-button
                         :disabled="!isElectron"
-                        @click="CLISettings.enabled = !CLISettings.enabled; autoSaveSettings()"
+                        @click="CLISettings.enabled = !CLISettings.enabled; handleEnableToggle(CLISettings.enabled)"
                         class="icon-btn web-search-btn"
                         :type="CLISettings.enabled ? 'primary' : 'default'"
                         v-if="MoreButtonDict.find(b => b.name === 'CLIButton')?.enabled&&!isCapsuleMode"
                         circle>
                         <i class="fa-solid fa-computer"></i>
+                      </el-button>
+                    </el-tooltip>
+
+                    <el-tooltip :content="t('visionControl')" placement="top">
+                      <el-button
+                        :disabled="!isElectron"
+                        @click="visionControlSettings.enabled = !visionControlSettings.enabled; handleVisionControlEnableToggle(visionControlSettings.enabled)"
+                        class="icon-btn web-search-btn"
+                        :type="visionControlSettings.enabled ? 'primary' : 'default'"
+                        v-if="MoreButtonDict.find(b => b.name === 'visionControl')?.enabled&&!isCapsuleMode"
+                        circle>
+                        <i class="fa-solid fa-arrow-pointer"></i>
                       </el-button>
                     </el-tooltip>
 
@@ -1045,23 +1081,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </el-tooltip>
 
 
-                    <el-tooltip :content="t('logoPage')" placement="top">
-                      <el-button
-                        plain
-                        class="icon-btn party-btn"
-                        style="border-radius: 24px;"
-                        @click="showLogoDialog = true"
-                      >
-                        <template #icon>
-                          <img
-                            :src="getVendorLogo('unknown')"
-                            class="model-vendor-logo"
-                            draggable="false"
-                          />
-                        </template>
-                      </el-button>
-                    </el-tooltip>
-
                     <el-tooltip :content="isSending ? t('stopGenerating') : t('sendMessage')" placement="top" class="send-btn-container">
                       <el-button
                         v-if="!isCapsuleMode"
@@ -1072,7 +1091,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                         <i :class="isSending ? 'fa-solid fa-stop' : 'fa-solid fa-paper-plane'" aria-hidden="true"></i>
                       </el-button>
                     </el-tooltip>
-
                   </div>
 
                   <!-- 1. 附件预览区域 -->
@@ -1080,14 +1098,19 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <div v-for="(item, index) in allItems" :key="index" class="attachment-item">
                       
                       <!-- 图片类型 -->
-                      <div v-if="item.type === 'image'" class="preview-image-box">
-                        <img :src="item.path" alt="preview" />
+                      <div v-if="item.uiCategory === 'image'" class="preview-image-box">
+                        <video v-if="item.detectedType === 'video'" 
+                              :src="formatFileUrl(item.path)" 
+                              controls 
+                              style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                        </video>
+                        <img v-else :src="formatFileUrl(item.path)" />
                         <div class="overlay">
                           <el-button 
                             type="danger" 
                             circle 
                             size="small" 
-                            @click.stop="removeItem(index, item.type)"
+                            @click.stop="removeItem(index, item.uiCategory)"
                           >
                             <i class="fa-solid fa-trash"></i>
                           </el-button>
@@ -1102,7 +1125,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                         <div class="file-info">
                           <span class="file-name" :title="item.name">{{ item.name }}</span>
                         </div>
-                        <div class="remove-btn" @click.stop="removeItem(index, item.type)">
+                        <div class="remove-btn" @click.stop="removeItem(index, item.uiCategory)">
                           <i class="fa-solid fa-xmark"></i>
                         </div>
                       </div>
@@ -1118,7 +1141,10 @@ function updateElement(el, rawMarkdown, formatFn) {
                     @dragleave.prevent="isDragging = false"
                     @drop.prevent="handleInputDrop"
                   >
+                    <!-- 模式切换：使用 v-show 切换键盘输入与按住说话 -->
+                    <!-- 键盘输入区 -->
                     <el-input
+                      v-show="!isPttMode"
                       v-model="userInput"
                       type="textarea"
                       :rows="isMobile?(isInputExpanded ? 8 : 3):(isInputExpanded ? 16 : 4)"
@@ -1129,9 +1155,58 @@ function updateElement(el, rawMarkdown, formatFn) {
                       @paste.native="handleInputPaste"
                       class="input-box-transparent">
                     </el-input>
-                    
-                    <div class="input-status-bar" v-if="!isAssistantMode && !isMobile">
+
+                    <!-- 按住说话区 (无缝融合版) -->
+                      <div v-show="isPttMode" class="ptt-seamless-wrapper">
+                        <div 
+                          class="ptt-seamless-area" 
+                          :class="{ 'is-recording': isPttRecording }"
+                          @touchstart="handlePttPress($event)"
+                          @touchend="handlePttRelease($event)"
+                          @touchcancel="handlePttRelease($event)"
+                          @mousedown="handlePttPress($event)"
+                          @mouseup="handlePttRelease($event)"
+                          @mouseleave="handlePttRelease($event)"
+                          @contextmenu.prevent  
+                        >
+                          <!-- 录音时的波纹动画图标 (可选) -->
+                          <div v-if="isPttRecording" class="recording-wave">
+                            <span></span><span></span><span></span><span></span><span></span>
+                          </div>
+                          
+                          <!-- 文字提示 (国际化) -->
+                          <span class="ptt-text">
+                            {{ isPttRecording ? t('releaseToSend') : (isProcessingPtt ? t('converting') : t('holdToTalk')) }}
+                          </span>
+                        </div>
+                      </div>
+              
+                      <div 
+                        v-if="isPttRecording && asrSettings.interactionMethod === 'keyTriggered'" 
+                        class="desktop-recording-overlay"
+                      >
+                        <div class="desktop-recording-content">
+                          <!-- 麦克风图标 (你可以换成自己的 el-icon) -->
+                          <el-icon class="mic-icon"><Microphone /></el-icon>
+                          
+                          <!-- 复用你的波纹动画 -->
+                          <div class="recording-wave">
+                            <span></span><span></span><span></span><span></span><span></span>
+                          </div>
+
+                          <!-- 文字提示 -->
+                          <span class="ptt-text">{{ t('releaseToSend') }}</span>
+                        </div>
+                      </div>
+
+
+                    <div class="input-status-bar">
                       
+                      <!-- ✨ 2. 语音/键盘切换按钮：始终显示（或者你可以加 v-if="isMobile" 只让手机显示） -->
+                      <div class="voice-toggle-btn" @click="isPttMode = !isPttMode" v-if="isMobile">
+                        <i :class="isPttMode ? 'fa-solid fa-keyboard' : 'fa-solid fa-microphone'"></i>
+                      </div>
+
                       <!-- 模型指示器 -->
                       <el-tooltip :content="t('clickToSwitchModel')" placement="top" :show-after="500">
                         <div class="status-pill" @click="showModelDialog = true">
@@ -1139,14 +1214,89 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <span class="pill-text">{{ settings?.model !== '' ? settings.model : t('noModelSelected') }}</span>
                         </div>
                       </el-tooltip>
-                      
-                      <!-- 扩展指示器 -->
-                      <el-tooltip :content="t('clickToSwitchExtensions')" placement="top" :show-after="500">
-                        <div class="status-pill" v-if="currentViewName" @click="openExtensionsDialog">
-                          <i class="fa-solid fa-puzzle-piece"></i>
-                          <span class="pill-text">{{ currentViewName }}</span>
-                        </div>
-                      </el-tooltip>
+
+                      <!-- ✨ 3. 将原有的桌面端状态胶囊包裹在一个 template 中，并在这里加 !isMobile 限制 -->
+                      <template  v-if="!isAssistantMode && !isMobile">
+                          
+                          <!-- 扩展指示器 -->
+                          <el-tooltip :content="t('clickToSwitchExtensions')" placement="top" :show-after="500">
+                            <div class="status-pill" v-if="currentViewName" @click="openExtensionsDialog">
+                              <i class="fa-solid fa-puzzle-piece"></i>
+                              <span class="pill-text">{{ currentViewName }}</span>
+                            </div>
+                          </el-tooltip>
+
+                          <!-- 3. 工作区目录指示器 (仅 CLI 启用时显示) -->
+                          <el-tooltip :content="t('workspace')" placement="top" :show-after="500">
+                            <div class="status-pill" v-if="CLISettings.enabled" @click="browseDirectory">
+                              <i class="fa-solid fa-folder-open"></i>
+                              <span class="pill-text">{{ CLISettings.cc_path ? CLISettings.cc_path.split(/[/\\]/).filter(Boolean).pop() : t('pleaseSelectWorkspaceFirst') }}</span>
+                            </div>
+                          </el-tooltip>
+
+                          <!-- 4. CLI 权限模式指示器 (仅 CLI 启用时显示) -->
+                          <el-dropdown 
+                            v-if="CLISettings.enabled" 
+                            placement="top" 
+                            trigger="click"
+                            class="status-pill-dropdown"
+                          >
+                            <!-- ⚠️ 关键修复：让 status-pill 直接作为下拉组件的触发器 -->
+                            <div class="status-pill">
+                              <el-tooltip :content="t('permissionMode')" placement="top" :show-after="500">
+                                <!-- 将内容包裹在一个 span 中，使得 tooltip 正常工作 -->
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                  <i class="fa-solid fa-shield-halved"></i>
+                                  <span class="pill-text">
+                                    {{ 
+                                      CLISettings.engine === 'local' ? localEnvSettings.permissionMode :
+                                      CLISettings.engine === 'ds' ? dsSettings.permissionMode :
+                                      CLISettings.engine === 'cc' ? ccSettings.permissionMode :
+                                      CLISettings.engine === 'qc' ? qcSettings.permissionMode : 'unknown'
+                                    }}
+                                  </span>
+                                </span>
+                              </el-tooltip>
+                            </div>
+                            
+                            <template #dropdown>
+                              <el-dropdown-menu>
+                                <!-- 本地环境 (Local) 选项 -->
+                                <template v-if="CLISettings.engine === 'local'">
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="localEnvSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+                                </template>
+                                <!-- Docker Sandbox (DS) 选项 -->
+                                <template v-else-if="CLISettings.engine === 'ds'">
+                                  <el-dropdown-item @click="dsSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="dsSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="dsSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="dsSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('bypassPermissions') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="dsSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('coworkPermissionMode') }}</el-dropdown-item>
+                                </template>
+                                <!-- Claude Code (CC) 选项 -->
+                                <template v-else-if="CLISettings.engine === 'cc'">
+                                  <el-dropdown-item @click="ccSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="ccSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="ccSettings.permissionMode='acceptEdits'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="ccSettings.permissionMode='bypassPermissions'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="ccSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+                                </template>
+                                <!-- Qwen Code (QC) 选项 -->
+                                <template v-else-if="CLISettings.engine === 'qc'">
+                                  <el-dropdown-item @click="qcSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="qcSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="qcSettings.permissionMode='auto-edit'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="qcSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                                  <el-dropdown-item @click="qcSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+                                </template>
+                              </el-dropdown-menu>
+                            </template>
+                          </el-dropdown>
+                      </template>
 
                     </div>
 
