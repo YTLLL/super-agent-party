@@ -56,7 +56,7 @@ async def mouse_move_async(x: float, y: float, duration: float = 0.5) -> str:
         time.sleep(0.02)
     
     await asyncio.to_thread(_move)
-    return f"鼠标已成功移动到屏幕位置 ({x}‰, {y}‰)，实际像素坐标 ({px}, {py})，耗时 {duration} 秒。"
+    return f"鼠标已成功移动到屏幕位置 ({x}‰, {y}‰)。 [LAST_ACTION: MOVE({x},{y})]"
 
 
 @require_gui
@@ -73,10 +73,13 @@ async def mouse_click_async(button: str = "left", clicks: int = 1, x: Optional[f
             pyautogui.click(x=px, y=py, clicks=clicks, button=button, interval=0.05)
             
         await asyncio.to_thread(_click_at)
-        return f"鼠标已移动到 ({x}‰, {y}‰) 并使用 {button} 键点击了 {clicks} 次。"
+        # 根据点击次数打上不同的标签
+        tag = f"CLICK({x},{y})" if clicks == 1 else f"DOUBLE_CLICK({x},{y})"
+        return f"鼠标已移动到 ({x}‰, {y}‰) 并使用 {button} 键点击了 {clicks} 次。 [LAST_ACTION: {tag}]"
     else:
+        # 如果没有传入坐标（原地点击），我们无法在图片上准确标出位置，所以不带坐标标签
         await asyncio.to_thread(pyautogui.click, clicks=clicks, button=button, interval=0.05)
-        return f"鼠标在当前位置使用 {button} 键点击了 {clicks} 次。"
+        return f"鼠标在当前位置使用 {button} 键点击了 {clicks} 次。[LAST_ACTION: CLICK_CURRENT]"
 
 
 @require_gui
@@ -93,17 +96,16 @@ async def mouse_double_click_async(button: str = "left", x: Optional[float] = No
             pyautogui.click(x=px, y=py, clicks=2, button=button, interval=0.05)
             
         await asyncio.to_thread(_double_click)
-        return f"鼠标已移动到 ({x}‰, {y}‰) 并使用 {button} 键双击。"
+        return f"鼠标已移动到 ({x}‰, {y}‰) 并使用 {button} 键双击。 [LAST_ACTION: DOUBLE_CLICK({x},{y})]"
     else:
         await asyncio.to_thread(pyautogui.click, clicks=2, button=button, interval=0.05)
-        return f"鼠标在当前位置使用 {button} 键双击。"
+        return f"鼠标在当前位置使用 {button} 键双击。 [LAST_ACTION: CLICK_CURRENT]"
 
 
 @require_gui
 async def mouse_drag_async(x1: float, y1: float, x2: float, y2: float, duration: float = 1.0, button: str = "left") -> str:
-    """从起始位置 (x1, y1) 拖拽到终点位置 (x2, y2)。坐标均为千分比。"""
+    """从起始位置 (x1, y1) 拖拽到终点位置 (x2, y2)"""
     try:
-        # 1. 验证坐标范围
         coords = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
         for name, val in coords.items():
             if val < 0 or val > 1000:
@@ -113,29 +115,16 @@ async def mouse_drag_async(x1: float, y1: float, x2: float, y2: float, duration:
         px2, py2 = _percent_to_pixel(x2, y2)
         
         def _drag():
-            # 1. 先精准移动到起点
             pyautogui.moveTo(px1, py1, duration=0.2)
-            
-            # 2. 【关键】给 UI 0.2 秒的反应时间，让元素进入“悬停/可交互”状态
             time.sleep(0.2) 
-            
-            # 3. 【关键】使用 pyautogui 原生的 dragTo，而不是 mouseDown + moveTo
-            # dragTo 会在底层操作系统级别发送正确的 Drag 事件，而不是 Move 事件
-            pyautogui.dragTo(
-                x=px2, 
-                y=py2, 
-                duration=duration, 
-                button=button, 
-                tween=pyautogui.easeInOutQuad
-            )
-            
-            # 4. 拖拽到位后，稍微停顿一下再彻底结束（防止有些软件还没判定落点）
+            pyautogui.dragTo(x=px2, y=py2, duration=duration, button=button, tween=pyautogui.easeInOutQuad)
             time.sleep(0.1)
             
         await asyncio.to_thread(_drag)
-        return f"已成功将鼠标从 ({x1}‰, {y1}‰) 拖拽到 ({x2}‰, {y2}‰)，按键：{button}，耗时 {duration} 秒。"
+        return f"已成功将鼠标从 ({x1}‰, {y1}‰) 拖拽到 ({x2}‰, {y2}‰)。[LAST_ACTION: DRAG({x1},{y1},{x2},{y2})]"
     except Exception as e:
         return f"拖拽失败：{e}"
+
 
 @require_gui
 async def mouse_scroll_async(clicks: int) -> str:
@@ -154,7 +143,25 @@ async def mouse_scroll_async(clicks: int) -> str:
     
     await asyncio.to_thread(_scroll)
     direction = "向上" if clicks > 0 else "向下"
-    return f"鼠标滚轮已{direction}滚动了 {abs(clicks)} 个单位。"
+    # 滚动无法标点，仅返回状态
+    return f"鼠标滚轮已{direction}滚动了 {abs(clicks)} 个单位。[LAST_ACTION: SCROLL]"
+
+
+@require_gui
+async def mouse_hold_async(button: str, duration: float) -> str:
+    """长按鼠标按键"""
+    if duration > 30: duration = 30
+    
+    def _hold_logic():
+        try:
+            pyautogui.mouseDown(button=button)
+            time.sleep(duration)
+        finally:
+            pyautogui.mouseUp(button=button)
+    
+    await asyncio.to_thread(_hold_logic)
+    return f"已成功按住鼠标 {button} 键持续 {duration} 秒。[LAST_ACTION: HOLD]"
+
 
 
 @require_gui
@@ -256,21 +263,6 @@ async def keyboard_hold_async(keys: List[str], duration: float) -> str:
     await asyncio.to_thread(_hold_logic)
     return f"已成功长按组合键 {keys} 持续 {duration} 秒。"
 
-
-@require_gui
-async def mouse_hold_async(button: str, duration: float) -> str:
-    """长按鼠标按键"""
-    if duration > 30: duration = 30
-    
-    def _hold_logic():
-        try:
-            pyautogui.mouseDown(button=button)
-            time.sleep(duration)
-        finally:
-            pyautogui.mouseUp(button=button)
-    
-    await asyncio.to_thread(_hold_logic)
-    return f"已成功按住鼠标 {button} 键持续 {duration} 秒。"
 
 # 注意：wait_async 不需要 GUI，所以【不要】加 @require_gui
 async def wait_async(seconds: float) -> str:

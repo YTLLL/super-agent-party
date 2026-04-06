@@ -83,7 +83,7 @@ class YouTubeDMClient:
             msg = {
                 'id': str(uuid.uuid4()),
                 "type": "message",
-                "content": f"{author} send: {text}",
+                "content": f"{author} said: {text}",
                 "danmu_type": "danmaku",
                 "platform": "youtube"
             }

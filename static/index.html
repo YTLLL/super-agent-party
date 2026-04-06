@@ -14014,6 +14014,30 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 />
                               </el-form-item>
 
+                              <el-form-item :label="t('enableDanmakuTTS')" class="form-item-align" label-position="left">
+                                <el-switch 
+                                  v-model="liveConfig.enableDanmakuTTS" 
+                                  @change="autoSaveSettings"
+                                ></el-switch>
+                              </el-form-item>  
+
+                              <el-form-item v-if="liveConfig.enableDanmakuTTS" :label="t('danmakuVoice') || 'Danmaku Voice (念弹幕音色)'" class="form-item-align" label-position="left">
+                                <el-select 
+                                  v-model="liveConfig.danmakuVoice" 
+                                  class="full-width-input"
+                                  @change="autoSaveSettings"
+                                >
+                                  <el-option label="Default" value="default"></el-option>
+                                  <!-- 复用你配好的角色语音库 -->
+                                  <el-option 
+                                    v-for="(config, name) in ttsSettings.newtts" 
+                                    :key="name" 
+                                    :label="name" 
+                                    :value="name"
+                                  ></el-option>
+                                </el-select>
+                              </el-form-item>
+
                               <el-alert
                                 type="info"
                                 :closable="false"
@@ -14021,6 +14045,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                               >
                                 {{ t('vrmAPIInstructions') }}
                               </el-alert>
+
                               <!-- API端点 -->
                               <el-form-item :label="t('apiEndpoint')" class="form-item-align" label-position="top">
                                 <el-input
@@ -14055,6 +14080,34 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   </template>
                                 </el-input>
                               </el-form-item>
+                              <el-form-item :label="t('danmakuOverlayUrl') || 'Danmaku Overlay URL'" class="form-item-align" label-position="top">
+                                <el-input
+                                  :value="partyURL+'/danmaku_overlay'"
+                                  readonly
+                                  class="full-width-input"
+                                >
+                                  <template #append>
+                                    <el-button @click="copyDanmakuOverlayEndpoint" class="copy-btn">
+                                      <i class="fa-solid fa-copy"></i>
+                                    </el-button>
+                                  </template>
+                                </el-input>
+                              </el-form-item>
+
+                              <el-form-item :label="t('subtitleOverlayUrl') || 'subtitle Overlay URL'" class="form-item-align" label-position="top">
+                                <el-input
+                                  :value="partyURL+'/subtitle_overlay'"
+                                  readonly
+                                  class="full-width-input"
+                                >
+                                  <template #append>
+                                    <el-button @click="copySubtitleOverlayEndpoint" class="copy-btn">
+                                      <i class="fa-solid fa-copy"></i>
+                                    </el-button>
+                                  </template>
+                                </el-input>
+                              </el-form-item>
+
                             </div>
                           </div>
                         </el-form>

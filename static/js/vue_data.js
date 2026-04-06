@@ -1558,6 +1558,8 @@ let vue_data = {
       twitch_enabled: false,
       twitch_channel: "",
       twitch_access_token: "",
+      danmakuVoice:"default",
+      enableDanmakuTTS: false,
     },
     WXBotConfig: {
       WXAgent:'super-model',

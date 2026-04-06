@@ -2084,6 +2084,24 @@ let vue_methods = {
                 generationFinished: false, 
                 toolBlocks: {},
             };
+            if (this.pendingDanmakuToRead && this.ttsSettings.enabled) {
+                // 【修改点】：增加 enableDanmakuTTS 开关判断
+                if (this.liveConfig.enableDanmakuTTS) {
+                    const voice = this.liveConfig.danmakuVoice || 'default';
+                    if (voice !== 'none') {
+                        // 只有开启了开关，才把弹幕塞进 TTS 队列
+                        newMsgData.ttsChunks.push(this.pendingDanmakuToRead);
+                        newMsgData.chunks_voice.push(`danmaku_vrm_silent:${voice}`);
+                        console.log('已开启读弹幕，弹幕语音已注入队列:', this.pendingDanmakuToRead);
+                    }
+                } else {
+                    console.log('未开启读弹幕开关，跳过弹幕语音合成');
+                }
+                
+                // 无论开没开 TTS，执行完这一步都要清空，防止下一条消息重复读取
+                this.pendingDanmakuToRead = null;
+            }
+
             this.messages.push(newMsgData);
             currentMsg = this.messages[this.messages.length - 1]; 
         }
@@ -2575,6 +2593,10 @@ let vue_methods = {
             this.voiceStack = ['default'];
             if (this.allBriefly) currentMsg.briefly = true;
             
+            if (!this.ttsSettings.enabled) {
+                try { fetch('/api/overlay/danmaku/clear', { method: 'POST' }).catch(()=>{}); } catch(e){}
+            }
+
             // Conversation saving logic...
             if (this.conversationId === null) {
                 this.conversationId = uuid.v4();
@@ -8089,8 +8111,15 @@ handleCreateSlackSeparator(val) {
       this.elapsedTime = Date.now() - this.startTime;
     },
     async processTTSChunk(message, index) {
+        let voice = message.chunks_voice[index];
         const chunk = message.ttsChunks[index];
-        const voice = message.chunks_voice[index];
+        
+        // 解析标记
+        const isVrmSilent = voice.startsWith('danmaku_vrm_silent:');
+        if (isVrmSilent) {
+            voice = voice.replace('danmaku_vrm_silent:', ''); // 恢复成真实音色 ID
+        }
+
         let chunk_text = chunk;
         let chunk_expressions = [];
 
@@ -8099,6 +8128,9 @@ handleCreateSlackSeparator(val) {
             chunk_expressions = (chunk.match(tagReg) || []).map(t => t.slice(1, -1));
             chunk_text = chunk.replace(tagReg, '').trim();
         }
+
+        const offset = message.chunks_voice.filter(v => v.startsWith('danmaku_vrm_silent:')).length;
+        const vrmIndex = index - offset; // 计算发给 VRM 的虚拟索引
 
         try {
             if (voice === 'silence') {
@@ -8121,18 +8153,17 @@ handleCreateSlackSeparator(val) {
                     const audioBlob = await response.blob();
                     const audioUrl = URL.createObjectURL(audioBlob);
                     
-                    // --- 二进制打包发送 ---
+                    // --- 修改点：预先转换二进制并存储，但不发送 ---
                     const audioBuffer = await audioBlob.arrayBuffer();
-                    const metadata = {
-                        type: 'audio_chunk',
-                        chunkIndex: index,
-                        text: chunk_text,
-                        expressions: chunk_expressions,
-                        mimeType: audioBlob.type
-                    };
-                    this.sendBinaryToVRM(metadata, audioBuffer);
 
-                    message.audioChunks[index] = { url: audioUrl, expressions: chunk_expressions, text: chunk_text, index };
+                    message.audioChunks[index] = { 
+                        url: audioUrl, 
+                        buffer: audioBuffer, // 暂存二进制数据
+                        mimeType: audioBlob.type,
+                        expressions: chunk_expressions, 
+                        text: chunk_text, 
+                        index 
+                    };
                     this.checkAudioPlayback();
                 }
             }
@@ -8159,130 +8190,116 @@ handleCreateSlackSeparator(val) {
       this.checkAudioPlayback(message, resolve);
     },
 
-    // 修改现有的音频播放方法
     async checkAudioPlayback(message, resolve) {
-      // 1. 安全检查
-      if (!message) { 
-          if(resolve) resolve(); 
-          return; 
-      }
-      
-      const lastMessage = message;
+        if (!message) { if(resolve) resolve(); return; }
+        const lastMessage = message;
 
-      // 2. 如果正在播放，稍后重试
-      if (lastMessage.isPlaying) {
-          setTimeout(() => this.checkAudioPlayback(message, resolve), 50);
-          return;
-      }
-
-      // 3. 检查是否播放完成
-      // 结束条件：所有 chunk 播放完毕，且文本生成已经结束 (generationFinished)
-      const hasMoreChunks = (lastMessage.currentChunk ?? 0) < (lastMessage.ttsChunks?.length ?? 0);
-      
-      if (!hasMoreChunks && lastMessage.generationFinished) {
-          console.log(`All audio chunks played for ${lastMessage.agentName}`);
-          this.stopTimer();
-          lastMessage.TTSelapsedTime = this.elapsedTime/1000;
-          lastMessage.currentChunk = 0;
-          
-          // 停止 fetch 循环
-          this.TTSrunning = false; 
-          this.cur_audioDatas = [];
-          
-          if(this.isReadInterruption){
-            setTimeout(() => {
-              if (this.isReadPaused){
-                this.resumeRead();
-              }else{
-                this.toggleContinuousPlay();
-              }
-            }, this.readSettings.delay);
-          }
-          
-          this.sendTTSStatusToVRM('allChunksCompleted', {});
-          
-          // 关键：解除 generateAIResponse 的阻塞
-          if (resolve) resolve();
-          return;
-      }
-
-      // 4. 获取当前音频块
-      const currentIndex = lastMessage.currentChunk;
-      const audioChunk = lastMessage.audioChunks[currentIndex];
-
-      // 如果没有更多 chunk 但生成还没结束，或者当前 chunk 还没下载好 -> 等待
-      if (!audioChunk) {
-        if (!this.ttsSettings.enabled) {
-             // 异常退出保护
-             if(resolve) resolve();
-             return;
+        if (lastMessage.isPlaying) {
+            setTimeout(() => this.checkAudioPlayback(message, resolve), 50);
+            return;
         }
-        setTimeout(() => this.checkAudioPlayback(message, resolve), 50);
-        return;
-      }
-      
-      // 5. 播放逻辑
-      if (!this.ttsSettings.enabled) {
-        lastMessage.isPlaying = false;
-        lastMessage.currentChunk = 0;
-        if (this.currentAudio) {
-          this.currentAudio.pause();
-          this.currentAudio = null;
-        }
-        this.sendTTSStatusToVRM('stopSpeaking', {});
-        if(resolve) resolve();
-        return;
-      }
-      
-      if (!lastMessage.isPlaying) {
-        lastMessage.isPlaying = true;
-        console.log(`Playing audio chunk ${currentIndex}`);
-        if (currentIndex == 0){
-          this.stopTimer();
-          lastMessage.first_sentence_latency = this.elapsedTime;
-        }
+
+        const currentIndex = lastMessage.currentChunk;
+        const audioChunk = lastMessage.audioChunks[currentIndex];
+        
+        // 如果该块还没合成好，继续等待
+        if (!audioChunk) {
+            // 如果所有已有的 chunk 都播完了
+            const allLocalChunksPlayed = currentIndex >= (lastMessage.ttsChunks?.length || 0);
             
-        try {
-          this.currentAudio = new Audio(audioChunk.url);
-          this.currentAudio.volume = this.vrmOnline ? 0.0000001 : 1;
-          
-          this.sendTTSStatusToVRM('startSpeaking', {
-            audioDataUrl: this.cur_audioDatas[currentIndex],
-            chunkIndex: currentIndex,
-            totalChunks: lastMessage.ttsChunks.length,
-            text: audioChunk.text,
-            expressions: audioChunk.expressions,
-            voice: lastMessage.chunks_voice[currentIndex]
-          });
-          
-          await new Promise((r) => {
-            this.currentAudio.onended = () => {
-              this.sendTTSStatusToVRM('chunkEnded', { 
-                chunkIndex: currentIndex 
-              });
-              r();
-            };
-            this.currentAudio.onerror = r;
-            this.currentAudio.play().catch(e => console.error('Play error:', e));
-          });
-          
-          console.log(`Audio chunk ${currentIndex} finished`);
-        } catch (error) {
-          console.error(`Playback error: ${error}`);
-        } finally {
-          lastMessage.currentChunk++;
-          lastMessage.isPlaying = false;
-          this.stopTimer();
-          lastMessage.TTSelapsedTime = this.elapsedTime / 1000;
-          
-          // 递归检查下一个
-          setTimeout(() => {
-            this.checkAudioPlayback(message, resolve);
-          }, 0);
-          
-          this.autoSaveSettings();
+            if (allLocalChunksPlayed) {
+                // 如果生成已结束，或者已经等了很久（比如5秒）都没新内容，就强行结束
+                if (lastMessage.generationFinished) {
+                    console.log("播放全部完成，正常退出");
+                    this.TTSrunning = false;
+                    try { fetch('/api/overlay/danmaku/clear', { method: 'POST' }).catch(()=>{}); } catch(e){}
+                    if (resolve) resolve();
+                    return;
+                } else {
+                    // 如果生成还没标记结束，但已经没东西播了，我们再等一下
+                    // 增加一个保险计数器（可选）或者直接检查是否还在生成
+                    if (!this.isSending) { 
+                        // 如果连网络请求都结束了，还没标记 finish，那肯定是状态出错了
+                        console.warn("检测到生成已停止但未标记完成，强行释放锁");
+                        lastMessage.generationFinished = true; // 补救状态
+                        this.TTSrunning = false;
+                        try { fetch('/api/overlay/danmaku/clear', { method: 'POST' }).catch(()=>{}); } catch(e){}
+                        if (resolve) resolve();
+                        return;
+                    }
+                    setTimeout(() => this.checkAudioPlayback(message, resolve), 50);
+                    return;
+                }
+            }
+            setTimeout(() => this.checkAudioPlayback(message, resolve), 50);
+            return;
         }
-      }
+
+        const rawVoice = lastMessage.chunks_voice[currentIndex] || '';
+        const isVrmSilent = rawVoice.startsWith('danmaku_vrm_silent:');
+        const actualVoice = isVrmSilent ? rawVoice.replace('danmaku_vrm_silent:', '') : rawVoice;
+        
+        // 计算偏移
+        const offset = lastMessage.chunks_voice.filter(v => v.startsWith('danmaku_vrm_silent:')).length;
+        const vrmIndex = currentIndex - offset;
+
+        if (!lastMessage.isPlaying) {
+            lastMessage.isPlaying = true;
+                
+            try {
+                // --- 核心同步修改点：只有非弹幕块且 VRM 在线时，才在此刻发送二进制数据 ---
+                if (!isVrmSilent && vrmIndex >= 0 && this.vrmOnline && audioChunk.buffer) {
+                    const metadata = {
+                        type: 'audio_chunk',
+                        chunkIndex: vrmIndex,
+                        text: audioChunk.text,
+                        expressions: audioChunk.expressions,
+                        mimeType: audioChunk.mimeType
+                    };
+                    // 此时发送，VRM 插件会立刻开始播放，与浏览器端的“静音播放”逻辑完美同步
+                    this.sendBinaryToVRM(metadata, audioChunk.buffer);
+                }
+
+                this.currentAudio = new Audio(audioChunk.url);
+                
+                if (isVrmSilent) {
+                    this.currentAudio.volume = 1.0; // 弹幕声音从浏览器出
+                    console.log("正在播放弹幕:", audioChunk.text);
+                } else {
+                    this.currentAudio.volume = this.vrmOnline ? 0.0000001 : 1.0; // AI声音从VRM出
+                }
+                
+                // 发送指令通知 VRM 更新状态（UI显示、表情等）
+                if (!isVrmSilent && vrmIndex >= 0) {
+                    this.sendTTSStatusToVRM('startSpeaking', {
+                        chunkIndex: vrmIndex,
+                        totalChunks: lastMessage.ttsChunks.length - offset,
+                        text: audioChunk.text,
+                        expressions: audioChunk.expressions,
+                        voice: actualVoice
+                    });
+                }
+                
+                // 等待当前这段音频播完（无论是有声还是静音）
+                await new Promise((r) => {
+                    this.currentAudio.onended = r;
+                    this.currentAudio.onerror = r; // 报错也要释放
+                    this.currentAudio.play().catch(e => {
+                        console.error("播放失败", e);
+                        r(); // 拦截也要释放
+                    });
+                    setTimeout(r, 20000); // 20秒强制跳过单个块，防止卡死
+                });
+                
+            } catch (error) {
+                console.error(`Playback error: ${error}`);
+            } finally {
+                lastMessage.currentChunk++;
+                lastMessage.isPlaying = false;
+                // 只有当前音频（弹幕）彻底 onended 之后，才会递归触发下一条（AI回复）
+                setTimeout(() => this.checkAudioPlayback(message, resolve), 0);
+            }
+        }
     },
     pollVRMStatus() {
       this.vrmPollTimer = setInterval(async () => {
@@ -9182,75 +9199,71 @@ handleCreateSlackSeparator(val) {
     this.isProcessingDanmu = false;
   },
 
-  // 处理弹幕队列
+// 1. 拷贝 URL 方法
+  copyDanmakuOverlayEndpoint() {
+    const url = this.partyURL + '/danmaku_overlay';
+    navigator.clipboard.writeText(url).then(() => {
+      if(typeof showNotification === 'function') showNotification(this.t('copySuccess') || 'Copied!', 'success');
+    }).catch(() => {
+      if(typeof showNotification === 'function') showNotification('Copy failed', 'error');
+    });
+  },
+
+copySubtitleOverlayEndpoint(){
+  const url =  this.partyURL + '/subtitle_overlay';
+  navigator.clipboard.writeText(url).then(() => {
+    if(typeof showNotification === 'function') showNotification(this.t('copySuccess') || 'Copied!', 'success');
+  }).catch(() => {
+    if(typeof showNotification === 'function') showNotification('Copy failed', 'error');
+  });
+},
+
+// 处理弹幕队列 - 新版
   async processDanmuQueue() {
     try {
-      // --- TTS 播放状态检查 ---
-      if(this.TTSrunning && this.ttsSettings.enabled){
-        const lastMessage = this.messages[this.messages.length - 1];
-        if ((!lastMessage || (lastMessage?.currentChunk ?? 0) >= (lastMessage?.ttsChunks?.length ?? 0)) && !this.isTyping) {
-          console.log('All audio chunks played');
-          lastMessage.currentChunk = 0;
-          this.TTSrunning = false;
-          this.cur_audioDatas = [];
-          this.sendTTSStatusToVRM('allChunksCompleted', {});
-        }
-        else{
-          // 还在播放中，直接返回
-          return;
-        }
-      }
-
-      // --- 基础状态检查 ---
-      if (!this.isLiveRunning || 
-          this.danmu.length === 0 || 
-          this.isTyping || 
-          (this.TTSrunning && this.ttsSettings.enabled) || 
-          this.isProcessingDanmu) {
+      // 基础检查 (保持不变)
+      if (!this.isLiveRunning || this.danmu.length === 0 || this.isTyping || 
+          (this.TTSrunning && this.ttsSettings.enabled) || this.isProcessingDanmu) {
         return;
       }
 
-      console.log('弹幕队列处理中...');
       this.isProcessingDanmu = true;
-      
-      // 获取最老的弹幕（队列末尾，因为是 unshift 进来的）
       const oldestDanmu = this.danmu[this.danmu.length - 1];
       
       if (oldestDanmu && oldestDanmu.content) {
-        
-        // --- 【去重逻辑 3】: 连续处理防重 (防止 AI 连续回复同一句话) ---
         if (this.lastProcessedContent === oldestDanmu.content) {
-            console.log('检测到与上一条已处理弹幕内容完全相同，跳过:', oldestDanmu.content);
-            this.danmu.pop(); // 直接移除该重复项
-            this.isProcessingDanmu = false; // 释放锁
-            return; // 结束本次循环
+            this.danmu.pop();
+            this.isProcessingDanmu = false;
+            return;
         }
-        // --------------------------------------------------------------
 
         console.log('开始处理弹幕:', oldestDanmu.content);
-        
-        // 更新最后处理的内容
         this.lastProcessedContent = oldestDanmu.content;
+        
+        // 【关键修复点 1】：将弹幕存入临时变量，准备注入 TTS 队列
+        this.pendingDanmakuToRead = oldestDanmu.content;
 
-        // 赋值给用户输入
+        // 设置 LLM 的输入
         this.userInput = oldestDanmu.content;
         
-        // 发送消息给 AI
+        // 触发 OBS 弹窗显示 (调用后端 API)
+        try {
+            fetch('/api/overlay/danmaku', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(oldestDanmu)
+            }).catch(()=>{});
+        } catch(e) {}
+
+        // 发送消息，启动 AI 生成流程
         await this.sendMessage();
         
-        // 处理成功后，从队列移除
         this.danmu.pop(); 
-        
-        console.log('弹幕处理完成，剩余:', this.danmu.length);
       }
-      
     } catch (error) {
-      console.error('处理弹幕时出错:', error);
-      // 出错时通常也要移除这一条，防止死循环卡住队列
-      // 视具体需求而定，这里选择移除
+      console.error('处理弹幕出错:', error);
       this.danmu.pop(); 
     } finally {
-      // 无论成功与否，最后都要释放锁
       this.isProcessingDanmu = false;
     }
   },

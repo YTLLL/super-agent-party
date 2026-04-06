@@ -788,33 +788,80 @@ async def list_files_tool(path: str = ".", show_all: bool = True) -> str:
     except Exception as e: return str(e)
 
 async def read_file_tool(path: str) -> str:
-    """[Docker] 读取文件：增加大小限制和结构化提示"""
+    """[Docker] 读取文件：增加大小限制、行宽截断及结构化提示"""
     try:
         real_cwd = await _get_current_cwd()
-        # 使用 shell 脚本限制读取前 2000 行，并返回总行数提示
+        
+        MAX_LINES = 1000      # 最多读取行数
+        MAX_LINE_WIDTH = 1000 # 单行最大字符数
+        
+        # 优化后的 Shell 脚本：
+        # 1. 检查是否为二进制文件
+        # 2. 获取总行数
+        # 3. 使用 awk 处理每一行：编号、截断长行、限制总行数
         script = f"""
-        if [ ! -f "{path}" ]; then echo "[Error] File not found: {path}"; exit 0; fi
-        total=$(wc -l < "{path}" 2>/dev/null || echo 0)
-        head -n 2000 "{path}" | cat -n
-        if [ "$total" -gt 2000 ]; then
+        FILE="{path}"
+        if [ ! -f "$FILE" ]; then echo "[Error] File not found: $FILE"; exit 0; fi
+        
+        # 检查是否为二进制 (grep -I 返回非0表示二进制)
+        if ! grep -qI . "$FILE"; then
+            echo "[Error] Cannot read binary file: $FILE"
+            exit 0
+        fi
+
+        total=$(wc -l < "$FILE" 2>/dev/null || echo 0)
+        
+        # 使用 awk 进行高效处理
+        awk -v max_w={MAX_LINE_WIDTH} -v max_l={MAX_LINES} '
+        NR <= max_l {{
+            line = $0;
+            if (length(line) > max_w) {{
+                line = substr(line, 1, max_w) " ... [Line Truncated]";
+            }}
+            printf "%6d | %s\\n", NR, line;
+        }}
+        NR > max_l {{ exit }}
+        ' "$FILE"
+
+        if [ "$total" -gt {MAX_LINES} ]; then
             echo ""
-            echo "... [Warning] File truncated (Too large). Showing 1 to 2000 of $total lines."
-            echo "💡 [Next Step Hint] Use 'read_file_range' to read specific lines (e.g. start: 2001, end: 2500) or 'tail_file' to read the end of the log."
+            echo "... [Warning] File truncated. Showing 1 to {MAX_LINES} of $total lines."
+            echo "💡 [Next Step Hint] The file is large. Use 'read_file_range' to read specific lines (e.g., 1001-2000) or 'tail_file' for the end."
         fi
         """
         return await _exec_docker_cmd_simple(real_cwd, ["sh", "-c", script])
-    except Exception as e: return str(e)
+    except Exception as e: 
+        return f"[Error] Read failed: {str(e)}"
 
 async def read_file_range_tool(path: str, start_line: int, end_line: int) -> str:
-    """[Docker] 精准读取文件指定行范围"""
+    """[Docker] 精准读取文件指定行范围，利用 awk 进行服务端截断"""
     try:
         if start_line < 1 or end_line < start_line:
             return "[Error] Invalid line range."
+        
         real_cwd = await _get_current_cwd()
-        # 使用 awk 高效读取指定行，并带上行号
-        script = f"""awk 'NR>={start_line} && NR<={end_line} {{printf "%5d | %s\\n", NR, $0}}' "{path}" """
-        return await _exec_docker_cmd_simple(real_cwd, ["sh", "-c", script])
-    except Exception as e: return str(e)
+        # awk 逻辑说明：
+        # 1. 指定行范围 NR>=start && NR<=end
+        # 2. 如果行长度 > 1000，使用 substr 截断
+        # 3. 格式化输出 行号 | 内容
+        max_line_len = 1000
+        script = (
+            f"awk 'NR>={start_line} && NR<={end_line} {{"
+            f"  line=$0; "
+            f"  if (length(line) > {max_line_len}) "
+            f"    line = substr(line, 1, {max_line_len}) \"... [Truncated]\"; "
+            f"  printf \"%5d | %s\\n\", NR, line"
+            f"}}' \"{path}\""
+        )
+        
+        result = await _exec_docker_cmd_simple(real_cwd, ["sh", "-c", script])
+        
+        # 兜底：防止 Docker 返回的结果依然由于行数过多导致爆炸
+        if len(result) > 50000:
+            return result[:50000] + "\n... [Warning] Output truncated by tool safety limit."
+        return result
+    except Exception as e: 
+        return str(e)
 
 async def tail_file_tool(path: str, lines: int = 100) -> str:
     """[Docker] 读取文件末尾（常用于日志）"""
@@ -1137,72 +1184,96 @@ async def list_files_tool_local(path: str = ".", show_all: bool = True) -> str:
     except Exception as e:
         return f"[Error] List failed: {str(e)}"
 
+def _format_line(line_number: int, content: str, max_line_chars: int = 1000) -> str:
+    """格式化单行，如果太长则截断"""
+    content = content.rstrip('\r\n')
+    if len(content) > max_line_chars:
+        # 截断并保留前后部分，中间提示
+        half = max_line_chars // 2
+        content = f"{content[:half]} ... [Truncated {len(content)-max_line_chars} chars] ... {content[-50:]}"
+    return f"{line_number:5} | {content}"
+
 async def read_file_tool_local(path: str) -> str:
-    """[Local] 读取文件：支持大文件截断读取，并返回结构化下一步建议"""
+    """[Local] 读取文件：支持大文件截断及长行截断"""
     try:
+        MAX_LINES = 1000
+        MAX_LINE_CHARS = 1000
+        MAX_TOTAL_CHARS = 50000
+        
         cwd = await _get_current_cwd()
         target = resolve_strict_path(cwd, path, check_symlink=True)
-
         if not target.exists() or not target.is_file():
-            return f"[Error] File not found or not a file: {path}"
+            return f"[Error] File not found: {path}"
 
-        # 修复 Bug：移除 rb 模式下的 encoding 参数
-        try:
-            with open(target, 'rb') as f_bin:
-                if b'\0' in f_bin.read(1024):
-                    return f"[Error] Cannot read binary file: {path}"
-        except Exception as e:
-            return f"[Error] Failed to check file type: {str(e)}"
+        # 二进制检查保持不变...
+        with open(target, 'rb') as f_bin:
+            if b'\0' in f_bin.read(1024):
+                return f"[Error] Cannot read binary file: {path}"
 
-        MAX_LINES = 2000
-        MAX_BYTES = 500 * 1024  
-        file_size = target.stat().st_size
+        output = []
+        current_total_len = 0
         truncated = False
         
         async with aiofiles.open(target, 'r', encoding='utf-8', errors='replace') as f:
-            if file_size > MAX_BYTES:
-                content = await f.read(MAX_BYTES)
-                truncated = True
-                lines = content.splitlines()
-                if lines: lines.pop()
-            else:
-                lines = await f.readlines()
-                lines = [l.rstrip('\n') for l in lines]
+            line_idx = 1
+            async for line in f:
+                formatted = _format_line(line_idx, line, MAX_LINE_CHARS)
+                output.append(formatted)
+                current_total_len += len(formatted)
+                
+                if line_idx >= MAX_LINES or current_total_len > MAX_TOTAL_CHARS:
+                    truncated = True
+                    break
+                line_idx += 1
 
-        if len(lines) > MAX_LINES:
-            lines = lines[:MAX_LINES]
-            truncated = True
-
-        output = [f"{i+1:4} | {line}" for i, line in enumerate(lines)]
-        
+        res = "\n".join(output)
         if truncated:
-            output.append(f"\n... [Warning] File content truncated (Too large). Showing first {len(lines)} lines.")
-            output.append(f"💡 [Next Step Hint] The file is large. Use 'read_file_range_local' to read lines {len(lines)+1} to {len(lines)+500}, or 'tail_file_local' to view the end.")
+            res += f"\n\n... [Warning] Content truncated (Safety Limit). Last line read: {line_idx}."
+            res += f"\n💡 [Hint] The file is large or has very long lines. Use 'read_file_range_local' to explore specific sections."
             
-        return "\n".join(output)
+        return res
     except Exception as e: 
-        return f"[Error] Read failed: {str(e)}"
-    
+        return f"[Error] Read failed: {str(e)}"  
+
 async def read_file_range_tool_local(path: str, start_line: int, end_line: int) -> str:
-    """[Local] 精准读取文件指定行范围"""
+    """[Local] 精准读取文件指定行范围，增加溢出保护"""
     try:
+        MAX_TOTAL_CHARS = 30000  # 单次返回最大字符数，防止上下文爆炸
+        MAX_LINE_CHARS = 1000    # 单行最大显示长度
+        
         if start_line < 1 or end_line < start_line:
-            return "[Error] Invalid line range. start_line must be >= 1 and end_line >= start_line."
+            return "[Error] Invalid line range."
             
         cwd = await _get_current_cwd()
         target = resolve_strict_path(cwd, path, check_symlink=True)
-        
-        if not target.exists() or not target.is_file(): return f"[Error] File not found: {path}"
+        if not target.exists() or not target.is_file(): 
+            return f"[Error] File not found: {path}"
 
+        output = []
+        current_total_len = 0
+        
         async with aiofiles.open(target, 'r', encoding='utf-8', errors='replace') as f:
-            lines = await f.readlines()
+            line_idx = 1
+            async for line in f:
+                if line_idx >= start_line:
+                    formatted = _format_line(line_idx, line, MAX_LINE_CHARS)
+                    output.append(formatted)
+                    current_total_len += len(formatted)
+                    
+                    if current_total_len > MAX_TOTAL_CHARS:
+                        output.append(f"--- [Warning] Output stopped: Reached limit of {MAX_TOTAL_CHARS} chars ---")
+                        break
+                
+                if line_idx >= end_line:
+                    break
+                line_idx += 1
             
-        if start_line > len(lines):
-            return f"[Error] start_line ({start_line}) is beyond file length ({len(lines)})."
+        if not output and line_idx < start_line:
+            return f"[Error] start_line ({start_line}) is beyond file length ({line_idx})."
             
-        subset = lines[start_line - 1 : end_line]
-        return "\n".join(f"{i + start_line:4} | {line.rstrip('\n')}" for i, line in enumerate(subset))
-    except Exception as e: return f"[Error] Range read failed: {str(e)}"
+        return "\n".join(output)
+    except Exception as e: 
+        return f"[Error] Range read failed: {str(e)}"
 
 async def tail_file_tool_local(path: str, lines: int = 100) -> str:
     """[Local] 读取文件末尾（常用于日志）"""

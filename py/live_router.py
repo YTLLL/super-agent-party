@@ -139,7 +139,7 @@ async def start_live(request: LiveConfigRequest):
                 await manager.broadcast({
                     'id': str(uuid.uuid4()),
                     "type": "message",
-                    "content": f"{user} send: {msg}",
+                    "content": f"{user} said: {msg}",
                     "danmu_type": "danmaku",
                     "platform": "twitch"
                 })
@@ -403,7 +403,7 @@ class WebSocketHandler(blivedm.BaseHandler):
         print(f'[{client.room_id}] 心跳')
 
     def _on_danmaku(self, client: blivedm.BLiveClient, message: web_models.DanmakuMessage):
-        msg_text = f'{message.uname}发送弹幕：{message.msg}'
+        msg_text = f'{message.uname}说：{message.msg}'
         data = {
             'id': str(uuid.uuid4()),
             'type': 'message',
@@ -476,7 +476,7 @@ class OpenLiveWebSocketHandler(blivedm.BaseHandler):
         print(f'[开放平台] 心跳')
 
     def _on_open_live_danmaku(self, client: blivedm.OpenLiveClient, message: open_models.DanmakuMessage):
-        msg_text = f'{message.uname}发送弹幕：{message.msg}'
+        msg_text = f'{message.uname}说：{message.msg}'
         data = {
             'id': str(uuid.uuid4()),
             'type': 'message',

@@ -337,7 +337,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 from fastapi import status
-from fastapi.responses import JSONResponse, StreamingResponse,Response
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse,Response
 import uuid
 import time
 from typing import Any, AsyncIterator, List, Dict,Optional, Tuple, Union
@@ -445,6 +445,74 @@ def draw_grid_on_image(image: Image.Image, grid_spacing: int = 10) -> Image.Imag
         draw.text((5, y + 2), f"{y_permille}%", fill=text_color)
         
     return image
+
+def draw_action_feedback(image: Image.Image, action_str: str) -> Image.Image:
+    """
+    解析返回结果字符串，并在图像上绘制动作反馈轨迹。
+    （已针对红色网格优化，全面移除红色，使用高对比度的青/蓝/绿/黄色）
+    """
+    # 强制将原始图像转换为 RGBA，以便使用半透明色彩
+    image = image.convert("RGBA")
+    
+    # 创建一个与原图同尺寸的透明涂层
+    overlay = Image.new("RGBA", image.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(overlay)
+    w, h = image.size
+    
+    def to_px(tx, ty):
+        return int(float(tx) * w / 1000), int(float(ty) * h / 1000)
+
+    # 1. 匹配 MOVE(x,y) -> 画个白色小圆点带黑边
+    move_match = re.search(r"\[LAST_ACTION: MOVE\((\d+\.?\d*),(\d+\.?\d*)\)\]", action_str)
+    if move_match:
+        x, y = move_match.groups()
+        px, py = to_px(x, y)
+        r = 6
+        draw.ellipse([px-r, py-r, px+r, py+r], fill=(255, 255, 255, 200), outline=(0, 0, 0, 255), width=1)
+
+    # 2. 匹配 CLICK(x,y) -> 画个青色(Cyan)半透明十字靶心 (对比红色网格极佳)
+    click_match = re.search(r"\[LAST_ACTION: CLICK\((\d+\.?\d*),(\d+\.?\d*)\)\]", action_str)
+    if click_match:
+        x, y = click_match.groups()
+        px, py = to_px(x, y)
+        r = 12
+        # 青色底圈
+        draw.ellipse([px-r, py-r, px+r, py+r], fill=(0, 255, 255, 150), outline=(255, 255, 255, 255), width=2)
+        # 白色十字
+        draw.line([px-r-5, py, px+r+5, py], fill=(255, 255, 255, 255), width=2)
+        draw.line([px, py-r-5, px, py+r+5], fill=(255, 255, 255, 255), width=2)
+
+    # 3. 匹配 DOUBLE_CLICK(x,y) -> 画个蓝色(Blue)双圈靶心
+    dclick_match = re.search(r"\[LAST_ACTION: DOUBLE_CLICK\((\d+\.?\d*),(\d+\.?\d*)\)\]", action_str)
+    if dclick_match:
+        x, y = dclick_match.groups()
+        px, py = to_px(x, y)
+        r = 14
+        # 蓝色底圈
+        draw.ellipse([px-r, py-r, px+r, py+r], fill=(0, 100, 255, 150), outline=(255, 255, 255, 255), width=2)
+        # 内层白圈
+        draw.ellipse([px-(r-4), py-(r-4), px+(r-4), py+(r-4)], outline=(255, 255, 255, 255), width=1)
+
+    # 4. 匹配 DRAG(x1,y1,x2,y2) -> 绿色轨迹线，绿色起点，黄色终点
+    drag_match = re.search(r"\[LAST_ACTION: DRAG\((\d+\.?\d*),(\d+\.?\d*),(\d+\.?\d*),(\d+\.?\d*)\)\]", action_str)
+    if drag_match:
+        x1, y1, x2, y2 = drag_match.groups()
+        p1 = to_px(x1, y1)
+        p2 = to_px(x2, y2)
+        
+        # 绿色带透明度的连接线
+        draw.line([p1, p2], fill=(0, 255, 0, 200), width=4)
+        
+        # 绿色起点圆
+        draw.ellipse([p1[0]-6, p1[1]-6, p1[0]+6, p1[1]+6], fill=(0, 255, 0, 255), outline=(255,255,255,255), width=1)
+        
+        # 黄色终点靶心 (黄色在网格上也很显眼)
+        r_end = 8
+        draw.ellipse([p2[0]-r_end, p2[1]-r_end, p2[0]+r_end, p2[1]+r_end], fill=(255, 215, 0, 180), outline=(255,255,255,255), width=2)
+
+    # 合并图层，转回 RGB (防 JPG 格式不支持 Alpha 通道)
+    combined = Image.alpha_composite(image, overlay)
+    return combined.convert("RGB")
 
 def scale_to_fit(width: int, height: int, max_w: int = 1920, max_h: int = 1080) -> tuple[int, int]:
     """计算等比例缩放后的尺寸"""
@@ -4227,7 +4295,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                     screenshot.resize, (logical_width, logical_height), Image.Resampling.LANCZOS
                                 )
                             
-                            target_w, target_h = scale_to_fit(logical_width, logical_height, 1920, 1080)
+                            target_w, target_h = scale_to_fit(logical_width, logical_height, 1280, 720)
                             
                             if screenshot.width > target_w or screenshot.height > target_h:
                                 print(f"检测到高分辨率屏幕，正在从 {screenshot.size} 缩放到 {(target_w, target_h)}")
@@ -4235,14 +4303,26 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                     screenshot.resize, (target_w, target_h), Image.Resampling.LANCZOS
                                 )
 
+                            action_feedback_hint = ""
+                            if results and "[LAST_ACTION:" in str(results):
+                                print(f"检测到上一次动作结果，正在绘制视觉反馈...")
+                                # 在截图上绘制上一步的红点/线
+                                screenshot = await asyncio.to_thread(draw_action_feedback, screenshot, str(results))
+
+                                action_feedback_hint = (
+                                    " Notice: The colored markers show your PREVIOUS actions. "
+                                    "Cyan crosshair = Click. Blue double-circle = Double Click. "
+                                    "Green line to Yellow dot = Drag."
+                                )
+
                             # 4. 根据设置决定是否绘制网格
                             if is_grid_enabled:
                                 # 在副本上绘制网格
                                 display_image = await asyncio.to_thread(draw_grid_on_image, screenshot.copy(), grid_spacing=10)
-                                grid_hint = "\n\n【system info】Current desktop screenshot with coordinate grid (0-1000) is injected. Use coordinates for precise clicking."
+                                grid_hint = f"\n\n【system info】Screenshot with red coordinate grid (0-1000) injected.\n{action_feedback_hint}"
                             else:
                                 display_image = screenshot
-                                grid_hint = "\n\n【system info】Current desktop screenshot is injected."
+                                grid_hint = f"\n\n【system info】Current desktop screenshot is injected.\n{action_feedback_hint}"
                             
                             # 5. 保存并注入
                             desktop_img_name = f"desktop_grid_{uuid.uuid4().hex}.png"
@@ -4252,9 +4332,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             await asyncio.to_thread(display_image.save, desktop_img_path, optimize=True)
                             
                             desktop_url = f"{fastapi_base_url}uploaded_files/{desktop_img_name}"
-                            
-                            # 6. 修改 Prompt，引导 AI 使用网格
-                            grid_hint = "【system info】The latest desktop screenshot has been injected."
                             
                             current_user_msg = {
                                 "role": "user",
@@ -7197,6 +7274,7 @@ class TTSConnectionManager:
     def __init__(self):
         self.main_connections: List[WebSocket] = []
         self.vrm_connections: List[WebSocket] = []
+        self.overlay_connections: list[WebSocket] = []
 
     async def connect_main(self, websocket: WebSocket):
         await websocket.accept()
@@ -7243,6 +7321,36 @@ class TTSConnectionManager:
                 disconnected.append(connection)
         for conn in disconnected:
             self.disconnect_main(conn)
+
+    async def connect_overlay(self, websocket: WebSocket):
+        """字幕页专用连接"""
+        await websocket.accept()
+        self.overlay_connections.append(websocket)
+
+    def disconnect_overlay(self, websocket: WebSocket):
+        if websocket in self.overlay_connections:
+            self.overlay_connections.remove(websocket)
+
+    async def broadcast_to_vrm(self, message: Union[str, bytes]):
+        """核心广播逻辑：区分发送内容"""
+        # 1. 如果是二进制（音频流），只发给真正的 VRM 页面
+        if isinstance(message, bytes):
+            for conn in list(self.vrm_connections):
+                try: await conn.send_bytes(message)
+                except: self.disconnect_vrm(conn)
+        
+        # 2. 如果是字符串（指令/文字），发给 VRM 页面 和 字幕页面
+        else:
+            # 发给 VRM 窗口（同步表情、UI等）
+            for conn in list(self.vrm_connections):
+                try: await conn.send_text(message)
+                except: self.disconnect_vrm(conn)
+            
+            # 发给字幕窗口（显示文字）
+            for conn in list(self.overlay_connections):
+                try: await conn.send_text(message)
+                except: self.disconnect_overlay(conn)
+
 
 tts_manager = TTSConnectionManager()
 
@@ -7294,15 +7402,25 @@ async def vrm_websocket_endpoint(websocket: WebSocket):
         logging.error(f"WS error in VRM: {e}")
         tts_manager.disconnect_vrm(websocket)
 
+@app.websocket("/ws/subtitles")
+async def subtitles_websocket_endpoint(websocket: WebSocket):
+    """字幕叠加层专用端点：不参与音频播放判断"""
+    await tts_manager.connect_overlay(websocket)
+    try:
+        while True:
+            await websocket.receive_text() # 保持心跳
+    except WebSocketDisconnect:
+        tts_manager.disconnect_overlay(websocket)
+
 @app.get("/tts/status")
 async def get_tts_status():
-    """获取当前TTS连接状态"""
+    """获取连接状态：Vue 前端会调用这个来决定是否静音"""
     return {
-        "main_connections": len(tts_manager.main_connections),
+        # 重要：Vue 只根据 vrm_connections 的数量来判断是否静音浏览器
         "vrm_connections": len(tts_manager.vrm_connections),
-        "total_connections": len(tts_manager.main_connections) + len(tts_manager.vrm_connections)
+        "overlay_connections": len(tts_manager.overlay_connections),
+        "main_connections": len(tts_manager.main_connections)
     }
-
 
 @app.post("/tts")
 async def text_to_speech(request: Request):
@@ -7762,6 +7880,7 @@ async def text_to_speech(request: Request):
                         "X-Audio-Format": "mp3"
                     }
                 )
+            
         raise HTTPException(status_code=400, detail="不支持的TTS引擎")
     
     except Exception as e:
@@ -9668,6 +9787,9 @@ from py.live_router import router as live_router, ws_router as live_ws_router
 app.include_router(live_router)     # /api/live/*
 app.include_router(live_ws_router)  # /ws/live/*
 
+
+from py.overlay_router import router as overlay_router
+app.include_router(overlay_router)
 
 # ---------- 工具 ----------
 def get_dir(mid: str) -> str:
