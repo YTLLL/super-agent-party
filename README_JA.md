@@ -37,7 +37,7 @@
 #### マルチロールグループチャット：タバーンキャラクターカードと長期記憶に対応し、複数のキャラクターと同時にチャットできます！
 ![image](doc/image/img-2/group.jpeg)
 
-#### インスタントメッセージングBot：QQ、Feishu、DingTalk、Telegram、Discord、Slackへのワンクリックデプロイに対応
+#### インスタントメッセージングBot：QQ、WeChat、Feishu、DingTalk、Telegram、Discord、Slackへのワンクリックデプロイに対応
 ![image](doc/image/img-2/im.jpeg)
 
 #### ライブ配信Bot：Bilibili、YouTube、Twitchへのワンクリックデプロイに対応し、360度パノラマライブ配信も可能。
@@ -56,21 +56,21 @@
 
 ### Windowsポータブルパッケージ（推奨！インストール不要のソースバージョン、最新リポジトリへのワンクリック同期対応、デスクトップ版のパッケージングを待つ必要なし）
 
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/super-agent-party-win-v0.3.9.7z)
+  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-win-v0.4.0.7z)
 
 ⭐ 注意！ `一键更新(update).bat` をダブルクリックしてソフトウェアを更新するか、`一键启动(start).bat` をダブルクリックしてソフトウェアを起動できます。OSは **Windows 10/11、Windows Server 2025** 以降が必要です！
 
 ### Windowsデスクトップインストール
 
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-Setup-0.3.9.exe)
+  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-Setup-0.4.0.exe)
 
 ⭐ 注意！ インストール時に「現在のユーザーのみにインストール」を選択してください。そうしないと、起動時に管理者権限が必要になります。OSは **Windows 10/11、Windows Server 2025** 以降が必要です！
 
 ### MacOS 統合パッケージ（現在はMチップのみ対応、インストール不要のソースコード版、ワンクリックでリポジトリ最新版に同期可能、デスクトップ版のパッケージ化待ち不要）
 > **開発者/上級ユーザー向け**：インストール不要のソースコード版、ワンクリックでリポジトリ最新版に同期可能、デスクトップ版のパッケージ化待ち不要。
 
-👉 [国際ユーザーはこちらをクリックしてダウンロード](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/super-agent-party-mac-v0.3.9.7z)  
-👉 [中国ユーザーはこちらをクリックしてダウンロード](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.3.9/super-agent-party-mac-v0.3.9.7z)
+👉 [国際ユーザーはこちらをクリックしてダウンロード](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-mac-v0.4.0.7z)  
+👉 [中国ユーザーはこちらをクリックしてダウンロード](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/super-agent-party-mac-v0.4.0.7z)
 
 #### 🚀 使用方法
 
@@ -93,7 +93,7 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 
 ### macOSデスクトップインストール（現在Mチップのみ対応）
 
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-0.3.9-Mac.dmg)
+  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
 
 ⭐ 注意！ ダウンロード後、dmgファイルのアプリを `/Applications` ディレクトリにドラッグしてください。その後、ターミナルを開き、以下のコマンドを実行してルートパスワードを入力し、ネットワークダウンロードに付与されたQuarantine属性を削除してください：
 
@@ -109,11 +109,11 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 
 `.AppImage` はインストール不要で即座に使用できるLinuxアプリケーション形式です。ほとんどのLinuxディストリビューションに対応しています。
 
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-0.3.9-Linux.AppImage)
+  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Linux.AppImage)
 
 #### 2. `.deb` パッケージを使用してインストール（Ubuntu/Debianシステム向け）
 
-  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.3.9/Super-Agent-Party-0.3.9-Linux.deb)
+  👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Linux.deb)
 
 ### Dockerデプロイ（このバージョンのデスクトップペットはブラウザからのみ閲覧できます。）
 
@@ -236,7 +236,7 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 | 対応モデルサービスプロバイダー | openai/ollama/difyなど、一般的なローカルデプロイメントエンジンインターフェースとクラウドサービスプロバイダーインターフェースに対応。 |
 | マルチモーダルモデル統合 | ロールプレイ、推論、画像認識、画像生成、音声認識、音声合成など、さまざまなタイプのモデルを統合して組み合わせて使用。 |
 | VRMデスクトップペットロボット | カスタムアバター、カスタムアニメーション、音声インタラクション、対話中断に対応する高度にカスタマイズ可能なペット。OBSなどの画面録画ソフトウェアに透過的にストリーミング可能で、双方向VMCプロトコルに対応！ |
-| メッセージングプラットフォームBot | 現在QQ、Feishu、Telegram、Discord、Slackに対応。今後さらにプラットフォームを追加予定。 |
+| メッセージングプラットフォームBot | 現在QQ、WeChat、Feishu、Telegram、Discord、Slackに対応。今後さらにプラットフォームを追加予定。 |
 | ライブ配信Bot | 現在Bilibili、YouTube、Twitchに対応。今後さらにプラットフォームを追加予定。 |
 | アナウンサーBot | 長文ナレーション、マルチボイスナレーション、デジタルヒューマンビデオナレーション、超長文テキストの一括音声変換（ダウンロード機能付き）、EPUBなどの一般的な電子書籍フォーマットの解析に対応。チャプターベースの変換は今後開発予定。 |
 | チャットインターフェース | チャットインターフェースはA2UI、数式、Mermaidダイアグラム、HTMLコードグラフィックスなどのフロントエンドレンダリング機能に対応。画像のダウンロードとコピーが可能。カプセルモードとアシスタントモードに対応し、会話インターフェースの縮小とドッキングが簡単。デスクトップビジョンとスクリーンショットと組み合わせて、仕事とエンターテイメントにシームレスに統合。 |

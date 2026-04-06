@@ -9980,104 +9980,80 @@ code {
   margin-top: 16px;
 }
 
-/* =========================================
-   视频库布局优化
-   ========================================= */
-
-/* 1. 视频网格容器：自适应排列 */
-.video-list {
+.video-grid {
   display: grid;
-  /* 自动填充，每个视频最小 280px，最大占满一份 */
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 视频建议稍微宽一点 */
   gap: 20px;
-  padding: 10px 0;
+  padding-top: 15px;
 }
 
-/* 2. 视频项卡片 */
 .video-item {
-  background: var(--el-bg-color);
-  border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+  background: #fdfdfd;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--shadow-sm);
 }
 
-.video-item:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--el-color-primary-light-5);
-}
-
-/* 3. 视频包装盒：固定比例防止高度跳动 */
 .video-wrapper {
   position: relative;
-  width: 100%;
-  /* 采用 16:9 比例，也可以改为 auto */
-  aspect-ratio: 16 / 9; 
-  background-color: #000; /* 视频未加载时的背景色 */
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: #000;
+  aspect-ratio: 16 / 9;
 }
 
-/* 4. 核心：限制视频标签不超出 */
-.video-wrapper video {
+.video-player {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: contain; /* 保持原比例，不足处留黑 */
 }
 
-/* 5. 悬浮按钮定位优化 */
-.video-wrapper .delete-overlay-btn {
+/* 顶部操作遮罩 */
+.video-top-overlay {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
-  opacity: 0; /* 默认隐藏，悬停显示 */
-  transform: scale(0.8);
-  transition: all 0.2s ease;
-  /* 强制按钮样式 */
-  background-color: rgba(245, 108, 108, 0.9) !important;
-  border: none !important;
-  color: white !important;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px; /* 只占顶部一小部分 */
+  padding: 8px 10px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none; /* 重要：不干扰视频点击 */
 }
 
-.video-wrapper .checkbox-no-label {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  margin: 0;
-  padding: 4px;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 4px;
-  height: auto;
-  line-height: 1;
-}
-
-/* 悬停时显示删除按钮 */
-.video-item:hover .delete-overlay-btn {
+/* 鼠标悬浮在视频项时显示顶部按钮 */
+.video-item:hover .video-top-overlay {
   opacity: 1;
-  transform: scale(1);
+  pointer-events: auto; /* 悬浮时允许点击按钮 */
 }
 
-/* 6. 底部信息区 (可选，如果你想显示文件名) */
+.video-quick-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.video-mini-btn {
+  padding: 4px !important;
+  height: 28px !important;
+  width: 28px !important;
+  border: none !important;
+}
+
+.video-mini-btn:hover {
+  background: #fff !important;
+}
+
 .video-info-footer {
   padding: 8px 12px;
-  font-size: 12px;
-  color: var(--el-text-color-regular);
-  background: var(--el-bg-color);
-  border-top: 1px solid var(--el-border-color-lighter);
-  white-space: nowrap;
-  overflow: hidden;
+  font-size: 13px;
   text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-/* 移动端适配 */
-@media (max-width: 600px) {
-  .video-list {
-    grid-template-columns: 1fr; /* 手机上一行一个 */
-  }
+/* 隐藏 Checkbox 文字 */
+:deep(.checkbox-no-label .el-checkbox__label) {
+  display: none;
 }
