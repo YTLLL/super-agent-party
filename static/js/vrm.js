@@ -3119,6 +3119,27 @@ function addcontrolPanel() {
             hideTooltip();
         });
 
+        const subtitleButton = document.createElement('div');
+        subtitleButton.id = 'subtitle-handle';
+        subtitleButton.innerHTML = '<i class="fas fa-closed-captioning"></i>';
+        subtitleButton.style.cssText = `
+            width: ${btn_width}px; height: ${btn_height}px; background: rgba(255,255,255,0.95);
+            border: 2px solid rgba(0,0,0,0.1); border-radius: 50%; color: #333; cursor: pointer;
+            -webkit-app-region: no-drag; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform 0.2s;
+            user-select: none; pointer-events: auto; backdrop-filter: blur(10px);
+            color: ${isSubtitleEnabled ? '#28a745' : '#dc3545'};
+        `;
+        subtitleButton.addEventListener('mouseenter', () => { subtitleButton.style.background = 'rgba(255,255,255,1)'; subtitleButton.style.transform = 'scale(1.1)'; subtitleButton.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; });
+        subtitleButton.addEventListener('mouseleave', () => { subtitleButton.style.background = 'rgba(255,255,255,0.95)'; subtitleButton.style.transform = 'scale(1)'; subtitleButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; });
+        subtitleButton.addEventListener('click', async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            isSubtitleEnabled = !isSubtitleEnabled;
+            toggleSubtitle(isSubtitleEnabled);
+            subtitleButton.style.color = isSubtitleEnabled ? '#28a745' : '#dc3545';
+            subtitleButton.title = isSubtitleEnabled ? await t('SubtitleEnabled') : await t('SubtitleDisabled');
+        });
+
         // 6. 刷新与关闭按钮
         const refreshButton = document.createElement('div');
         refreshButton.id = 'refresh-handle';
@@ -3218,28 +3239,6 @@ function addcontrolPanel() {
         wsStatusButton.addEventListener('mouseleave', () => { wsStatusButton.style.background = 'rgba(255,255,255,0.95)'; wsStatusButton.style.transform = 'scale(1)'; wsStatusButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; });
         async function updateWSStatus() { wsStatusButton.style.color = wsConnected ? '#28a745' : '#dc3545'; wsStatusButton.title = wsConnected ? await t('WebSocketConnected') : await t('WebSocketDisconnected'); }
         setInterval(updateWSStatus, 1000);
-
-        // 子 3. 字幕按钮
-        const subtitleButton = document.createElement('div');
-        subtitleButton.id = 'subtitle-handle';
-        subtitleButton.innerHTML = '<i class="fas fa-closed-captioning"></i>';
-        subtitleButton.style.cssText = `
-            width: ${btn_width}px; height: ${btn_height}px; background: rgba(255,255,255,0.95);
-            border: 2px solid rgba(0,0,0,0.1); border-radius: 50%; color: #333; cursor: pointer;
-            -webkit-app-region: no-drag; display: flex; align-items: center; justify-content: center;
-            font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform 0.2s;
-            user-select: none; pointer-events: auto; backdrop-filter: blur(10px);
-            color: ${isSubtitleEnabled ? '#28a745' : '#dc3545'};
-        `;
-        subtitleButton.addEventListener('mouseenter', () => { subtitleButton.style.background = 'rgba(255,255,255,1)'; subtitleButton.style.transform = 'scale(1.1)'; subtitleButton.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; });
-        subtitleButton.addEventListener('mouseleave', () => { subtitleButton.style.background = 'rgba(255,255,255,0.95)'; subtitleButton.style.transform = 'scale(1)'; subtitleButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; });
-        subtitleButton.addEventListener('click', async (e) => {
-            e.preventDefault(); e.stopPropagation();
-            isSubtitleEnabled = !isSubtitleEnabled;
-            toggleSubtitle(isSubtitleEnabled);
-            subtitleButton.style.color = isSubtitleEnabled ? '#28a745' : '#dc3545';
-            subtitleButton.title = isSubtitleEnabled ? await t('SubtitleEnabled') : await t('SubtitleDisabled');
-        });
 
         // 子 4. 闲置动画按钮
         const idleAnimationButton = document.createElement('div');
@@ -3495,7 +3494,7 @@ function addcontrolPanel() {
         controlPanel.appendChild(hideButton);          // 模型不遮挡
         controlPanel.appendChild(prevModelButton);     // 上一个模型
         controlPanel.appendChild(nextModelButton);     // 下一个模型
-
+        controlPanel.appendChild(subtitleButton);          // 字幕开关
         if (!isElectron) {
             controlPanel.appendChild(voiceControlBtn);            // 语音控制
         }
@@ -3505,7 +3504,6 @@ function addcontrolPanel() {
         controlPanel.appendChild(closeButton);         // 关闭
 
         // 2. 组装子面板（收纳次要按钮）
-        subPanel.appendChild(subtitleButton);          // 字幕开关
         subPanel.appendChild(idleAnimationButton);     // 闲置动画
         subPanel.appendChild(switchCtrlBtn);           // 第一人称
         subPanel.appendChild(moveModeBtn);             // 物体平移缩放
