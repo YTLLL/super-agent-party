@@ -60,6 +60,7 @@
 ### Windows portable package (Recommended! Installation-free source version, support one-click synchronization to the latest version of the warehouse, no need to wait for the desktop version to be packaged)
 
   👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-win-v0.4.0.7z)
+
   👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/super-agent-party-win-v0.4.0.7z)
 
 ⭐ Note!  You can double-click `一键更新(update).bat` to update the software, or you can double-click `一键启动(start).bat` to start the software.The operating system must be **Windows 10/11, Windows Server 2025**, or a later version!
@@ -67,6 +68,7 @@
 ### Windows Desktop Installation
 
   👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-Setup-0.4.0.exe)
+
   👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/Super-Agent-Party-Setup-0.4.0.exe)
 
 ⭐ Note! Choose to install only for the current user during installation, otherwise, administrator privileges will be required to start.The operating system must be **Windows 10/11, Windows Server 2025**, or a later version!
@@ -75,6 +77,7 @@
 > **Suitable for developers/advanced users**: No-install source code version, supports one-click sync to the latest repository version, no need to wait for desktop version packaging.
 
 👉 [International users click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-mac-v0.4.0.7z)  
+
 👉 [Chinese users click to download](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/super-agent-party-mac-v0.4.0.7z)
 
 #### 🚀 Usage Steps
@@ -99,6 +102,7 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 ### MacOS Desktop Installation (Currently only M chips are supported.)
 
   👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
+  
   👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
 
 ⭐Attention! After downloading, drag the app file of the dmg file into the `/Applications` directory, then open end point, execute the following command and enter the root password to remove the attached Quarantine attribute from the network download:
