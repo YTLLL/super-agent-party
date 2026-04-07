@@ -221,15 +221,34 @@ async def copy_to_input_box(text: str) -> str:
                     time.sleep(0.05)
 
     await asyncio.to_thread(_type_text)
-    return f"已成功通过键盘输入文本：'{text}'"
+    return f"已复制文本到输入框：'{text}'"
 
 
 @require_gui
 async def keyboard_press(key: str, presses: int = 1) -> str:
-    """按下单个按键"""
-    await asyncio.to_thread(pyautogui.press, key, presses=presses, interval=0.05)
+    """按下单个按键多次"""
+    def _press_logic():
+        pyautogui.press(key, presses=presses, interval=0.05)
+    
+    await asyncio.to_thread(_press_logic)
     return f"已按下键盘按键 '{key}' {presses} 次。"
 
+
+@require_gui
+async def keyboard_sequence(keys: List[str]) -> str:
+    """按顺序按下多个不同的按键，中间间隔 0.5 秒"""
+    if not keys:
+        return "错误：未提供按键列表。"
+
+    def _sequence_logic():
+        for i, key in enumerate(keys):
+            pyautogui.press(key)
+            # 如果不是最后一个按键，则等待 0.5 秒
+            if i < len(keys) - 1:
+                time.sleep(0.5)
+
+    await asyncio.to_thread(_sequence_logic)
+    return f"已按顺序执行按键序列：{', '.join(keys)}，按键间隔 0.5 秒。"
 
 @require_gui
 async def keyboard_hotkey(keys: List[str]) -> str:
@@ -426,14 +445,40 @@ keyboard_press_tool = {
     "type": "function",
     "function": {
         "name": "keyboard_press",
-        "description": "按下单个按键。常用于输入字母、数字、回车(enter)、退格(backspace)、转义(esc)、制表符(tab)、方向键等。",
+        "description": "按下单个按键。适用于需要连续按下同一个键的情况，例如删除多个字符或连续下移。",
         "parameters": {
             "type": "object",
             "properties": {
-                "key": {"type": "string", "description": "按键名称，有效值例如: a, 1, enter, space, esc, backspace, tab, up, down, left, right, delete, pagedown, pageup等。"},
-                "presses": {"type": "integer", "description": "按下次数，默认1次", "default": 1}
+                "key": {
+                    "type": "string", 
+                    "description": "按键名称，例如: 'enter', 'backspace', 'tab', 'down', 'esc'。"
+                },
+                "presses": {
+                    "type": "integer", 
+                    "description": "按下该按键的次数，默认为 1。", 
+                    "default": 1
+                }
             },
             "required": ["key"]
+        }
+    }
+}
+
+keyboard_sequence_tool = {
+    "type": "function",
+    "function": {
+        "name": "keyboard_sequence",
+        "description": "按顺序按下多个不同的按键。程序会在每个按键之间自动停顿 0.5 秒。适用于流程化的按键操作，例如 '先按 Tab 切换焦点，再按 Enter 确认'。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "按键名称的列表。例如 ['tab', 'enter'] 或 ['up', 'up', 'space']。"
+                }
+            },
+            "required": ["keys"]
         }
     }
 }
@@ -525,6 +570,7 @@ mouse_use_tools = [
 keyboard_use_tools = [
     keyboard_type_tool,
     keyboard_press_tool,
+    keyboard_sequence_tool,
     keyboard_hotkey_tool,
     keyboard_hold_tool,
 ]
