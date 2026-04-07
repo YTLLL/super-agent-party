@@ -34,6 +34,9 @@
 #### 任务中心：让你的AI智能体可以在后台执行任何高级任务，自动控制电脑帮你干活，支持 MCP 和 Agent Skills
 ![image](doc/image/img-1/task.jpeg)
 
+#### 电脑控制：通过桌面视觉加上对鼠标、键盘、终端三方面的控制工具链，让AI智能体可以在电脑上完成任何任务！下图为AI在玩Wordle
+![image](doc/image/img-1/vision.jpeg)
+
 #### 多角色群聊：支持酒馆角色卡，支持长期记忆，你可以同时和多个角色一起聊天！
 ![image](doc/image/img-1/group.jpeg)
 
@@ -103,7 +106,7 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 ### MacOS桌面版安装（目前只支持M芯片）
 
   👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
-  
+
   👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
 
 ⭐注意！下载后将dmg文件的app文件拖入`/Applications`目录下，然后打开终端，执行以下命令并输入root密码，从而移除从网络下载附加的Quarantine属性：

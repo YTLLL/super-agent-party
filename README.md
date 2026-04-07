@@ -35,6 +35,9 @@
 #### Task Center: Enable your AI agents to perform any advanced tasks in the background, automatically control your computer to get work done, supporting MCP and Agent Skills.
 ![image](doc/image/img-2/task.jpeg)
 
+#### Computer Control: Through desktop vision combined with a toolchain for controlling the mouse, keyboard, and terminal, AI agents can accomplish any task on a computer! The image below shows an AI playing Wordle.
+![image](doc/image/img-2/vision.jpeg)
+
 #### Multi-Role Group Chat: Supports tavern character cards and long-term memory, allowing you to chat with multiple characters simultaneously!
 ![image](doc/image/img-2/group.jpeg)
 
@@ -102,7 +105,7 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 ### MacOS Desktop Installation (Currently only M chips are supported.)
 
   👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
-  
+
   👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/Super-Agent-Party-0.4.0-Mac.dmg)
 
 ⭐Attention! After downloading, drag the app file of the dmg file into the `/Applications` directory, then open end point, execute the following command and enter the root password to remove the attached Quarantine attribute from the network download:
