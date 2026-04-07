@@ -193,7 +193,9 @@
       "keyboard":true,
       "desktopVision": true,
       "onlyNewScreen": true,
-      "isEnableGrid": true
+      "isEnableGrid": true,
+      "isFullScreen": true, 
+      "ScreenSize" : [0,0,1280,720]
     },
     "ccSettings": {
       "enabled":true,

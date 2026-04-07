@@ -370,6 +370,8 @@ let vue_data = {
       desktopVision: true,
       onlyNewScreen: true,
       isEnableGrid: true, // 是否启用网格
+      isFullScreen: true, // 是否全屏
+      ScreenSize : [0,0,1280,720], // 非全屏时，截取x1 y1 x2 y2
     },
     ccSettings: {
       enabled: false,

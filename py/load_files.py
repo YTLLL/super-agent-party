@@ -72,7 +72,6 @@ def is_private_ip(hostname):
             
             # 2. 正常的内网/本地回环地址检查 (10.x, 172.16.x, 192.168.x, 127.x)
             if ip_obj.is_private or ip_obj.is_loopback:
-                print(f"[安全拦截] 域名 {hostname} 解析到了真实的内网IP: {ip_str}")
                 return True
                 
     except Exception as e:

@@ -347,7 +347,7 @@ from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 import aiofiles
 import argparse
-from py.dify_openai_async import DifyOpenAIAsync
+from py.dify_openai import DifyOpenAIAsync
 
 from py.get_setting import EXT_DIR, IS_DOCKER, SKILLS_DIR, _copy_default_skills, convert_to_opus_simple, load_covs, load_settings, save_covs,save_settings,clean_temp_files_task,base_path,configure_host_port,UPLOAD_FILES_DIR,AGENT_DIR,MEMORY_CACHE_DIR,KB_DIR,DEFAULT_VRM_DIR,USER_DATA_DIR,LOG_DIR,TOOL_TEMP_DIR
 from py.llm_tool import get_image_base64,get_image_media_type
@@ -859,7 +859,7 @@ async def t(text: str) -> str:
 async_tools = {}
 async_tools_lock = asyncio.Lock()
 
-async def execute_async_tool(tool_id: str, tool_name: str, args: dict, settings: dict,user_prompt: str):
+async def execute_tool(tool_id: str, tool_name: str, args: dict, settings: dict,user_prompt: str):
     try:
         results = await dispatch_tool(tool_name, args, settings)
         if isinstance(results, AsyncIterator):
@@ -937,20 +937,20 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
     
     # ==================== 1. 导入所有工具函数 ====================
     from py.web_search import (
-        DDGsearch_async, 
-        searxng_async, 
-        Tavily_search_async,
-        Bing_search_async,
-        Google_search_async,
-        Brave_search_async,
-        Exa_search_async,
-        Serper_search_async,
-        bochaai_search_async,
-        jina_crawler_async,
-        Crawl4Ai_search_async, 
-        firecrawl_search_async,
-        simple_fetch_async,
-        markdown_new_async,
+        DDGsearch, 
+        searxng, 
+        Tavily_search,
+        Bing_search,
+        Google_search,
+        Brave_search,
+        Exa_search,
+        Serper_search,
+        bochaai_search,
+        jina_crawler,
+        Crawl4Ai_search, 
+        firecrawl_search,
+        simple_fetch,
+        markdown_new,
     )
     from py.know_base import query_knowledge_base
     from py.agent_tool import agent_tool_call
@@ -958,14 +958,14 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
     from py.llm_tool import custom_llm_tool
     from py.pollinations import pollinations_image,openai_image,openai_chat_image
     from py.load_files import get_file_content
-    from py.code_interpreter import e2b_code_async,local_run_code_async
+    from py.code_interpreter import e2b_code,local_run_code
     from py.custom_http import fetch_custom_http
     from py.comfyui_tool import comfyui_tool_call
     from py.utility_tools import (
-        time_async,
-        get_weather_async,
-        get_location_coordinates_async,
-        get_weather_by_city_async,
+        time,
+        get_weather,
+        get_location_coordinates,
+        get_weather_by_city,
         get_wikipedia_summary_and_sections,
         get_wikipedia_section_content,
         search_arxiv_papers
@@ -974,9 +974,9 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
 
     # Docker CLI 工具（原有）
     from py.cli_tool import (
-        claude_code_async,
-        qwen_code_async,
-        docker_sandbox_async,
+        claude_code,
+        qwen_code,
+        docker_sandbox,
         list_files_tool,
         read_file_tool,
         read_file_range_tool, 
@@ -993,7 +993,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
 
     # 新增：本地环境 CLI 工具（假设保存在 py/local_cli_tool.py）
     from py.cli_tool import (
-        shell_tool_local,           # 本地 bash 执行（对应 docker_sandbox_async）
+        shell_tool_local,           # 本地 bash 执行（对应 docker_sandbox）
         list_files_tool_local,     # 本地文件列表
         read_file_tool_local,      # 本地文件读取
         read_file_range_tool_local, # <--- 新增导入
@@ -1035,58 +1035,58 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
     )
     
     from py.computer_use_tool import (
-        mouse_move_async,
-        mouse_click_async,
-        mouse_double_click_async,
-        mouse_drag_async,
-        mouse_scroll_async,
-        mouse_hold_async,
-        keyboard_type_async,
-        keyboard_press_async,
-        keyboard_hotkey_async,
-        keyboard_hold_async,
-        wait_async,
-        screenshot_async
+        mouse_move,
+        mouse_click,
+        mouse_double_click,
+        mouse_drag,
+        mouse_scroll,
+        mouse_hold,
+        copy_to_input_box,
+        keyboard_press,
+        keyboard_hotkey,
+        keyboard_hold,
+        wait,
+        screenshot
     )
 
     # ==================== 2. 定义工具映射表 ====================
     _TOOL_HOOKS = {
-        "DDGsearch_async": DDGsearch_async,
-        "searxng_async": searxng_async,
-        "Tavily_search_async": Tavily_search_async,
+        "DDGsearch": DDGsearch,
+        "searxng": searxng,
+        "Tavily_search": Tavily_search,
         "query_knowledge_base": query_knowledge_base,
-        "jina_crawler_async": jina_crawler_async,
-        "Crawl4Ai_search_async": Crawl4Ai_search_async,
-        "firecrawl_search_async": firecrawl_search_async,
-        "simple_fetch_async":simple_fetch_async,
-        "markdown_new_async":markdown_new_async,
+        "jina_crawler": jina_crawler,
+        "Crawl4Ai_search": Crawl4Ai_search,
+        "firecrawl_search": firecrawl_search,
+        "simple_fetch":simple_fetch,
+        "markdown_new":markdown_new,
         "agent_tool_call": agent_tool_call,
         "a2a_tool_call": a2a_tool_call,
         "custom_llm_tool": custom_llm_tool,
         "pollinations_image":pollinations_image,
         "get_file_content":get_file_content,
         "get_image_content": get_image_content,
-        "e2b_code_async": e2b_code_async,
-        "local_run_code_async": local_run_code_async,
+        "e2b_code": e2b_code,
+        "local_run_code": local_run_code,
         "openai_image": openai_image,
         "openai_chat_image":openai_chat_image,
-        "Bing_search_async": Bing_search_async,
-        "Google_search_async": Google_search_async,
-        "Brave_search_async": Brave_search_async,
-        "Exa_search_async": Exa_search_async,
-        "Serper_search_async": Serper_search_async,
-        "bochaai_search_async": bochaai_search_async,
+        "Bing_search": Bing_search,
+        "Google_search": Google_search,
+        "Brave_search": Brave_search,
+        "Exa_search": Exa_search,
+        "Serper_search": Serper_search,
+        "bochaai_search": bochaai_search,
         "comfyui_tool_call": comfyui_tool_call,
-        "time_async": time_async,
-        "get_weather_async": get_weather_async,
-        "get_location_coordinates_async": get_location_coordinates_async,
-        "get_weather_by_city_async":get_weather_by_city_async,
+        "time": time,
+        "get_weather": get_weather,
+        "get_location_coordinates": get_location_coordinates,
+        "get_weather_by_city":get_weather_by_city,
         "get_wikipedia_summary_and_sections": get_wikipedia_summary_and_sections,
         "get_wikipedia_section_content": get_wikipedia_section_content,
         "search_arxiv_papers": search_arxiv_papers,
         "auto_behavior": auto_behavior,
-        "claude_code_async": claude_code_async,
-        "qwen_code_async": qwen_code_async,
+        "claude_code": claude_code,
+        "qwen_code": qwen_code,
         "list_pages": list_pages,
         "new_page": new_page,
         "close_page": close_page,
@@ -1107,7 +1107,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "get_categories":get_categories,
         
         # Docker Sandbox 相关工具（原有）
-        "docker_sandbox_async": docker_sandbox_async,
+        "docker_sandbox": docker_sandbox,
         "list_files_tool": list_files_tool,
         "read_file_tool": read_file_tool,
         "read_file_range_tool": read_file_range_tool, # <--- 映射新工具
@@ -1142,25 +1142,25 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "finish_task":finish_task,
 
         # 鼠标键盘控制
-        "mouse_move_async":mouse_move_async,
-        "mouse_click_async":mouse_click_async,
-        "mouse_double_click_async":mouse_double_click_async,
-        "mouse_drag_async":mouse_drag_async,
-        "mouse_scroll_async":mouse_scroll_async,
-        "mouse_hold_async":mouse_hold_async,
-        "keyboard_type_async":keyboard_type_async,
-        "keyboard_press_async":keyboard_press_async,
-        "keyboard_hotkey_async":keyboard_hotkey_async,
-        "keyboard_hold_async":keyboard_hold_async,
-        "wait_async":wait_async,
-        "screenshot_async":screenshot_async
+        "mouse_move":mouse_move,
+        "mouse_click":mouse_click,
+        "mouse_double_click":mouse_double_click,
+        "mouse_drag":mouse_drag,
+        "mouse_scroll":mouse_scroll,
+        "mouse_hold":mouse_hold,
+        "copy_to_input_box":copy_to_input_box,
+        "keyboard_press":keyboard_press,
+        "keyboard_hotkey":keyboard_hotkey,
+        "keyboard_hold":keyboard_hold,
+        "wait":wait,
+        "screenshot":screenshot
     }
     
     # ==================== 3. 权限拦截逻辑 (Human-in-the-loop) ====================
     # 定义受控的敏感工具列表
     # 这些工具在执行前需要检查权限配置 (.agent/config.json 或 全局设置)
     SENSITIVE_TOOLS = [
-        "docker_sandbox_async",
+        "docker_sandbox",
         "edit_file_tool",
         "edit_file_patch_tool",   
         "todo_write_tool",        
@@ -1779,7 +1779,7 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
 
 ⚠️ 重要提示：
 1. 当前为 Docker 环境，请使用 Linux 命令和工具链
-2. 执行 docker_sandbox_async 时，命令必须符合 Linux 的语法规范
+2. 执行 docker_sandbox 时，命令必须符合 Linux 的语法规范
 3. 路径分隔符：Unix 使用正斜杠(/)
 4. 请尽量使用相对路径，避免使用绝对路径，以免在跨平台时出现问题
 
@@ -2488,15 +2488,31 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
         if should_capture:
             try:
                 import pyautogui
+                # 引入我们刚才写的设置区域的方法
+                from py.computer_use_tool import set_screen_region
                 
-                # 判定是否启用网格辅助 (必须在 vision_control_enabled 开启的前提下)
-                is_grid_enabled = vision_control_enabled and settings.get('visionControlSettings', {}).get('isEnableGrid', False)
+                # 获取配置
+                v_settings = settings.get('visionControlSettings', {})
+                is_full_screen = v_settings.get('isFullScreen', True)
+                screen_size = v_settings.get('ScreenSize', [0, 0, 1280, 720])
+                is_grid_enabled = vision_control_enabled and v_settings.get('isEnableGrid', False)
 
-                print(f"正在执行桌面截图 (网格辅助: {'开启' if is_grid_enabled else '关闭'})...")
+                print(f"正在执行桌面截图 (全屏: {is_full_screen}, 网格: {is_grid_enabled})...")
                 
-                # 1. 获取逻辑尺寸并捕获
-                logical_width, logical_height = pyautogui.size()
-                screenshot = await asyncio.to_thread(pyautogui.screenshot)
+                # 1. 根据全屏配置决定截取范围，并同步给鼠标工具
+                if not is_full_screen and len(screen_size) == 4:
+                    x, y, w, h = map(int, screen_size)
+                    # 截取指定区域
+                    screenshot = await asyncio.to_thread(pyautogui.screenshot, region=(x, y, w, h))
+                    logical_width, logical_height = w, h
+                    # 通知计算机工具，接下来的鼠标操作要基于这个区域
+                    set_screen_region((x, y, w, h))
+                else:
+                    # 全屏截图
+                    logical_width, logical_height = pyautogui.size()
+                    screenshot = await asyncio.to_thread(pyautogui.screenshot)
+                    # 恢复全屏鼠标映射
+                    set_screen_region(None)
                 
                 # 2. 统一缩放到逻辑坐标系 (解决 Windows DPI 缩放偏移)
                 if screenshot.width != logical_width or screenshot.height != logical_height:
@@ -2515,7 +2531,10 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 if is_grid_enabled:
                     # 在副本上绘制网格
                     display_image = await asyncio.to_thread(draw_grid_on_image, screenshot.copy(), grid_spacing=10)
-                    grid_hint = "\n\n【system info】Current desktop screenshot with coordinate grid (0-1000) is injected. Use coordinates for precise clicking."
+                    if not is_full_screen:
+                        grid_hint = "\n\n【system info】Current partial screen region screenshot with coordinate grid (0-1000) is injected. Use coordinates for precise clicking."
+                    else:
+                        grid_hint = "\n\n【system info】Current desktop screenshot with coordinate grid (0-1000) is injected. Use coordinates for precise clicking."
                 else:
                     display_image = screenshot
                     grid_hint = "\n\n【system info】Current desktop screenshot is injected."
@@ -2662,15 +2681,15 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
         request.messages = await message_without_images(request.messages)
         from py.load_files import get_files_content,file_tool,image_tool
         from py.web_search import (
-            DDGsearch_async, 
-            searxng_async, 
-            Tavily_search_async,
-            Bing_search_async,
-            Google_search_async,
-            Brave_search_async,
-            Exa_search_async,
-            Serper_search_async,
-            bochaai_search_async,
+            DDGsearch, 
+            searxng, 
+            Tavily_search,
+            Bing_search,
+            Google_search,
+            Brave_search,
+            Exa_search,
+            Serper_search,
+            bochaai_search,
             duckduckgo_tool, 
             searxng_tool, 
             tavily_tool, 
@@ -3222,23 +3241,23 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         }
                         yield f"data: {json.dumps(chunk_dict)}\n\n"
                         if settings['webSearch']['engine'] == 'duckduckgo':
-                            results = await DDGsearch_async(user_prompt)
+                            results = await DDGsearch(user_prompt)
                         elif settings['webSearch']['engine'] == 'searxng':
-                            results = await searxng_async(user_prompt)
+                            results = await searxng(user_prompt)
                         elif settings['webSearch']['engine'] == 'tavily':
-                            results = await Tavily_search_async(user_prompt)
+                            results = await Tavily_search(user_prompt)
                         elif settings['webSearch']['engine'] == 'bing':
-                            results = await Bing_search_async(user_prompt)
+                            results = await Bing_search(user_prompt)
                         elif settings['webSearch']['engine'] == 'google':
-                            results = await Google_search_async(user_prompt)
+                            results = await Google_search(user_prompt)
                         elif settings['webSearch']['engine'] == 'brave':
-                            results = await Brave_search_async(user_prompt)
+                            results = await Brave_search(user_prompt)
                         elif settings['webSearch']['engine'] == 'exa':
-                            results = await Exa_search_async(user_prompt)
+                            results = await Exa_search(user_prompt)
                         elif settings['webSearch']['engine'] == 'serper':
-                            results = await Serper_search_async(user_prompt)
+                            results = await Serper_search(user_prompt)
                         elif settings['webSearch']['engine'] == 'bochaai':
-                            results = await bochaai_search_async(user_prompt)
+                            results = await bochaai_search(user_prompt)
                         if results:
                             content_append(request.messages, 'user',  f"\n\n联网搜索结果：{results}\n\n请根据联网搜索结果组织你的回答，并确保你的回答是准确的。")
                             tool_chunk = {
@@ -3344,8 +3363,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         # 子智能体默认只保留安全的工具，移除高风险操作
                         SUBAGENT_BLOCKED_TOOLS = [
                             # 阻止子智能体执行系统命令
-                            "claude_code_async",
-                            "qwen_code_async",
+                            "claude_code",
+                            "qwen_code",
                             
                             # 阻止子智能体管理进程/端口
                             "manage_processes_tool",
@@ -3909,7 +3928,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             }
                             yield f"data: {json.dumps(chunk_dict)}\n\n"
                             asyncio.create_task(
-                                execute_async_tool(
+                                execute_tool(
                                     async_tool_id,
                                     response_content.name,
                                     data_list[0],
@@ -4279,56 +4298,68 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     if vision_control_enabled and (results =='[Getting screenshot]' or settings.get('visionControlSettings', {}).get('desktopVision', False)):
                         try:
                             import pyautogui
-                            is_grid_enabled = settings.get('visionControlSettings', {}).get('isEnableGrid', False)
-
-                            print("正在执行带网格的桌面截图...")
+                            # 必须从你的工具类中引入设置区域的方法
+                            from py.computer_use_tool import set_screen_region
                             
-                            # 1. 获取逻辑尺寸
-                            logical_width, logical_height = pyautogui.size()
+                            v_settings = settings.get('visionControlSettings', {})
+                            is_grid_enabled = v_settings.get('isEnableGrid', False)
+                            is_full_screen = v_settings.get('isFullScreen', True)
+                            # ScreenSize 格式为 [x, y, width, height]
+                            screen_size = v_settings.get('ScreenSize', [0, 0, 1920, 1080])
+                            time.sleep(0.5) # 等待一下，确保截图工具已经准备好
+                            print(f"正在执行桌面截图 (全屏: {is_full_screen}, 网格: {is_grid_enabled})...")
                             
-                            # 2. 捕获屏幕
-                            screenshot = await asyncio.to_thread(pyautogui.screenshot)
+                            # --- 1. 区域判定与捕获 ---
+                            if not is_full_screen and len(screen_size) == 4:
+                                # 局部截图模式
+                                rx, ry, rw, rh = map(int, screen_size)
+                                # 关键：告诉鼠标工具，接下来的 0-1000 坐标要映射到这个局部矩形
+                                set_screen_region((rx, ry, rw, rh))
+                                
+                                # 逻辑尺寸即为选区尺寸
+                                logical_width, logical_height = rw, rh
+                                # 捕获指定区域
+                                screenshot = await asyncio.to_thread(pyautogui.screenshot, region=(rx, ry, rw, rh))
+                            else:
+                                # 全屏截图模式
+                                set_screen_region(None) # 恢复全屏映射
+                                logical_width, logical_height = pyautogui.size()
+                                screenshot = await asyncio.to_thread(pyautogui.screenshot)
                             
-                            # 3. 强制 Resize 到逻辑坐标系 (解决 Windows 偏移的核心)
+                            # --- 2. 强制 Resize 到逻辑坐标系 (解决 Windows 缩放偏移) ---
                             if screenshot.width != logical_width or screenshot.height != logical_height:
                                 screenshot = await asyncio.to_thread(
                                     screenshot.resize, (logical_width, logical_height), Image.Resampling.LANCZOS
                                 )
                             
+                            # 限制传输图片大小，平衡 Token 消耗
                             target_w, target_h = scale_to_fit(logical_width, logical_height, 1280, 720)
-                            
                             if screenshot.width > target_w or screenshot.height > target_h:
-                                print(f"检测到高分辨率屏幕，正在从 {screenshot.size} 缩放到 {(target_w, target_h)}")
                                 screenshot = await asyncio.to_thread(
                                     screenshot.resize, (target_w, target_h), Image.Resampling.LANCZOS
                                 )
 
+                            # --- 3. 绘制视觉反馈 (红点/线) ---
                             action_feedback_hint = ""
                             if results and "[LAST_ACTION:" in str(results):
-                                print(f"检测到上一次动作结果，正在绘制视觉反馈...")
-                                # 在截图上绘制上一步的红点/线
                                 screenshot = await asyncio.to_thread(draw_action_feedback, screenshot, str(results))
-
                                 action_feedback_hint = (
-                                    " Notice: The colored markers show your PREVIOUS actions. "
-                                    "Cyan crosshair = Click. Blue double-circle = Double Click. "
-                                    "Green line to Yellow dot = Drag."
+                                    " Notice: The colored markers show your PREVIOUS actions relative to this view. "
+                                    "Cyan = Click. Blue = Double Click. Green-Yellow = Drag."
                                 )
 
-                            # 4. 根据设置决定是否绘制网格
+                            # --- 4. 绘制网格辅助 ---
                             if is_grid_enabled:
-                                # 在副本上绘制网格
                                 display_image = await asyncio.to_thread(draw_grid_on_image, screenshot.copy(), grid_spacing=10)
-                                grid_hint = f"\n\n【system info】Screenshot with red coordinate grid (0-1000) injected.\n{action_feedback_hint}"
+                                region_text = "partial region" if not is_full_screen else "full desktop"
+                                grid_hint = f"\n\n【system info】Screenshot of {region_text} with coordinate grid (0-1000) injected. Use coordinates for precise clicking within this view.\n{action_feedback_hint}"
                             else:
                                 display_image = screenshot
-                                grid_hint = f"\n\n【system info】Current desktop screenshot is injected.\n{action_feedback_hint}"
+                                grid_hint = f"\n\n【system info】Current screenshot injected.\n{action_feedback_hint}"
                             
-                            # 5. 保存并注入
-                            desktop_img_name = f"desktop_grid_{uuid.uuid4().hex}.png"
+                            # --- 5. 保存并注入消息 ---
+                            desktop_img_name = f"desktop_view_{uuid.uuid4().hex}.png"
                             desktop_img_path = os.path.join(UPLOAD_FILES_DIR, desktop_img_name)
-                            
-                            # 保存处理后的图片
                             await asyncio.to_thread(display_image.save, desktop_img_path, optimize=True)
                             
                             desktop_url = f"{fastapi_base_url}uploaded_files/{desktop_img_name}"
@@ -4342,33 +4373,22 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             }
                             request.messages.append(current_user_msg)
                             
-                            print(f"带网格截图已注入: {desktop_url}")
-                            
-                            if settings.get('visionControlSettings', {}).get('onlyNewScreen', False):
-                                # 遍历除最后一条（刚刚注入了新截图的）消息之外的所有历史消息
+                            # --- 6. 清理旧截图 ---
+                            if v_settings.get('onlyNewScreen', False):
                                 for msg in request.messages[:-1]:
                                     if isinstance(msg.get('content'), list):
-                                        # 过滤掉所有图片内容，只保留文本
-                                        msg['content'] = [
-                                            item for item in msg['content'] 
-                                            if item.get('type') != 'image_url'
-                                        ]
-                                        
-                                        # 可选：如果过滤后 list 只剩一个文本项，可以将其还原为纯字符串格式
+                                        msg['content'] = [item for item in msg['content'] if item.get('type') != 'image_url']
                                         if len(msg['content']) == 1 and msg['content'][0].get('type') == 'text':
                                             msg['content'] = msg['content'][0]['text']
                                         elif len(msg['content']) == 0:
-                                            # 如果该消息原本只有图片（虽然在对话中少见），可设置为空字符串防止报错
                                             msg['content'] = ""
-                                
-                                print("已清理历史消息中的旧截图，仅保留最新屏幕状态。")
 
                         except Exception as e:
                             print(f"后端桌面截图失败: {e}")
                             
-                        images = await images_in_messages(request.messages,fastapi_base_url)
+                        images = await images_in_messages(request.messages, fastapi_base_url)
                         request.messages = await message_without_images(request.messages)
-                    msg = await images_add_in_messages(request.messages, images,settings)
+                    msg = await images_add_in_messages(request.messages, images, settings)
                     if request.top_p != 1 or settings['top_p'] != 1:
                         extra['top_p'] = request.top_p or settings['top_p']
                     if tools:
@@ -4681,11 +4701,11 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     messages = f"用户说：{user_prompt}\n\n---\n\n你说：{full_content}"
                     infer = cur_memory.get('infer', False) or False
                     
-                    def run_async_task():
+                    def run_task():
                         import asyncio  # ← 在这里导入！
                         import traceback
                         
-                        async def add_async():
+                        async def add():
                             loop = asyncio.get_running_loop()
                             with ThreadPoolExecutor() as executor:
                                 metadata = {
@@ -4697,19 +4717,19 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         
                         try:
                             loop = asyncio.get_running_loop()
-                            task = asyncio.create_task(add_async())
+                            task = asyncio.create_task(add())
                             task.add_done_callback(
                                 lambda t: print(f"任务异常: {t.exception()}") if t.exception() else None
                             )
                         except RuntimeError:
                             # 没有运行的事件循环
-                            asyncio.run(add_async())
+                            asyncio.run(add())
                         except Exception as e:
-                            print(f"run_async_task 异常: {e}")
+                            print(f"run_task 异常: {e}")
                             traceback.print_exc()
                     
                     import threading
-                    thread = threading.Thread(target=run_async_task, daemon=True)
+                    thread = threading.Thread(target=run_task, daemon=True)
                     thread.start()
                     print("记忆更新任务已提交到后台线程")
 
@@ -4787,15 +4807,15 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
 
     from py.load_files import get_files_content,file_tool,image_tool
     from py.web_search import (
-        DDGsearch_async, 
-        searxng_async, 
-        Tavily_search_async,
-        Bing_search_async,
-        Google_search_async,
-        Brave_search_async,
-        Exa_search_async,
-        Serper_search_async,
-        bochaai_search_async,
+        DDGsearch, 
+        searxng, 
+        Tavily_search,
+        Bing_search,
+        Google_search,
+        Brave_search,
+        Exa_search,
+        Serper_search,
+        bochaai_search,
         duckduckgo_tool, 
         searxng_tool, 
         tavily_tool, 
@@ -5178,23 +5198,23 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
         if settings['webSearch']['enabled'] or enable_web_search:
             if settings['webSearch']['when'] == 'before_thinking' or settings['webSearch']['when'] == 'both':
                 if settings['webSearch']['engine'] == 'duckduckgo':
-                    results = await DDGsearch_async(user_prompt)
+                    results = await DDGsearch(user_prompt)
                 elif settings['webSearch']['engine'] == 'searxng':
-                    results = await searxng_async(user_prompt)
+                    results = await searxng(user_prompt)
                 elif settings['webSearch']['engine'] == 'tavily':
-                    results = await Tavily_search_async(user_prompt)
+                    results = await Tavily_search(user_prompt)
                 elif settings['webSearch']['engine'] == 'bing':
-                    results = await Bing_search_async(user_prompt)
+                    results = await Bing_search(user_prompt)
                 elif settings['webSearch']['engine'] == 'google':
-                    results = await Google_search_async(user_prompt)
+                    results = await Google_search(user_prompt)
                 elif settings['webSearch']['engine'] == 'brave':
-                    results = await Brave_search_async(user_prompt)
+                    results = await Brave_search(user_prompt)
                 elif settings['webSearch']['engine'] == 'exa':
-                    results = await Exa_search_async(user_prompt)
+                    results = await Exa_search(user_prompt)
                 elif settings['webSearch']['engine'] == 'serper':
-                    results = await Serper_search_async(user_prompt)
+                    results = await Serper_search(user_prompt)
                 elif settings['webSearch']['engine'] == 'bochaai':
-                    results = await bochaai_search_async(user_prompt)
+                    results = await bochaai_search(user_prompt)
                 if results:
                     content_append(request.messages, 'user',  f"\n\n联网搜索结果：{results}")
             if settings['webSearch']['when'] == 'after_thinking' or settings['webSearch']['when'] == 'both':
@@ -5686,7 +5706,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
             messages=f"用户说：{user_prompt}\n\n---\n\n你说：{response_dict["choices"][0]['message']['content']}"
             executor = ThreadPoolExecutor()
             infer = cur_memory.get('infer') or False
-            async def add_async():
+            async def add():
                 loop = asyncio.get_event_loop()
                 # 绑定 user_id 关键字参数
                 metadata = {
@@ -5697,7 +5717,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                 await loop.run_in_executor(executor, func, messages)
                 print("知识库更新完成")
 
-            asyncio.create_task(add_async())
+            asyncio.create_task(add())
         return JSONResponse(content=response_dict)
     except Exception as e:
         return JSONResponse(
@@ -5732,20 +5752,20 @@ async def execute_tool_manually(request: Request):
 
     # ==================== 1. 导入所有工具函数 ====================
     from py.web_search import (
-        DDGsearch_async, 
-        searxng_async, 
-        Tavily_search_async,
-        Bing_search_async,
-        Google_search_async,
-        Brave_search_async,
-        Exa_search_async,
-        Serper_search_async,
-        bochaai_search_async,
-        jina_crawler_async,
-        Crawl4Ai_search_async, 
-        firecrawl_search_async,
-        simple_fetch_async,
-        markdown_new_async,
+        DDGsearch, 
+        searxng, 
+        Tavily_search,
+        Bing_search,
+        Google_search,
+        Brave_search,
+        Exa_search,
+        Serper_search,
+        bochaai_search,
+        jina_crawler,
+        Crawl4Ai_search, 
+        firecrawl_search,
+        simple_fetch,
+        markdown_new,
     )
     from py.know_base import query_knowledge_base
     from py.agent_tool import agent_tool_call
@@ -5753,14 +5773,14 @@ async def execute_tool_manually(request: Request):
     from py.llm_tool import custom_llm_tool
     from py.pollinations import pollinations_image,openai_image,openai_chat_image
     from py.load_files import get_file_content
-    from py.code_interpreter import e2b_code_async,local_run_code_async
+    from py.code_interpreter import e2b_code,local_run_code
     from py.custom_http import fetch_custom_http
     from py.comfyui_tool import comfyui_tool_call
     from py.utility_tools import (
-        time_async,
-        get_weather_async,
-        get_location_coordinates_async,
-        get_weather_by_city_async,
+        time,
+        get_weather,
+        get_location_coordinates,
+        get_weather_by_city,
         get_wikipedia_summary_and_sections,
         get_wikipedia_section_content,
         search_arxiv_papers
@@ -5769,9 +5789,9 @@ async def execute_tool_manually(request: Request):
 
     # Docker CLI 工具（原有）
     from py.cli_tool import (
-        claude_code_async,
-        qwen_code_async,
-        docker_sandbox_async,
+        claude_code,
+        qwen_code,
+        docker_sandbox,
         list_files_tool,
         read_file_tool,
         read_file_range_tool, 
@@ -5788,7 +5808,7 @@ async def execute_tool_manually(request: Request):
 
     # 新增：本地环境 CLI 工具（假设保存在 py/local_cli_tool.py）
     from py.cli_tool import (
-        shell_tool_local,           # 本地 bash 执行（对应 docker_sandbox_async）
+        shell_tool_local,           # 本地 bash 执行（对应 docker_sandbox）
         list_files_tool_local,     # 本地文件列表
         read_file_tool_local,      # 本地文件读取
         read_file_range_tool_local, # <--- 新增导入
@@ -5830,58 +5850,58 @@ async def execute_tool_manually(request: Request):
     )
     
     from py.computer_use_tool import (
-        mouse_move_async,
-        mouse_click_async,
-        mouse_double_click_async,
-        mouse_drag_async,
-        mouse_scroll_async,
-        mouse_hold_async,
-        keyboard_type_async,
-        keyboard_press_async,
-        keyboard_hotkey_async,
-        keyboard_hold_async,
-        wait_async,
-        screenshot_async
+        mouse_move,
+        mouse_click,
+        mouse_double_click,
+        mouse_drag,
+        mouse_scroll,
+        mouse_hold,
+        copy_to_input_box,
+        keyboard_press,
+        keyboard_hotkey,
+        keyboard_hold,
+        wait,
+        screenshot
     )
 
     # ==================== 2. 定义工具映射表 ====================
     _TOOL_HOOKS = {
-        "DDGsearch_async": DDGsearch_async,
-        "searxng_async": searxng_async,
-        "Tavily_search_async": Tavily_search_async,
+        "DDGsearch": DDGsearch,
+        "searxng": searxng,
+        "Tavily_search": Tavily_search,
         "query_knowledge_base": query_knowledge_base,
-        "jina_crawler_async": jina_crawler_async,
-        "Crawl4Ai_search_async": Crawl4Ai_search_async,
-        "firecrawl_search_async": firecrawl_search_async,
-        "simple_fetch_async":simple_fetch_async,
-        "markdown_new_async":markdown_new_async,
+        "jina_crawler": jina_crawler,
+        "Crawl4Ai_search": Crawl4Ai_search,
+        "firecrawl_search": firecrawl_search,
+        "simple_fetch":simple_fetch,
+        "markdown_new":markdown_new,
         "agent_tool_call": agent_tool_call,
         "a2a_tool_call": a2a_tool_call,
         "custom_llm_tool": custom_llm_tool,
         "pollinations_image":pollinations_image,
         "get_file_content":get_file_content,
         "get_image_content": get_image_content,
-        "e2b_code_async": e2b_code_async,
-        "local_run_code_async": local_run_code_async,
+        "e2b_code": e2b_code,
+        "local_run_code": local_run_code,
         "openai_image": openai_image,
         "openai_chat_image":openai_chat_image,
-        "Bing_search_async": Bing_search_async,
-        "Google_search_async": Google_search_async,
-        "Brave_search_async": Brave_search_async,
-        "Exa_search_async": Exa_search_async,
-        "Serper_search_async": Serper_search_async,
-        "bochaai_search_async": bochaai_search_async,
+        "Bing_search": Bing_search,
+        "Google_search": Google_search,
+        "Brave_search": Brave_search,
+        "Exa_search": Exa_search,
+        "Serper_search": Serper_search,
+        "bochaai_search": bochaai_search,
         "comfyui_tool_call": comfyui_tool_call,
-        "time_async": time_async,
-        "get_weather_async": get_weather_async,
-        "get_location_coordinates_async": get_location_coordinates_async,
-        "get_weather_by_city_async":get_weather_by_city_async,
+        "time": time,
+        "get_weather": get_weather,
+        "get_location_coordinates": get_location_coordinates,
+        "get_weather_by_city":get_weather_by_city,
         "get_wikipedia_summary_and_sections": get_wikipedia_summary_and_sections,
         "get_wikipedia_section_content": get_wikipedia_section_content,
         "search_arxiv_papers": search_arxiv_papers,
         "auto_behavior": auto_behavior,
-        "claude_code_async": claude_code_async,
-        "qwen_code_async": qwen_code_async,
+        "claude_code": claude_code,
+        "qwen_code": qwen_code,
         "list_pages": list_pages,
         "new_page": new_page,
         "close_page": close_page,
@@ -5902,7 +5922,7 @@ async def execute_tool_manually(request: Request):
         "get_categories":get_categories,
         
         # Docker Sandbox 相关工具（原有）
-        "docker_sandbox_async": docker_sandbox_async,
+        "docker_sandbox": docker_sandbox,
         "list_files_tool": list_files_tool,
         "read_file_tool": read_file_tool,
         "read_file_range_tool": read_file_range_tool, # <--- 映射新工具
@@ -5937,18 +5957,18 @@ async def execute_tool_manually(request: Request):
         "finish_task":finish_task,
 
         # 鼠标键盘控制
-        "mouse_move_async":mouse_move_async,
-        "mouse_click_async":mouse_click_async,
-        "mouse_double_click_async":mouse_double_click_async,
-        "mouse_drag_async":mouse_drag_async,
-        "mouse_scroll_async":mouse_scroll_async,
-        "mouse_hold_async":mouse_hold_async,
-        "keyboard_type_async":keyboard_type_async,
-        "keyboard_press_async":keyboard_press_async,
-        "keyboard_hotkey_async":keyboard_hotkey_async,
-        "keyboard_hold_async":keyboard_hold_async,
-        "wait_async":wait_async,
-        "screenshot_async":screenshot_async
+        "mouse_move":mouse_move,
+        "mouse_click":mouse_click,
+        "mouse_double_click":mouse_double_click,
+        "mouse_drag":mouse_drag,
+        "mouse_scroll":mouse_scroll,
+        "mouse_hold":mouse_hold,
+        "copy_to_input_box":copy_to_input_box,
+        "keyboard_press":keyboard_press,
+        "keyboard_hotkey":keyboard_hotkey,
+        "keyboard_hold":keyboard_hold,
+        "wait":wait,
+        "screenshot":screenshot
     }
     
 
