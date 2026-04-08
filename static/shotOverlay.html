@@ -6,21 +6,21 @@
   <style>
     html,body{margin:0;width:100vw;height:100vh;overflow:hidden; user-select: none;}
     
-    /* 背景蒙层画布，鼠标为十字 */
+    /* 背景蒙层画布 */
     #canvas{position:fixed;left:0;top:0;width:100%;height:100%;z-index:2;cursor:crosshair;}
     
-    /* 选区框体，去掉 pointer-events:none，使其可以响应鼠标事件 */
+    /* 选区框体 */
     #box{
       position:absolute;
       border:2px solid #00a1ff;
       z-index:3;
       display:none; 
       box-shadow: 0 0 8px rgba(0,161,255,0.4);
-      background: rgba(0,0,0,0.01); /* 必须有一点背景才能捕获内部的鼠标拖动事件 */
+      background: rgba(0,0,0,0.01); 
       cursor: move;
     }
 
-    /* --- 控制点样式 --- */
+    /* 控制点样式 */
     .handle {
       position: absolute;
       width: 10px;
@@ -40,19 +40,16 @@
     .handle.sw { top: 100%; left: 0; cursor: nesw-resize; }
     .handle.w  { top: 50%; left: 0; cursor: ew-resize; }
 
-    /* --- 工具栏样式 --- */
+    /* --- 工具栏样式（提取到外层，绝对定位） --- */
     #toolbar {
       position: absolute;
-      bottom: -45px;
-      right: -2px; /* 贴紧右侧边框 */
       background: #fff;
       border-radius: 6px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      display: flex;
       padding: 4px;
       gap: 4px;
-      z-index: 5;
-      display: none; /* 选区完成后再显示 */
+      z-index: 10;
+      display: none; /* js 中会设置为 flex */
       cursor: default;
     }
     .tool-btn {
@@ -72,7 +69,7 @@
     .tool-btn.cancel { color: #ff4d4f; }
     .tool-btn.confirm { color: #52c41a; }
 
-    /* --- 提示弹窗样式 --- */
+    /* 提示弹窗样式 */
     #lang-tip {
       position: fixed;
       bottom: 15%;
@@ -116,12 +113,12 @@
     <div class="handle s" data-dir="s"></div>
     <div class="handle sw" data-dir="sw"></div>
     <div class="handle w" data-dir="w"></div>
+  </div>
 
-    <!-- 工具栏 -->
-    <div id="toolbar">
-      <button class="tool-btn cancel" id="btn-cancel" title="取消 (Esc)">✖</button>
-      <button class="tool-btn confirm" id="btn-confirm" title="完成 (Enter)">✔</button>
-    </div>
+  <!-- 工具栏（与box解绑，避免被遮挡） -->
+  <div id="toolbar">
+    <button class="tool-btn cancel" id="btn-cancel" title="取消 (Esc)">✖</button>
+    <button class="tool-btn confirm" id="btn-confirm" title="完成 (Enter)">✔</button>
   </div>
 
   <script>
@@ -139,7 +136,6 @@
 
     let hideTimer = null;
 
-    // 接收语言并显示
     if (window.electronAPI && window.electronAPI.onSetLanguage) {
       window.electronAPI.onSetLanguage((lang) => {
         tip.innerText = locales[lang] || locales['zh-CN'];
@@ -148,7 +144,6 @@
         hideTimer = setTimeout(fadeOutTip, 5000);
       });
     } else {
-      // 本地测试用
       tip.innerText = locales['zh-CN'];
       tip.style.display = 'block';
       requestAnimationFrame(() => tip.classList.add('show'));
@@ -170,6 +165,7 @@
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
       drawMask();
+      if (toolbar.style.display === 'flex') positionToolbar();
     }
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
@@ -186,53 +182,77 @@
       const w = parseInt(box.style.width) || 0;
       const h = parseInt(box.style.height) || 0;
 
-      ctx.fillRect(0, 0, canvas.width, y); // 上
-      ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h); // 下
-      ctx.fillRect(0, y, x, h); // 左
-      ctx.fillRect(x + w, y, canvas.width - x - w, h); // 右
+      ctx.fillRect(0, 0, canvas.width, y); 
+      ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h); 
+      ctx.fillRect(0, y, x, h); 
+      ctx.fillRect(x + w, y, canvas.width - x - w, h); 
     }
 
-    // 初始化蒙版全屏变暗
     drawMask();
 
     // 核心状态管理
-    let action = 'none'; // 'draw' | 'move' | 'resize' | 'none'
+    let action = 'none'; 
     let resizeDir = '';
-    
-    // 选区的数据
     let rect = { x: 0, y: 0, w: 0, h: 0 };
-    // 鼠标按下时的初始数据
     let startPos = { x: 0, y: 0, rectX: 0, rectY: 0, rectW: 0, rectH: 0 };
 
-    // 将数据同步到DOM
     function renderBox() {
       box.style.left = rect.x + 'px';
       box.style.top = rect.y + 'px';
       box.style.width = rect.w + 'px';
       box.style.height = rect.h + 'px';
-      
-      // 防止工具栏跑到屏幕外面
-      if (rect.y + rect.h + 50 > canvas.height) {
-        toolbar.style.bottom = '5px'; // 如果底部空间不够，放到框内
-      } else {
-        toolbar.style.bottom = '-45px'; // 正常放在框下面
-      }
-      
       drawMask();
     }
 
-    window.addEventListener('mousedown', e => {
-      // 右键直接取消
-      if (e.button === 2) {
-        cancelAction();
-        return;
+    // --- 重点：智能定位工具栏 ---
+    function positionToolbar() {
+      // 预估工具栏的宽高
+      const tbWidth = 80;  
+      const tbHeight = 44; 
+      const gap = 8; // 选框与工具栏的间距
+      
+      // 安全边距：防止被底部的Dock或侧边的Dock遮挡
+      const SAFE_BOTTOM = 80; 
+      const SAFE_SIDES = 60; 
+      const SAFE_TOP = 10;
+
+      const usableHeight = canvas.height - SAFE_BOTTOM;
+      const usableWidth = canvas.width - SAFE_SIDES;
+
+      // 默认目标位置：选框的右下角外部
+      let tx = rect.x + rect.w - tbWidth;
+      let ty = rect.y + rect.h + gap; 
+
+      // 1. 如果下方超出安全区域（会碰到底部 Dock）
+      if (ty + tbHeight > usableHeight) {
+        // 尝试放到选框上方
+        ty = rect.y - tbHeight - gap;
+        
+        // 2. 如果上方也越界了（说明选区非常大，纵向占满了屏幕）
+        if (ty < SAFE_TOP) {
+          // 强制放入选区内部靠下的位置，且严格保证不越过底部的 Dock 安全线
+          ty = Math.min(rect.y + rect.h - tbHeight - gap, usableHeight - tbHeight);
+          // 极限兜底：确保一定不会超顶
+          ty = Math.max(SAFE_TOP, ty);
+        }
       }
 
-      // 如果点击的是工具栏按钮，不触发任何画布逻辑
+      // 3. 横向 X 坐标的安全区限制（防止被左右两侧的 Dock 遮挡）
+      tx = Math.max(SAFE_SIDES, Math.min(tx, usableWidth - tbWidth));
+
+      // 应用位置
+      toolbar.style.left = tx + 'px';
+      toolbar.style.top = ty + 'px';
+    }
+
+    window.addEventListener('mousedown', e => {
+      if (e.button === 2) { cancelAction(); return; }
+
+      // 点击工具栏自身时不拦截逻辑
       if (e.target.closest('#toolbar')) return;
 
       hideTipImmediately();
-      toolbar.style.display = 'none'; // 操作时隐藏工具栏
+      toolbar.style.display = 'none'; // 操作时先隐藏工具栏
 
       startPos = { 
         x: e.clientX, 
@@ -241,14 +261,11 @@
       };
 
       if (e.target.classList.contains('handle')) {
-        // 拖拽控制点 -> 调整大小
         action = 'resize';
         resizeDir = e.target.getAttribute('data-dir');
       } else if (e.target === box) {
-        // 拖拽框体 -> 移动位置
         action = 'move';
       } else {
-        // 点击外部 -> 重新绘制新框
         action = 'draw';
         box.style.display = 'block';
         rect.x = e.clientX;
@@ -272,12 +289,10 @@
         rect.h = Math.abs(dy);
       } 
       else if (action === 'move') {
-        // 限制不要移出屏幕外
         rect.x = Math.max(0, Math.min(canvas.width - rect.w, startPos.rectX + dx));
         rect.y = Math.max(0, Math.min(canvas.height - rect.h, startPos.rectY + dy));
       } 
       else if (action === 'resize') {
-        // 计算调整大小逻辑，这里用坐标点(x1,y1, x2,y2)来计算，防止负数宽高
         let x1 = startPos.rectX;
         let y1 = startPos.rectY;
         let x2 = startPos.rectX + startPos.rectW;
@@ -293,7 +308,6 @@
         rect.w = Math.abs(x2 - x1);
         rect.h = Math.abs(y2 - y1);
       }
-
       renderBox();
     });
 
@@ -301,7 +315,6 @@
       if (action === 'none') return;
       action = 'none';
 
-      // 选区太小，当做无效操作，隐藏框
       if (rect.w < 5 || rect.h < 5) {
         box.style.display = 'none';
         toolbar.style.display = 'none';
@@ -309,20 +322,17 @@
         return;
       }
 
-      // 操作完成后，显示工具栏
+      // 操作完成后，计算工具栏位置并展示
+      positionToolbar();
       toolbar.style.display = 'flex';
     });
 
-    // --- 按钮与快捷键逻辑 ---
     function cancelAction() {
       if (window.electronAPI) window.electronAPI.cancelShot();
     }
 
     function confirmAction() {
-      if (rect.w < 5 || rect.h < 5) {
-        cancelAction();
-        return;
-      }
+      if (rect.w < 5 || rect.h < 5) { cancelAction(); return; }
       if (window.electronAPI) {
         window.electronAPI.finishShot({
           x: Math.round(rect.x),
@@ -333,14 +343,11 @@
       }
     }
 
-    // 绑定按钮事件
     document.getElementById('btn-cancel').addEventListener('click', cancelAction);
     document.getElementById('btn-confirm').addEventListener('click', confirmAction);
 
-    // 禁用默认的右键菜单
     window.addEventListener('contextmenu', e => e.preventDefault());
 
-    // 快捷键支持
     window.addEventListener('keydown', e => {
       if (e.key === 'Escape') cancelAction();
       if (e.key === 'Enter' && box.style.display !== 'none') confirmAction();
