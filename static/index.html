@@ -4746,6 +4746,24 @@ function updateElement(el, rawMarkdown, formatFn) {
                           :rows="3"
                         />
                       </el-form-item>
+                      <el-form-item :label="t('isFullScreen')" class="form-item-align" label-position="left">
+                        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                          <el-switch v-model="visionControlSettings.isFullScreen" @click.stop @change="handleFullScreenChange"></el-switch>
+                        </div>
+                      </el-form-item>
+                      <el-form-item v-if="!visionControlSettings.isFullScreen">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                          <span>
+                            {{t('currentFieldOfView')}} : [{{ visionControlSettings.ScreenSize.join(', ') }}]
+                          </span>
+                          <el-button 
+                            type="primary"
+                            @click="reselectRegion"
+                          >
+                            {{t('Reselect')}}
+                          </el-button>
+                        </div>
+                      </el-form-item>
                     </div>
                   </div>
                 </el-form>
