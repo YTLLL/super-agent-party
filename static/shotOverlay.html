@@ -4,166 +4,347 @@
   <meta charset="utf-8"/>
   <title>截图选区</title>
   <style>
-    html,body{margin:0;width:100vw;height:100vh;overflow:hidden;cursor:crosshair; user-select: none;}
-    #canvas{position:fixed;left:0;top:0;width:100%;height:100%;z-index:2;pointer-events:none}
-    #box{position:absolute;border:2px solid #00a1ff;z-index:3;pointer-events:none;display:none; box-shadow: 0 0 8px rgba(0,161,255,0.4);}
+    html,body{margin:0;width:100vw;height:100vh;overflow:hidden; user-select: none;}
+    
+    /* 背景蒙层画布，鼠标为十字 */
+    #canvas{position:fixed;left:0;top:0;width:100%;height:100%;z-index:2;cursor:crosshair;}
+    
+    /* 选区框体，去掉 pointer-events:none，使其可以响应鼠标事件 */
+    #box{
+      position:absolute;
+      border:2px solid #00a1ff;
+      z-index:3;
+      display:none; 
+      box-shadow: 0 0 8px rgba(0,161,255,0.4);
+      background: rgba(0,0,0,0.01); /* 必须有一点背景才能捕获内部的鼠标拖动事件 */
+      cursor: move;
+    }
 
-    /* --- 优化后的提示弹窗样式 --- */
+    /* --- 控制点样式 --- */
+    .handle {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: #00a1ff;
+      border: 1px solid #fff;
+      border-radius: 50%;
+      z-index: 4;
+      transform: translate(-50%, -50%);
+    }
+    .handle.nw { top: 0; left: 0; cursor: nwse-resize; }
+    .handle.n  { top: 0; left: 50%; cursor: ns-resize; }
+    .handle.ne { top: 0; left: 100%; cursor: nesw-resize; }
+    .handle.e  { top: 50%; left: 100%; cursor: ew-resize; }
+    .handle.se { top: 100%; left: 100%; cursor: nwse-resize; }
+    .handle.s  { top: 100%; left: 50%; cursor: ns-resize; }
+    .handle.sw { top: 100%; left: 0; cursor: nesw-resize; }
+    .handle.w  { top: 50%; left: 0; cursor: ew-resize; }
+
+    /* --- 工具栏样式 --- */
+    #toolbar {
+      position: absolute;
+      bottom: -45px;
+      right: -2px; /* 贴紧右侧边框 */
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      display: flex;
+      padding: 4px;
+      gap: 4px;
+      z-index: 5;
+      display: none; /* 选区完成后再显示 */
+      cursor: default;
+    }
+    .tool-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: none;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: background 0.2s;
+    }
+    .tool-btn:hover { background: #f0f0f0; }
+    .tool-btn.cancel { color: #ff4d4f; }
+    .tool-btn.confirm { color: #52c41a; }
+
+    /* --- 提示弹窗样式 --- */
     #lang-tip {
       position: fixed;
-      bottom: 15%; /* 靠下放置 */
+      bottom: 15%;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(20, 20, 20, 0.75);
-      backdrop-filter: blur(12px); /* 毛玻璃效果 */
+      backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       color: white;
       padding: 12px 24px;
-      border-radius: 50px; /* 胶囊形状 */
-      font-family: -apple-system, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      border-radius: 50px;
+      font-family: -apple-system, "Noto Sans SC", sans-serif;
       font-size: 15px;
       font-weight: 500;
       z-index: 100;
-      pointer-events: none; /* 鼠标穿透 */
+      pointer-events: none;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
       border: 1px solid rgba(255,255,255,0.1);
       display: none;
       opacity: 0;
-      transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: opacity 0.4s, transform 0.4s;
     }
-
-    #lang-tip.show {
-      display: block;
-      opacity: 1;
-      transform: translateX(-50%) translateY(-10px);
-    }
+    #lang-tip.show { display: block; opacity: 1; transform: translateX(-50%) translateY(-10px); }
   </style>
 </head>
 <body>
   <!-- 提示容器 -->
   <div id="lang-tip"></div>
 
+  <!-- 蒙版画布 -->
   <canvas id="canvas"></canvas>
-  <div id="box"></div>
+
+  <!-- 选区框及内部元素 -->
+  <div id="box">
+    <!-- 八个方向的拉伸控制点 -->
+    <div class="handle nw" data-dir="nw"></div>
+    <div class="handle n" data-dir="n"></div>
+    <div class="handle ne" data-dir="ne"></div>
+    <div class="handle e" data-dir="e"></div>
+    <div class="handle se" data-dir="se"></div>
+    <div class="handle s" data-dir="s"></div>
+    <div class="handle sw" data-dir="sw"></div>
+    <div class="handle w" data-dir="w"></div>
+
+    <!-- 工具栏 -->
+    <div id="toolbar">
+      <button class="tool-btn cancel" id="btn-cancel" title="取消 (Esc)">✖</button>
+      <button class="tool-btn confirm" id="btn-confirm" title="完成 (Enter)">✔</button>
+    </div>
+  </div>
 
   <script>
-    const canvas = document.getElementById('canvas')
-    const ctx = canvas.getContext('2d')
-    const box = document.getElementById('box')
-    const tip = document.getElementById('lang-tip')
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const box = document.getElementById('box');
+    const tip = document.getElementById('lang-tip');
+    const toolbar = document.getElementById('toolbar');
 
     // 语言文案
     const locales = {
-      'zh-CN': '💡 按住鼠标左键并拖动，框选AI可见范围，按下右键取消',
-      'en-US': '💡 Click and drag to select the AI visible area, right-click to cancel',
+      'zh-CN': '💡 按住左键拖动框选可见范围，拖拽边缘可调整，右键取消',
+      'en-US': '💡 Drag to select visible area, drag edges to resize, right-click to cancel',
     }
 
     let hideTimer = null;
 
     // 接收语言并显示
-    window.electronAPI.onSetLanguage((lang) => {
-      tip.innerText = locales[lang] || locales['en-US'];
-      tip.style.display = 'block';
-      
-      // 这里的 requestAnimationFrame 确保 display: block 先生效，从而触发 transition 动画
-      requestAnimationFrame(() => {
-        tip.classList.add('show');
+    if (window.electronAPI && window.electronAPI.onSetLanguage) {
+      window.electronAPI.onSetLanguage((lang) => {
+        tip.innerText = locales[lang] || locales['zh-CN'];
+        tip.style.display = 'block';
+        requestAnimationFrame(() => tip.classList.add('show'));
+        hideTimer = setTimeout(fadeOutTip, 5000);
       });
+    } else {
+      // 本地测试用
+      tip.innerText = locales['zh-CN'];
+      tip.style.display = 'block';
+      requestAnimationFrame(() => tip.classList.add('show'));
+    }
 
-      // 5秒后自动淡出
-      hideTimer = setTimeout(fadeOutTip, 5000);
-    });
-
-    // 统一的淡出逻辑
     function fadeOutTip() {
       if (hideTimer) clearTimeout(hideTimer);
       tip.classList.remove('show');
-      // 动画结束后隐藏 DOM
-      setTimeout(() => {
-        if (!tip.classList.contains('show')) tip.style.display = 'none';
-      }, 500);
+      setTimeout(() => { if (!tip.classList.contains('show')) tip.style.display = 'none'; }, 500);
     }
-
-    // 立即隐藏逻辑（用于 mousedown）
     function hideTipImmediately() {
         if (hideTimer) clearTimeout(hideTimer);
-        tip.style.transition = 'none'; // 取消过渡，立刻消失
+        tip.style.transition = 'none';
         tip.classList.remove('show');
         tip.style.display = 'none';
     }
 
     function resizeCanvas() {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
-      drawMask()
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      drawMask();
     }
-    window.addEventListener('resize', resizeCanvas)
-    resizeCanvas()
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
     function drawMask() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      if (box.style.display === 'none') return
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'rgba(0,0,0,.5)';
+      if (box.style.display === 'none') {
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+      const x = parseInt(box.style.left) || 0;
+      const y = parseInt(box.style.top) || 0;
+      const w = parseInt(box.style.width) || 0;
+      const h = parseInt(box.style.height) || 0;
 
-      const x = parseInt(box.style.left)
-      const y = parseInt(box.style.top)
-      const w = parseInt(box.style.width)
-      const h = parseInt(box.style.height)
-
-      ctx.fillStyle = 'rgba(0,0,0,.5)' // 稍微加深蒙版
-      ctx.fillRect(0, 0, canvas.width, y)
-      ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h)
-      ctx.fillRect(0, y, x, h)
-      ctx.fillRect(x + w, y, canvas.width - x - w, h)
+      ctx.fillRect(0, 0, canvas.width, y); // 上
+      ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h); // 下
+      ctx.fillRect(0, y, x, h); // 左
+      ctx.fillRect(x + w, y, canvas.width - x - w, h); // 右
     }
 
-    let startX, startY, down = false
+    // 初始化蒙版全屏变暗
+    drawMask();
+
+    // 核心状态管理
+    let action = 'none'; // 'draw' | 'move' | 'resize' | 'none'
+    let resizeDir = '';
+    
+    // 选区的数据
+    let rect = { x: 0, y: 0, w: 0, h: 0 };
+    // 鼠标按下时的初始数据
+    let startPos = { x: 0, y: 0, rectX: 0, rectY: 0, rectW: 0, rectH: 0 };
+
+    // 将数据同步到DOM
+    function renderBox() {
+      box.style.left = rect.x + 'px';
+      box.style.top = rect.y + 'px';
+      box.style.width = rect.w + 'px';
+      box.style.height = rect.h + 'px';
+      
+      // 防止工具栏跑到屏幕外面
+      if (rect.y + rect.h + 50 > canvas.height) {
+        toolbar.style.bottom = '5px'; // 如果底部空间不够，放到框内
+      } else {
+        toolbar.style.bottom = '-45px'; // 正常放在框下面
+      }
+      
+      drawMask();
+    }
 
     window.addEventListener('mousedown', e => {
-      // 关键：按下时立即让提示消失
-      hideTipImmediately();
+      // 右键直接取消
+      if (e.button === 2) {
+        cancelAction();
+        return;
+      }
 
-      down = true
-      startX = e.clientX
-      startY = e.clientY
-      box.style.display = 'block'
-      box.style.left = startX + 'px'
-      box.style.top = startY + 'px'
-      box.style.width = '0px'
-      box.style.height = '0px'
-    })
+      // 如果点击的是工具栏按钮，不触发任何画布逻辑
+      if (e.target.closest('#toolbar')) return;
+
+      hideTipImmediately();
+      toolbar.style.display = 'none'; // 操作时隐藏工具栏
+
+      startPos = { 
+        x: e.clientX, 
+        y: e.clientY,
+        rectX: rect.x, rectY: rect.y, rectW: rect.w, rectH: rect.h
+      };
+
+      if (e.target.classList.contains('handle')) {
+        // 拖拽控制点 -> 调整大小
+        action = 'resize';
+        resizeDir = e.target.getAttribute('data-dir');
+      } else if (e.target === box) {
+        // 拖拽框体 -> 移动位置
+        action = 'move';
+      } else {
+        // 点击外部 -> 重新绘制新框
+        action = 'draw';
+        box.style.display = 'block';
+        rect.x = e.clientX;
+        rect.y = e.clientY;
+        rect.w = 0;
+        rect.h = 0;
+        renderBox();
+      }
+    });
 
     window.addEventListener('mousemove', e => {
-      if (!down) return
-      const left = Math.min(e.clientX, startX)
-      const top = Math.min(e.clientY, startY)
-      const width = Math.abs(e.clientX - startX)
-      const height = Math.abs(e.clientY - startY)
-      box.style.left = left + 'px'
-      box.style.top = top + 'px'
-      box.style.width = width + 'px'
-      box.style.height = height + 'px'
-      drawMask()
-    })
+      if (action === 'none') return;
+
+      const dx = e.clientX - startPos.x;
+      const dy = e.clientY - startPos.y;
+
+      if (action === 'draw') {
+        rect.x = Math.min(e.clientX, startPos.x);
+        rect.y = Math.min(e.clientY, startPos.y);
+        rect.w = Math.abs(dx);
+        rect.h = Math.abs(dy);
+      } 
+      else if (action === 'move') {
+        // 限制不要移出屏幕外
+        rect.x = Math.max(0, Math.min(canvas.width - rect.w, startPos.rectX + dx));
+        rect.y = Math.max(0, Math.min(canvas.height - rect.h, startPos.rectY + dy));
+      } 
+      else if (action === 'resize') {
+        // 计算调整大小逻辑，这里用坐标点(x1,y1, x2,y2)来计算，防止负数宽高
+        let x1 = startPos.rectX;
+        let y1 = startPos.rectY;
+        let x2 = startPos.rectX + startPos.rectW;
+        let y2 = startPos.rectY + startPos.rectH;
+
+        if (resizeDir.includes('w')) x1 = e.clientX;
+        if (resizeDir.includes('e')) x2 = e.clientX;
+        if (resizeDir.includes('n')) y1 = e.clientY;
+        if (resizeDir.includes('s')) y2 = e.clientY;
+
+        rect.x = Math.min(x1, x2);
+        rect.y = Math.min(y1, y2);
+        rect.w = Math.abs(x2 - x1);
+        rect.h = Math.abs(y2 - y1);
+      }
+
+      renderBox();
+    });
 
     window.addEventListener('mouseup', e => {
-      if (!down) return
-      down = false
-      const rect = {
-        x: parseInt(box.style.left),
-        y: parseInt(box.style.top),
-        width: parseInt(box.style.width),
-        height: parseInt(box.style.height)
-      }
-      if (rect.width < 5 || rect.height < 5) {
-        window.electronAPI.cancelShot()
-        return
-      }
-      window.electronAPI.finishShot(rect)
-    })
+      if (action === 'none') return;
+      action = 'none';
 
+      // 选区太小，当做无效操作，隐藏框
+      if (rect.w < 5 || rect.h < 5) {
+        box.style.display = 'none';
+        toolbar.style.display = 'none';
+        drawMask();
+        return;
+      }
+
+      // 操作完成后，显示工具栏
+      toolbar.style.display = 'flex';
+    });
+
+    // --- 按钮与快捷键逻辑 ---
+    function cancelAction() {
+      if (window.electronAPI) window.electronAPI.cancelShot();
+    }
+
+    function confirmAction() {
+      if (rect.w < 5 || rect.h < 5) {
+        cancelAction();
+        return;
+      }
+      if (window.electronAPI) {
+        window.electronAPI.finishShot({
+          x: Math.round(rect.x),
+          y: Math.round(rect.y),
+          width: Math.round(rect.w),
+          height: Math.round(rect.h)
+        });
+      }
+    }
+
+    // 绑定按钮事件
+    document.getElementById('btn-cancel').addEventListener('click', cancelAction);
+    document.getElementById('btn-confirm').addEventListener('click', confirmAction);
+
+    // 禁用默认的右键菜单
+    window.addEventListener('contextmenu', e => e.preventDefault());
+
+    // 快捷键支持
     window.addEventListener('keydown', e => {
-      if (e.key === 'Escape') window.electronAPI.cancelShot()
-    })
+      if (e.key === 'Escape') cancelAction();
+      if (e.key === 'Enter' && box.style.display !== 'none') confirmAction();
+    });
   </script>
 </body>
 </html>
