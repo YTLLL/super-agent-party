@@ -3,7 +3,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from py.get_setting import load_settings
 
-async def e2b_code_async(code: str, language: str = "Python") -> str:
+async def e2b_code(code: str, language: str = "Python") -> str:
     settings = await load_settings()
     e2b_api_key = settings["codeSettings"]["e2b_api_key"]
     executor = ThreadPoolExecutor()
@@ -21,7 +21,7 @@ import asyncio
 from aiohttp import ClientSession
 
 
-async def local_run_code_async(code: str, language: str = "python") -> str:
+async def local_run_code(code: str, language: str = "python") -> str:
     settings = await load_settings()
     url = settings["codeSettings"]["sandbox_url"].strip("/") + "/run_code"
     headers = {
@@ -41,7 +41,7 @@ async def local_run_code_async(code: str, language: str = "python") -> str:
 e2b_code_tool = {
     "type": "function",
     "function": {
-        "name": "e2b_code_async",
+        "name": "e2b_code",
         "description": "执行代码，工具只会返回stdout和stderr。请将你要查看的答案输出到stdout。",
         "parameters": {
             "type": "object",
@@ -65,7 +65,7 @@ e2b_code_tool = {
 local_run_code_tool = {
   "type": "function",
   "function": {
-    "name": "local_run_code_async",
+    "name": "local_run_code",
     "description": "执行代码，工具只会返回stdout和stderr。请将你要查看的答案输出到stdout。",
     "parameters": {
       "type": "object",

@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 # 获取本地时区（tzinfo 类型）
 local_timezone = get_localzone()  # 这个返回的是 tzinfo 类型
 
-async def time_async(timezone: str = None):
+async def time(timezone: str = None):
     # 如果没有传入 timezone，则使用本地时区
     tz = ZoneInfo(timezone) if timezone else local_timezone
     
@@ -26,7 +26,7 @@ async def time_async(timezone: str = None):
 time_tool = {
     "type": "function",
     "function": {
-        "name": "time_async",
+        "name": "time",
         "description": f"获取当前时间（带时区信息）",
         "parameters": {
             "type": "object",
@@ -113,7 +113,7 @@ def _desc(code: int) -> str:
     return _WCODE_MAP.get(code, "未知")
 
 
-async def get_weather_async(city: str, forecast: bool = False, days: int = 1) -> str:
+async def get_weather(city: str, forecast: bool = False, days: int = 1) -> str:
     """
     查询城市天气（实时或预报）—— 改用 Open-Meteo
     """
@@ -161,7 +161,7 @@ async def get_weather_async(city: str, forecast: bool = False, days: int = 1) ->
 weather_tool = {
     "type": "function",
     "function": {
-        "name": "get_weather_async",
+        "name": "get_weather",
         "description": "查询城市天气（实时或预报）",
         "parameters": {
             "type": "object",
@@ -188,7 +188,7 @@ weather_tool = {
     },
 }
 
-async def get_location_coordinates_async(city: str) -> str:
+async def get_location_coordinates(city: str) -> str:
     """
     查询城市的经纬度信息（改用 Open-Meteo GeoCoding）
     返回格式与原来完全一致，方便无痛替换。
@@ -225,7 +225,7 @@ async def get_location_coordinates_async(city: str) -> str:
 location_tool = {
     "type": "function",
     "function": {
-        "name": "get_location_coordinates_async",
+        "name": "get_location_coordinates",
         "description": "查询城市的经纬度和位置信息",
         "parameters": {
             "type": "object",
@@ -240,7 +240,7 @@ location_tool = {
     },
 }
 
-async def get_weather_by_city_async(city: str,lang:str="zh-CN",product:str="astro") -> str:
+async def get_weather_by_city(city: str,lang:str="zh-CN",product:str="astro") -> str:
     """
     根据城市名称获取7timer天气数据（JSON + 图片URL）
     
@@ -249,7 +249,7 @@ async def get_weather_by_city_async(city: str,lang:str="zh-CN",product:str="astr
     """
     try:
         # 1. 获取城市经纬度
-        location_info = await get_location_coordinates_async(city)
+        location_info = await get_location_coordinates(city)
         
         # 解析经纬度（假设返回格式包含 "经纬度: 纬度, 经度"）
         if "经纬度:" not in location_info:
@@ -298,7 +298,7 @@ async def get_weather_by_city_async(city: str,lang:str="zh-CN",product:str="astr
 timer_weather_tool = {
     "type": "function",
     "function": {
-        "name": "get_weather_by_city_async",
+        "name": "get_weather_by_city",
         "description": "更加详细的天气信息，包含天气晴雨表图片。根据城市名称获取7timer天气数据（JSON + 图片URL）。请按照![image](image_url)格式返回图片URL",
         "parameters": {
             "type": "object",

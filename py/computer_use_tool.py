@@ -30,13 +30,31 @@ def require_gui(func):
 # ==============================================================
 
 
+CURRENT_SCREEN_REGION = None
+
+def set_screen_region(region: Optional[Tuple[int, int, int, int]]):
+    """设置当前激活的屏幕映射区域"""
+    global CURRENT_SCREEN_REGION
+    CURRENT_SCREEN_REGION = region
+
 def _percent_to_pixel(x_percent: float, y_percent: float) -> Tuple[int, int]:
-    """内部辅助函数：将千分比 (0 到 1000) 转换为当前屏幕的实际像素坐标。"""
-    width, height = pyautogui.size()
-    
+    """内部辅助函数：将千分比 (0 到 1000) 转换为当前屏幕或指定区域的实际像素坐标。"""
     x_percent = max(0, min(1000, float(x_percent)))
     y_percent = max(0, min(1000, float(y_percent)))
     
+    # 如果指定了局部屏幕区域，则基于局部区域计算坐标
+    if CURRENT_SCREEN_REGION is not None:
+        rx, ry, rw, rh = CURRENT_SCREEN_REGION
+        px = rx + int(rw * (x_percent / 1000))
+        py = ry + int(rh * (y_percent / 1000))
+        
+        # 确保不超出该区域的边界
+        px = min(px, rx + rw - 1)
+        py = min(py, ry + rh - 1)
+        return px, py
+        
+    # 否则默认映射全屏坐标
+    width, height = pyautogui.size()
     px = min(int(width * (x_percent / 1000)), width - 1)
     py = min(int(height * (y_percent / 1000)), height - 1)
     
@@ -44,7 +62,7 @@ def _percent_to_pixel(x_percent: float, y_percent: float) -> Tuple[int, int]:
 
 
 @require_gui
-async def mouse_move_async(x: float, y: float, duration: float = 0.5) -> str:
+async def mouse_move(x: float, y: float, duration: float = 0.5) -> str:
     """移动鼠标到屏幕千分比位置"""
     if x < 0 or x > 1000 or y < 0 or y > 1000:
         return "千分比坐标超出范围，请输入 0 到 1000 之间的值。"
@@ -60,7 +78,7 @@ async def mouse_move_async(x: float, y: float, duration: float = 0.5) -> str:
 
 
 @require_gui
-async def mouse_click_async(button: str = "left", clicks: int = 1, x: Optional[float] = None, y: Optional[float] = None) -> str:
+async def mouse_click(button: str = "left", clicks: int = 1, x: Optional[float] = None, y: Optional[float] = None) -> str:
     """点击鼠标（支持千分比坐标）"""
     if x is not None and y is not None:
         if x < 0 or x > 1000 or y < 0 or y > 1000:    
@@ -69,8 +87,8 @@ async def mouse_click_async(button: str = "left", clicks: int = 1, x: Optional[f
         def _click_at():
             px, py = _percent_to_pixel(x, y)
             pyautogui.moveTo(px, py, duration=0.2)
-            time.sleep(0.05)
-            pyautogui.click(x=px, y=py, clicks=clicks, button=button, interval=0.05)
+            time.sleep(0.2) 
+            pyautogui.click(x=px, y=py, clicks=clicks, button=button, interval=0.1)
             
         await asyncio.to_thread(_click_at)
         # 根据点击次数打上不同的标签
@@ -78,12 +96,12 @@ async def mouse_click_async(button: str = "left", clicks: int = 1, x: Optional[f
         return f"鼠标已移动到 ({x}‰, {y}‰) 并使用 {button} 键点击了 {clicks} 次。 [LAST_ACTION: {tag}]"
     else:
         # 如果没有传入坐标（原地点击），我们无法在图片上准确标出位置，所以不带坐标标签
-        await asyncio.to_thread(pyautogui.click, clicks=clicks, button=button, interval=0.05)
+        await asyncio.to_thread(pyautogui.click, clicks=clicks, button=button, interval=0.1)
         return f"鼠标在当前位置使用 {button} 键点击了 {clicks} 次。[LAST_ACTION: CLICK_CURRENT]"
 
 
 @require_gui
-async def mouse_double_click_async(button: str = "left", x: Optional[float] = None, y: Optional[float] = None) -> str:
+async def mouse_double_click(button: str = "left", x: Optional[float] = None, y: Optional[float] = None) -> str:
     """双击鼠标"""
     if x is not None and y is not None:
         if x < 0 or x > 1000 or y < 0 or y > 1000:    
@@ -92,18 +110,18 @@ async def mouse_double_click_async(button: str = "left", x: Optional[float] = No
         def _double_click():
             px, py = _percent_to_pixel(x, y)
             pyautogui.moveTo(px, py, duration=0.2)
-            time.sleep(0.05)
-            pyautogui.click(x=px, y=py, clicks=2, button=button, interval=0.05)
+            time.sleep(0.2)
+            pyautogui.click(x=px, y=py, clicks=2, button=button, interval=0.1)
             
         await asyncio.to_thread(_double_click)
         return f"鼠标已移动到 ({x}‰, {y}‰) 并使用 {button} 键双击。 [LAST_ACTION: DOUBLE_CLICK({x},{y})]"
     else:
-        await asyncio.to_thread(pyautogui.click, clicks=2, button=button, interval=0.05)
+        await asyncio.to_thread(pyautogui.click, clicks=2, button=button, interval=0.1)
         return f"鼠标在当前位置使用 {button} 键双击。 [LAST_ACTION: CLICK_CURRENT]"
 
 
 @require_gui
-async def mouse_drag_async(x1: float, y1: float, x2: float, y2: float, duration: float = 1.0, button: str = "left") -> str:
+async def mouse_drag(x1: float, y1: float, x2: float, y2: float, duration: float = 1.0, button: str = "left") -> str:
     """从起始位置 (x1, y1) 拖拽到终点位置 (x2, y2)"""
     try:
         coords = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
@@ -127,7 +145,7 @@ async def mouse_drag_async(x1: float, y1: float, x2: float, y2: float, duration:
 
 
 @require_gui
-async def mouse_scroll_async(clicks: int) -> str:
+async def mouse_scroll(clicks: int) -> str:
     """滚动鼠标"""
     def _scroll():
         chunk_size = 10 if abs(clicks) > 10 else abs(clicks)
@@ -148,7 +166,7 @@ async def mouse_scroll_async(clicks: int) -> str:
 
 
 @require_gui
-async def mouse_hold_async(button: str, duration: float) -> str:
+async def mouse_hold(button: str, duration: float) -> str:
     """长按鼠标按键"""
     if duration > 30: duration = 30
     
@@ -165,7 +183,7 @@ async def mouse_hold_async(button: str, duration: float) -> str:
 
 
 @require_gui
-async def keyboard_type_async(text: str) -> str:
+async def copy_to_input_box(text: str) -> str:
     """输入文本"""
     def _type_text():
         old_clipboard = ""
@@ -203,18 +221,37 @@ async def keyboard_type_async(text: str) -> str:
                     time.sleep(0.05)
 
     await asyncio.to_thread(_type_text)
-    return f"已成功通过键盘输入文本：'{text}'"
+    return f"已复制文本到输入框：'{text}'"
 
 
 @require_gui
-async def keyboard_press_async(key: str, presses: int = 1) -> str:
-    """按下单个按键"""
-    await asyncio.to_thread(pyautogui.press, key, presses=presses, interval=0.05)
+async def keyboard_press(key: str, presses: int = 1) -> str:
+    """按下单个按键多次"""
+    def _press_logic():
+        pyautogui.press(key, presses=presses, interval=0.05)
+    
+    await asyncio.to_thread(_press_logic)
     return f"已按下键盘按键 '{key}' {presses} 次。"
 
 
 @require_gui
-async def keyboard_hotkey_async(keys: List[str]) -> str:
+async def keyboard_sequence(keys: List[str]) -> str:
+    """按顺序按下多个不同的按键，中间间隔 0.5 秒"""
+    if not keys:
+        return "错误：未提供按键列表。"
+
+    def _sequence_logic():
+        for i, key in enumerate(keys):
+            pyautogui.press(key)
+            # 如果不是最后一个按键，则等待 0.5 秒
+            if i < len(keys) - 1:
+                time.sleep(0.5)
+
+    await asyncio.to_thread(_sequence_logic)
+    return f"已按顺序执行按键序列：{', '.join(keys)}，按键间隔 0.5 秒。"
+
+@require_gui
+async def keyboard_hotkey(keys: List[str]) -> str:
     """按下组合快捷键"""
     if not keys: return "错误：未提供按键组合"
     
@@ -234,7 +271,7 @@ async def keyboard_hotkey_async(keys: List[str]) -> str:
 
 
 @require_gui
-async def keyboard_hold_async(keys: List[str], duration: float) -> str:
+async def keyboard_hold(keys: List[str], duration: float) -> str:
     """长按按键"""
     if duration > 30: duration = 30
     
@@ -264,14 +301,14 @@ async def keyboard_hold_async(keys: List[str], duration: float) -> str:
     return f"已成功长按组合键 {keys} 持续 {duration} 秒。"
 
 
-# 注意：wait_async 不需要 GUI，所以【不要】加 @require_gui
-async def wait_async(seconds: float) -> str:
+# 注意：wait 不需要 GUI，所以【不要】加 @require_gui
+async def wait(seconds: float) -> str:
     """等待一段时间，让页面或程序加载"""
     seconds = min(max(0, seconds), 60)
     await asyncio.sleep(seconds)
     return f"已等待 {seconds} 秒。"
 
-async def screenshot_async() -> str:
+async def screenshot() -> str:
     """获取截图"""
     await asyncio.sleep(0.3)
     return "[Getting screenshot]"
@@ -281,7 +318,7 @@ async def screenshot_async() -> str:
 mouse_move_tool = {
     "type": "function",
     "function": {
-        "name": "mouse_move_async",
+        "name": "mouse_move",
         "description": "将鼠标移动到屏幕上的指定位置。坐标使用千分比表示（0到1000）。(0,0)是屏幕左上角，(1000,1000)是右下角，(500,500)是屏幕正中心。",
         "parameters": {
             "type": "object",
@@ -298,7 +335,7 @@ mouse_move_tool = {
 mouse_click_tool = {
     "type": "function",
     "function": {
-        "name": "mouse_click_async",
+        "name": "mouse_click",
         "description": "点击鼠标。如果传入千分比坐标，则会先移动到该位置再点击；如果不传坐标则在当前位置点击。",
         "parameters": {
             "type": "object",
@@ -316,7 +353,7 @@ mouse_click_tool = {
 mouse_double_click_tool = {
     "type": "function",
     "function": {
-        "name": "mouse_double_click_async",
+        "name": "mouse_double_click",
         "description": "双击鼠标以快速打开链接、文件、应用等。如果传入千分比坐标，则会先移动到该位置再点击；如果不传坐标则在当前位置点击。",
         "parameters": {
             "type": "object",
@@ -333,7 +370,7 @@ mouse_double_click_tool = {
 mouse_drag_tool = {
     "type": "function",
     "function": {
-        "name": "mouse_drag_async",
+        "name": "mouse_drag",
         "description": "按下鼠标按键从起始坐标拖动到终点坐标。常用于拖动窗口、滑块、移动文件或框选一段区域。",
         "parameters": {
             "type": "object",
@@ -350,113 +387,10 @@ mouse_drag_tool = {
     }
 }
 
-mouse_scroll_tool = {
-    "type": "function",
-    "function": {
-        "name": "mouse_scroll_async",
-        "description": "滚动鼠标滚轮以浏览网页或文档。正数表示向上滚动，负数表示向下滚动。",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "clicks": {"type": "integer", "description": "滚动单位。大于0为向上滚，小于0为向下滚。如 500 或 -500。一般网页滚动一次可以尝试 300 到 800 的数值。"}
-            },
-            "required": ["clicks"]
-        }
-    }
-}
-
-keyboard_type_tool = {
-    "type": "function",
-    "function": {
-        "name": "keyboard_type_async",
-        "description": "在当前焦点输入框中输入一段文本。支持输入中文和英文字符。注意：调用前请确保已经点击了正确的输入框使之获得了焦点！",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "text": {"type": "string", "description": "需要输入的具体文本内容"}
-            },
-            "required": ["text"]
-        }
-    }
-}
-
-keyboard_press_tool = {
-    "type": "function",
-    "function": {
-        "name": "keyboard_press_async",
-        "description": "按下单个功能按键。常用于输入回车(enter)、退格(backspace)、转义(esc)、制表符(tab)、方向键等。",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "key": {"type": "string", "description": "按键名称，有效值例如: enter, space, esc, backspace, tab, up, down, left, right, delete, pagedown, pageup等。"},
-                "presses": {"type": "integer", "description": "按下次数，默认1次", "default": 1}
-            },
-            "required": ["key"]
-        }
-    }
-}
-
-keyboard_hotkey_tool = {
-    "type": "function",
-    "function": {
-        "name": "keyboard_hotkey_async",
-        "description": "按下键盘组合快捷键。例如复制是['ctrl', 'c']，切换窗口是['alt', 'tab']。如果是mac系统请使用'command'代替'ctrl'。",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "keys": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "快捷键组合数组，必须按照按下的先后顺序排列。例如: ['ctrl', 'shift', 'esc']"
-                }
-            },
-            "required": ["keys"]
-        }
-    }
-}
-
-wait_tool = {
-    "type": "function",
-    "function": {
-        "name": "wait_async",
-        "description": "让操作暂停并等待一段时间。在点击了加载页面的链接、启动软件、或者输入内容后，必须调用此工具等待 UI 刷新完成，否则下一步操作可能会因为找不到目标而失败。",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "seconds": {"type": "number", "description": "需要等待的秒数，如 1, 2.5, 5等。如果网速慢或程序加载慢，请适当延长。"}
-            },
-            "required": ["seconds"]
-        }
-    }
-}
-
-keyboard_hold_tool = {
-    "type": "function",
-    "function": {
-        "name": "keyboard_hold_async",
-        "description": "长按键盘上的一个或多个按键一段时间。这对于控制游戏角色移动或执行需要按住的操作非常有用。",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "keys": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "需要按住的按键列表。例如 ['w'] 或 ['w', 'shift']。"
-                },
-                "duration": {
-                    "type": "number", 
-                    "description": "按住的时长（秒）。"
-                }
-            },
-            "required": ["keys", "duration"]
-        }
-    }
-}
-
 mouse_hold_tool = {
     "type": "function",
     "function": {
-        "name": "mouse_hold_async",
+        "name": "mouse_hold",
         "description": "长按鼠标某个按键一段时间。适用于游戏中的蓄力、持续开火或某些 UI 的长按菜单。",
         "parameters": {
             "type": "object",
@@ -476,10 +410,140 @@ mouse_hold_tool = {
     }
 }
 
-screenshot_async_tool = {
+
+mouse_scroll_tool = {
     "type": "function",
     "function": {
-        "name": "screenshot_async",
+        "name": "mouse_scroll",
+        "description": "滚动鼠标滚轮以浏览网页或文档。正数表示向上滚动，负数表示向下滚动。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "clicks": {"type": "integer", "description": "滚动单位。大于0为向上滚，小于0为向下滚。如 500 或 -500。一般网页滚动一次可以尝试 300 到 800 的数值。"}
+            },
+            "required": ["clicks"]
+        }
+    }
+}
+
+keyboard_type_tool = {
+    "type": "function",
+    "function": {
+        "name": "copy_to_input_box",
+        "description": "在当前焦点输入框中复制你给的一段文本。支持输入中文和英文字符。注意：调用前请确保已经点击了正确的输入框使之获得了焦点！这个输入只是复制粘贴，与键盘控制无关，不是真的按键交互",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "需要输入的具体文本内容"}
+            },
+            "required": ["text"]
+        }
+    }
+}
+
+keyboard_press_tool = {
+    "type": "function",
+    "function": {
+        "name": "keyboard_press",
+        "description": "按下单个按键。适用于需要连续按下同一个键的情况，例如删除多个字符或连续下移。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string", 
+                    "description": "按键名称，例如: 'enter', 'backspace', 'tab', 'down', 'esc'。"
+                },
+                "presses": {
+                    "type": "integer", 
+                    "description": "按下该按键的次数，默认为 1。", 
+                    "default": 1
+                }
+            },
+            "required": ["key"]
+        }
+    }
+}
+
+keyboard_sequence_tool = {
+    "type": "function",
+    "function": {
+        "name": "keyboard_sequence",
+        "description": "按顺序按下多个不同的按键。程序会在每个按键之间自动停顿 0.5 秒。适用于流程化的按键操作，例如 '先按 Tab 切换焦点，再按 Enter 确认'。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "按键名称的列表。例如 ['tab', 'enter'] 或 ['up', 'up', 'space']。"
+                }
+            },
+            "required": ["keys"]
+        }
+    }
+}
+
+keyboard_hotkey_tool = {
+    "type": "function",
+    "function": {
+        "name": "keyboard_hotkey",
+        "description": "按下键盘组合快捷键。例如复制是['ctrl', 'c']，切换窗口是['alt', 'tab']。如果是mac系统请使用'command'代替'ctrl'。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "快捷键组合数组，必须按照按下的先后顺序排列。例如: ['ctrl', 'shift', 'esc']"
+                }
+            },
+            "required": ["keys"]
+        }
+    }
+}
+
+keyboard_hold_tool = {
+    "type": "function",
+    "function": {
+        "name": "keyboard_hold",
+        "description": "长按键盘上的一个或多个按键一段时间。这对于控制游戏角色移动或执行需要按住的操作非常有用。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "需要按住的按键列表。例如 ['w'] 或 ['w', 'shift']。"
+                },
+                "duration": {
+                    "type": "number", 
+                    "description": "按住的时长（秒）。"
+                }
+            },
+            "required": ["keys", "duration"]
+        }
+    }
+}
+
+
+wait_tool = {
+    "type": "function",
+    "function": {
+        "name": "wait",
+        "description": "让操作暂停并等待一段时间。在点击了加载页面的链接、启动软件、或者输入内容后，必须调用此工具等待 UI 刷新完成，否则下一步操作可能会因为找不到目标而失败。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "seconds": {"type": "number", "description": "需要等待的秒数，如 1, 2.5, 5等。如果网速慢或程序加载慢，请适当延长。"}
+            },
+            "required": ["seconds"]
+        }
+    }
+}
+screenshot_tool = {
+    "type": "function",
+    "function": {
+        "name": "screenshot",
         "description": "截取带有千分比辅助网格的当前桌面的图像"
     }
 }
@@ -491,7 +555,7 @@ computer_use_tools = [
 ]
 
 desktopVision_use_tools = [
-    screenshot_async_tool
+    screenshot_tool
 ]
 
 mouse_use_tools = [
@@ -506,6 +570,7 @@ mouse_use_tools = [
 keyboard_use_tools = [
     keyboard_type_tool,
     keyboard_press_tool,
+    keyboard_sequence_tool,
     keyboard_hotkey_tool,
     keyboard_hold_tool,
 ]

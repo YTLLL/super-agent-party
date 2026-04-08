@@ -425,7 +425,7 @@ class WebSocketHandler(blivedm.BaseHandler):
         asyncio.create_task(manager.broadcast(data))
     
     def _on_buy_guard(self, client: blivedm.BLiveClient, message: web_models.GuardBuyMessage):
-        msg_text = f'{message.username} 上舰，guard_level={message.guard_level}'
+        msg_text = f'{message.username} 上舰，大航海等级={message.guard_level}'
         data = {
             'id': str(uuid.uuid4()),
             'type': 'message',
@@ -500,7 +500,7 @@ class OpenLiveWebSocketHandler(blivedm.BaseHandler):
         asyncio.create_task(manager.broadcast(data))
 
     def _on_open_live_buy_guard(self, client: blivedm.OpenLiveClient, message: open_models.GuardBuyMessage):
-        msg_text = f'{message.user_info.uname} 购买 大航海等级={message.guard_level}'
+        msg_text = f'{message.user_info.uname} 上舰，大航海等级={message.guard_level}'
         data = {
             'id': str(uuid.uuid4()),
             'type': 'message',

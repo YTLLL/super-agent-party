@@ -16341,4 +16341,51 @@ closeTaskCenter() {
       this.autoSaveSettings();
     },
 
+    async handleFullScreenChange(val) {
+      if (!val) {
+        // 如果开关变成 false（关闭全屏），主动调起选区界面
+        await this.reselectRegion();
+      } else {
+        // 如果开关变成 true（开启全屏），直接保存设置
+        this.autoSaveSettings();
+      }
+    },
+
+    /**
+     * 呼出边框让用户重新选择屏幕区域
+     */
+    async reselectRegion() {
+      try {
+        // 调用 preload 暴露的方法，传入 true 让主窗口暂时隐藏
+        const rect = await window.electronAPI.showScreenshotOverlay(true);
+        
+        // 选区结束后，恢复显示主窗口
+        window.electronAPI.windowAction('show');
+        
+        if (rect) {
+          // 用户成功框选，记录选区：[x, y, 宽度, 高度]
+          this.visionControlSettings.ScreenSize = [
+            Math.floor(rect.x), 
+            Math.floor(rect.y), 
+            Math.floor(rect.width), 
+            Math.floor(rect.height)
+          ];
+          this.visionControlSettings.isFullScreen = false;
+        } else {
+          // 如果 rect 为空（比如用户按 Esc 取消了截图），自动恢复为全屏模式
+          this.visionControlSettings.isFullScreen = true;
+        }
+        
+        // 触发自动保存
+        this.autoSaveSettings();
+        
+      } catch (error) {
+        console.error("选区失败:", error);
+        // 如果发生错误，确保主窗口重新出现并恢复状态
+        window.electronAPI.windowAction('show');
+        this.visionControlSettings.isFullScreen = true;
+        this.autoSaveSettings();
+      }
+    },
+
 }

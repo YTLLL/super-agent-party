@@ -1090,6 +1090,10 @@ ipcMain.handle('upload-to-workspace', async (event, { targetDirPath, sourceFileP
       
       shotOverlay.setIgnoreMouseEvents(false)
       shotOverlay.loadFile(path.join(__dirname, 'static/shotOverlay.html'))
+      shotOverlay.webContents.on('did-finish-load', () => {
+        shotOverlay.webContents.send('set-shot-language', currentLanguage)
+      })
+
       shotOverlay.setVisibleOnAllWorkspaces(true)
 
       return new Promise((resolve) => {

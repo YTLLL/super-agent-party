@@ -496,7 +496,7 @@ async def _exec_docker_cmd_simple(cwd: str, cmd_list: list) -> str:
 
 # ==================== Docker 环境工具实现 (含新功能) ====================
 
-async def docker_sandbox_async(command: str, background: bool = False) -> str | AsyncIterator[str]:
+async def docker_sandbox(command: str, background: bool = False) -> str | AsyncIterator[str]:
     """[Docker] 在沙盒中执行命令，增强了错误捕获和诊断能力"""
     settings = await load_settings()
     cwd = settings.get("CLISettings", {}).get("cc_path")
@@ -1699,7 +1699,7 @@ async def todo_write_tool_local(action: str, id: str = None, content: str = None
 
 cli_info = "这是一个交互式命令行工具..."
 
-async def claude_code_async(prompt) -> str | AsyncIterator[str]:
+async def claude_code(prompt) -> str | AsyncIterator[str]:
     settings = await load_settings()
     cwd = settings.get("CLISettings", {}).get("cc_path")
     ccSettings = settings.get("ccSettings", {})
@@ -1730,7 +1730,7 @@ async def claude_code_async(prompt) -> str | AsyncIterator[str]:
                     if isinstance(block, TextBlock): yield block.text
     return _stream()
 
-async def qwen_code_async(prompt: str) -> str | AsyncIterator[str]:
+async def qwen_code(prompt: str) -> str | AsyncIterator[str]:
     settings = await load_settings()
     cwd = settings.get("CLISettings", {}).get("cc_path")
     qcSettings = settings.get("qcSettings", {})
@@ -2068,7 +2068,7 @@ TOOLS_REGISTRY = {
     # --- 基础设施 ---
     "bash": {
         "type": "function", "function": {
-            "name": "docker_sandbox_async", 
+            "name": "docker_sandbox", 
             "description": "Run bash in Docker.",
             "parameters": {
                 "type": "object", 
@@ -2340,7 +2340,7 @@ LOCAL_TOOLS_REGISTRY = {
 claude_code_tool = {
     "type": "function",
     "function": {
-        "name": "claude_code_async",
+        "name": "claude_code",
         "description": f"Interact with Claude Code Agent. {cli_info}",
         "parameters": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}
     }
@@ -2348,7 +2348,7 @@ claude_code_tool = {
 qwen_code_tool = {
     "type": "function",
     "function": {
-        "name": "qwen_code_async",
+        "name": "qwen_code",
         "description": f"Interact with Qwen Code Agent. {cli_info}",
         "parameters": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}
     }

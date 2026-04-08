@@ -4,22 +4,93 @@
   <meta charset="utf-8"/>
   <title>截图选区</title>
   <style>
-    html,body{margin:0;width:100vw;height:100vh;overflow:hidden;cursor:crosshair}
-    /* 唯一一层 canvas，其余什么都不画 */
+    html,body{margin:0;width:100vw;height:100vh;overflow:hidden;cursor:crosshair; user-select: none;}
     #canvas{position:fixed;left:0;top:0;width:100%;height:100%;z-index:2;pointer-events:none}
-    /* 橙色边框 */
-    #box{position:absolute;border:2px solid #ff7b00;z-index:3;pointer-events:none;display:none}
+    #box{position:absolute;border:2px solid #00a1ff;z-index:3;pointer-events:none;display:none; box-shadow: 0 0 8px rgba(0,161,255,0.4);}
+
+    /* --- 优化后的提示弹窗样式 --- */
+    #lang-tip {
+      position: fixed;
+      bottom: 15%; /* 靠下放置 */
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 20, 0.75);
+      backdrop-filter: blur(12px); /* 毛玻璃效果 */
+      -webkit-backdrop-filter: blur(12px);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 50px; /* 胶囊形状 */
+      font-family: -apple-system, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      z-index: 100;
+      pointer-events: none; /* 鼠标穿透 */
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      display: none;
+      opacity: 0;
+      transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #lang-tip.show {
+      display: block;
+      opacity: 1;
+      transform: translateX(-50%) translateY(-10px);
+    }
   </style>
 </head>
 <body>
+  <!-- 提示容器 -->
+  <div id="lang-tip"></div>
+
   <canvas id="canvas"></canvas>
   <div id="box"></div>
 
-  <script src="shotPreload.js"></script>
   <script>
     const canvas = document.getElementById('canvas')
     const ctx = canvas.getContext('2d')
     const box = document.getElementById('box')
+    const tip = document.getElementById('lang-tip')
+
+    // 语言文案
+    const locales = {
+      'zh-CN': '💡 按住鼠标左键并拖动，框选AI可见范围，按下右键取消',
+      'en-US': '💡 Click and drag to select the AI visible area, right-click to cancel',
+    }
+
+    let hideTimer = null;
+
+    // 接收语言并显示
+    window.electronAPI.onSetLanguage((lang) => {
+      tip.innerText = locales[lang] || locales['en-US'];
+      tip.style.display = 'block';
+      
+      // 这里的 requestAnimationFrame 确保 display: block 先生效，从而触发 transition 动画
+      requestAnimationFrame(() => {
+        tip.classList.add('show');
+      });
+
+      // 5秒后自动淡出
+      hideTimer = setTimeout(fadeOutTip, 5000);
+    });
+
+    // 统一的淡出逻辑
+    function fadeOutTip() {
+      if (hideTimer) clearTimeout(hideTimer);
+      tip.classList.remove('show');
+      // 动画结束后隐藏 DOM
+      setTimeout(() => {
+        if (!tip.classList.contains('show')) tip.style.display = 'none';
+      }, 500);
+    }
+
+    // 立即隐藏逻辑（用于 mousedown）
+    function hideTipImmediately() {
+        if (hideTimer) clearTimeout(hideTimer);
+        tip.style.transition = 'none'; // 取消过渡，立刻消失
+        tip.classList.remove('show');
+        tip.style.display = 'none';
+    }
 
     function resizeCanvas() {
       canvas.width = window.innerWidth
@@ -31,32 +102,34 @@
 
     function drawMask() {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-      if (box.style.display === 'none') return   // 还没开始选
+      if (box.style.display === 'none') return
 
       const x = parseInt(box.style.left)
       const y = parseInt(box.style.top)
       const w = parseInt(box.style.width)
       const h = parseInt(box.style.height)
 
-      ctx.fillStyle = 'rgba(0,0,0,.45)'
-
-      /* 反向填充：只画四条边，中间完全留空 */
-      ctx.fillRect(0, 0, canvas.width, y)                    // 上边
-      ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h) // 下边
-      ctx.fillRect(0, y, x, h)                               // 左边
-      ctx.fillRect(x + w, y, canvas.width - x - w, h)        // 右边
+      ctx.fillStyle = 'rgba(0,0,0,.5)' // 稍微加深蒙版
+      ctx.fillRect(0, 0, canvas.width, y)
+      ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h)
+      ctx.fillRect(0, y, x, h)
+      ctx.fillRect(x + w, y, canvas.width - x - w, h)
     }
 
     let startX, startY, down = false
 
     window.addEventListener('mousedown', e => {
+      // 关键：按下时立即让提示消失
+      hideTipImmediately();
+
       down = true
       startX = e.clientX
       startY = e.clientY
       box.style.display = 'block'
       box.style.left = startX + 'px'
       box.style.top = startY + 'px'
-      box.style.width = box.style.height = 0
+      box.style.width = '0px'
+      box.style.height = '0px'
     })
 
     window.addEventListener('mousemove', e => {
@@ -81,7 +154,7 @@
         width: parseInt(box.style.width),
         height: parseInt(box.style.height)
       }
-      if (rect.width < 10 || rect.height < 10) {
+      if (rect.width < 5 || rect.height < 5) {
         window.electronAPI.cancelShot()
         return
       }

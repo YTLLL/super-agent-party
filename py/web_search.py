@@ -9,7 +9,7 @@ from tavily import TavilyClient
 from py.get_setting import load_settings
 from py.load_files import check_robots_txt
 
-async def DDGsearch_async(query):
+async def DDGsearch(query):
     settings = await load_settings()
     def sync_search():
         max_results = settings['webSearch']['duckduckgo_max_results'] or 10
@@ -31,7 +31,7 @@ async def DDGsearch_async(query):
 duckduckgo_tool = {
     "type": "function",
     "function": {
-        "name": "DDGsearch_async",
+        "name": "DDGsearch",
         "description": f"通过关键词获得DuckDuckGo搜索上的信息。",
         "parameters": {
             "type": "object",
@@ -46,7 +46,7 @@ duckduckgo_tool = {
     },
 }
 
-async def searxng_async(query,categories="general"):
+async def searxng(query,categories="general"):
     settings = await load_settings()
     def sync_search(query):
         max_results = settings['webSearch']['searxng_max_results'] or 10
@@ -105,7 +105,7 @@ async def searxng_async(query,categories="general"):
 searxng_tool = {
     "type": "function",
     "function": {
-        "name": "searxng_async",
+        "name": "searxng",
         "description": "通过SearXNG开源元搜索引擎获取网络信息。",
         "parameters": {
             "type": "object",
@@ -126,7 +126,7 @@ searxng_tool = {
     },
 }
 
-async def bochaai_search_async(query):
+async def bochaai_search(query):
     settings = await load_settings()
     def sync_search():
         max_results = settings['webSearch']['bochaai_max_results'] or 10
@@ -186,7 +186,7 @@ async def bochaai_search_async(query):
 bochaai_tool = {
     "type": "function",
     "function": {
-        "name": "bochaai_search_async",
+        "name": "bochaai_search",
         "description": "通过博查得智能搜索API获取网络信息，支持深度语义理解。",
         "parameters": {
             "type": "object",
@@ -201,7 +201,7 @@ bochaai_tool = {
     }
 }
 
-async def Tavily_search_async(query):
+async def Tavily_search(query):
     settings = await load_settings()
     def sync_search():
         max_results = settings['webSearch']['tavily_max_results'] or 10
@@ -227,7 +227,7 @@ async def Tavily_search_async(query):
 tavily_tool = {
     "type": "function",
     "function": {
-        "name": "Tavily_search_async",
+        "name": "Tavily_search",
         "description": "通过Tavily专业搜索API获取高质量的网络信息，特别适合获取实时数据和专业分析。",
         "parameters": {
             "type": "object",
@@ -244,7 +244,7 @@ tavily_tool = {
 
 from langchain_community.utilities import BingSearchAPIWrapper
 
-async def Bing_search_async(query):
+async def Bing_search(query):
     settings = await load_settings()
     def sync_search():
         max_results = settings['webSearch']['bing_max_results'] or 10
@@ -269,7 +269,7 @@ async def Bing_search_async(query):
 bing_tool = {
     "type": "function",
     "function": {
-        "name": "Bing_search_async",
+        "name": "Bing_search",
         "description": "通过Bing搜索API获取网络信息。",
         "parameters": {
             "type": "object",
@@ -286,7 +286,7 @@ bing_tool = {
 
 from langchain_google_community import GoogleSearchAPIWrapper
 
-async def Google_search_async(query):
+async def Google_search(query):
     settings = await load_settings()
     def sync_search():
         max_results = settings['webSearch']['google_max_results'] or 10
@@ -311,7 +311,7 @@ async def Google_search_async(query):
 google_tool = {
     "type": "function",
     "function": {
-        "name": "Google_search_async",
+        "name": "Google_search",
         "description": "通过Google搜索API获取网络信息。",
         "parameters": {
             "type": "object",
@@ -328,7 +328,7 @@ google_tool = {
 
 from langchain_community.tools import BraveSearch
 
-async def Brave_search_async(query):
+async def Brave_search(query):
     settings = await load_settings()
     def sync_search():
         max_results = settings['webSearch']['brave_max_results'] or 10
@@ -351,7 +351,7 @@ async def Brave_search_async(query):
 brave_tool = {
     "type": "function",
     "function": {
-        "name": "Brave_search_async",
+        "name": "Brave_search",
         "description": "通过Brave搜索API获取网络信息。",
         "parameters": {
             "type": "object",
@@ -367,7 +367,7 @@ brave_tool = {
 }
 
 from langchain_exa import ExaSearchResults
-async def Exa_search_async(query):
+async def Exa_search(query):
     settings = await load_settings()
     def sync_search():
         max_results = settings['webSearch']['exa_max_results'] or 10
@@ -397,7 +397,7 @@ async def Exa_search_async(query):
 exa_tool = {
     "type": "function", 
     "function": {
-        "name": "Exa_search_async",
+        "name": "Exa_search",
         "description": "通过Exa搜索API获取网络信息。",
         "parameters": {
             "type": "object",
@@ -414,7 +414,7 @@ exa_tool = {
 
 from langchain_community.utilities import GoogleSerperAPIWrapper
 
-async def Serper_search_async(query):
+async def Serper_search(query):
     settings = await load_settings()
     def sync_search():
         max_results = settings['webSearch']['serper_max_results'] or 10
@@ -437,7 +437,7 @@ async def Serper_search_async(query):
 serper_tool = {
     "type": "function",
     "function": {
-        "name": "Serper_search_async",
+        "name": "Serper_search",
         "description": "通过Serper搜索API获取网络信息。",
         "parameters": {
             "type": "object",
@@ -452,7 +452,7 @@ serper_tool = {
     }
 }
 
-async def jina_crawler_async(original_url):
+async def jina_crawler(original_url):
     settings = await load_settings()
     def sync_crawler():
         detail_url = "https://r.jina.ai/"
@@ -485,7 +485,7 @@ async def jina_crawler_async(original_url):
 jina_crawler_tool = {
     "type": "function",
     "function": {
-        "name": "jina_crawler_async",
+        "name": "jina_crawler",
         "description": "通过Jina AI的网页爬取API获取指定URL的网页内容。指定URL可以为其他搜索引擎搜索出来的网页链接，也可以是用户给出的网站链接。但不要将本机地址或内网地址开头的URL作为参数传入，因为jina将无法访问到这些URL。",
         "parameters": {
             "type": "object",
@@ -524,7 +524,7 @@ class Crawl4AiTester:
 
             time.sleep(2)
 
-async def Crawl4Ai_search_async(original_url):
+async def Crawl4Ai_search(original_url):
     settings = await load_settings()
     def sync_search():
         try:
@@ -552,7 +552,7 @@ async def Crawl4Ai_search_async(original_url):
 Crawl4Ai_tool = {
     "type": "function",
     "function": {
-        "name": "Crawl4Ai_search_async",
+        "name": "Crawl4Ai_search",
         "description": "通过Crawl4Ai服务爬取指定URL的网页内容，返回Markdown格式的文本。",
         "parameters": {
             "type": "object",
@@ -712,7 +712,7 @@ class FirecrawlClient:
         return response.json()
 
 
-async def firecrawl_search_async(original_url: str, query: str = None) -> str:
+async def firecrawl_search(original_url: str, query: str = None) -> str:
     """
     Firecrawl 主函数
     支持多种模式：scrape(单页), crawl(整站), search(搜索), map(地图)
@@ -852,7 +852,7 @@ async def firecrawl_search_async(original_url: str, query: str = None) -> str:
 firecrawl_tool = {
     "type": "function",
     "function": {
-        "name": "firecrawl_search_async",
+        "name": "firecrawl_search",
         "description": "通过Firecrawl服务获取网页内容。支持单页抓取、整站爬取、搜索和网站地图模式。可以处理JavaScript渲染的页面，返回结构化的Markdown内容。",
         "parameters": {
             "type": "object",
@@ -874,7 +874,7 @@ firecrawl_tool = {
 from bs4 import BeautifulSoup
 import re
 
-async def simple_fetch_async(url):
+async def simple_fetch(url):
     """
     改进的网页抓取工具，返回结构化的清洗后内容
     支持抓取内网和外网页面
@@ -987,7 +987,7 @@ async def simple_fetch_async(url):
 simple_fetch_tool = {
     "type": "function",
     "function": {
-        "name": "simple_fetch_async",
+        "name": "simple_fetch",
         "description": "抓取指定URL的网页内容。支持内网和外网地址。",
         "parameters": {
             "type": "object",
@@ -1002,7 +1002,7 @@ simple_fetch_tool = {
     },
 }
 
-async def markdown_new_async(original_url):
+async def markdown_new(original_url):
     """
     通过 markdown.new 服务将网页转换为 Markdown 格式
     """
@@ -1044,7 +1044,7 @@ async def markdown_new_async(original_url):
 markdown_new_tool = {
     "type": "function",
     "function": {
-        "name": "markdown_new_async",
+        "name": "markdown_new",
         "description": "通过 markdown.new 服务获取指定URL的网页内容，并自动转换为结构化的 Markdown 文本。此工具非常轻量高效，适用于外网链接。请勿传入本机地址或内网地址（会无法访问）。",
         "parameters": {
             "type": "object",
