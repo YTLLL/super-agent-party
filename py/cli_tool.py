@@ -1085,9 +1085,35 @@ async def shell_tool_local(command: str, background: bool = False) -> str | Asyn
     
     system = platform.system()
     if system == "Windows":
-        is_ps = any(x in command.lower() for x in ['get-', 'set-location', 'select-string'])
-        exe = "powershell.exe" if is_ps else "cmd.exe"
-        args = ["-Command", command] if is_ps else ["/c", command]
+        # 核心逻辑：判断是否为典型的 CMD 专属语法
+        def is_strictly_cmd(cmd_str: str) -> bool:
+            c = cmd_str.lower().strip()
+            # 1. 包含 CMD 的环境变量语法，例如 %PATH%, %USERPROFILE%
+            if re.search(r'%[a-z0-9_]+%', c): 
+                return True
+            # 2. 使用了 CMD 特有的斜杠参数（PS 使用横杠 -）
+            # 例如: dir /s /b, del /f /q, copy /y (这些如果在 PS 中运行会直接报错)
+            if re.search(r'^(dir|del|copy|xcopy|rmdir|rd|md|mkdir|ren|rename)\s+/[a-z]', c): 
+                return True
+            # 3. CMD 的变量赋值语法: set VAR=value (PS 中为 $VAR="value")
+            if re.search(r'^set\s+[a-z0-9_]+=', c): 
+                return True
+            # 4. CMD 独有的内置命令和批处理语法
+            if re.search(r'^(mklink|call|goto|if exist|for /)\b', c): 
+                return True
+            # 5. CMD 的命令连接符 && (Win10 自带的 PowerShell 5.1 不支持 &&，除非命令里也带了 $)
+            if '&&' in c and '$' not in c:
+                return True
+                
+            return False
+
+        if is_strictly_cmd(command):
+            exe = "cmd.exe"
+            args = ["/c", command]
+        else:
+            exe = "powershell.exe"
+            # 推荐加上 -NonInteractive 和 -NoProfile，能极大提升 PowerShell 的启动速度
+            args = ["-NonInteractive", "-NoProfile", "-Command", command]
     else:
         exe = os.environ.get('SHELL', '/bin/bash')
         args = ["-c", command]
