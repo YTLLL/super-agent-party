@@ -2776,8 +2776,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 }
                 m0 = Memory.from_config(config)
                 print("长期记忆配置加载完成")
-        open_tag = "<think>"
-        close_tag = "</think>"
+        OPEN_TAG_PATTERN = re.compile(r'<(think|thought)>', re.IGNORECASE)
+        CLOSE_TAG_PATTERN = re.compile(r'</(think|thought)>', re.IGNORECASE)
 
         tools = request.tools or []
         if mcp_client_list:
@@ -3521,18 +3521,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                             yield f"data: {json.dumps(chunk_dict)}\n\n"
                                             full_reasoning += reasoning_part
                                             buffer = buffer[end_pos+len(close_tag):]
-                                            in_reasoning = False
-                                        else:
-                                            # 发送未闭合的中间内容
-                                            if buffer:
-                                                chunk_dict["choices"][0]["delta"] = {
-                                                    "reasoning_content": buffer,
-                                                    "content": ""
-                                                }
-                                                yield f"data: {json.dumps(chunk_dict)}\n\n"
-                                                full_reasoning += buffer
-                                                buffer = ""
-                                            break  # 等待更多内容
+                                            in_reasoning = False     
+                
                     else:
                         # 流式调用推理模型
                         reasoner_stream = await reasoner_client.chat.completions.create(
@@ -3666,27 +3656,30 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         while buffer:
                             if not in_reasoning:
                                 # 寻找开始标签
-                                start_pos = buffer.find(open_tag)
-                                if start_pos != -1:
+                                open_match = OPEN_TAG_PATTERN.search(buffer)
+                                if open_match:
+                                    start_pos = open_match.start()
                                     # 处理开始标签前的内容
                                     content_buffer.append(buffer[:start_pos])
-                                    buffer = buffer[start_pos+len(open_tag):]
+                                    # open_match.end() 自动计算了标签的准确长度，完美替代 len(open_tag)
+                                    buffer = buffer[open_match.end():] 
                                     in_reasoning = True
                                 else:
                                     content_buffer.append(buffer)
                                     buffer = ""
                             else:
                                 # 寻找结束标签
-                                end_pos = buffer.find(close_tag)
-                                if end_pos != -1:
+                                close_match = CLOSE_TAG_PATTERN.search(buffer)
+                                if close_match:
+                                    end_pos = close_match.start()
                                     # 处理思考内容
                                     reasoning_buffer.append(buffer[:end_pos])
-                                    buffer = buffer[end_pos+len(close_tag):]
+                                    buffer = buffer[close_match.end():]
                                     in_reasoning = False
                                 else:
                                     reasoning_buffer.append(buffer)
                                     buffer = ""
-                        
+
                         # 构造新的delta内容
                         new_content = "".join(content_buffer)
                         new_reasoning = "".join(reasoning_buffer)
@@ -3697,7 +3690,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         
                         # 重置缓冲区但保留未完成部分
                         if in_reasoning:
-                            content_buffer = [new_content.split(open_tag)[-1]] 
+                            # 按照任何支持的开标签进行切割
+                            content_buffer = [OPEN_TAG_PATTERN.split(new_content)[-1]] 
                         else:
                             content_buffer = []
                         reasoning_buffer = []
@@ -4250,18 +4244,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                                 yield f"data: {json.dumps(chunk_dict)}\n\n"
                                                 full_reasoning += reasoning_part
                                                 buffer = buffer[end_pos+len(close_tag):]
-                                                in_reasoning = False
-                                            else:
-                                                # 发送未闭合的中间内容
-                                                if buffer:
-                                                    chunk_dict["choices"][0]["delta"] = {
-                                                        "reasoning_content": buffer,
-                                                        "content": ""
-                                                    }
-                                                    yield f"data: {json.dumps(chunk_dict)}\n\n"
-                                                    full_reasoning += buffer
-                                                    buffer = ""
-                                                break  # 等待更多内容
+                                                in_reasoning = False     
+                    
                         else:
                             # 流式调用推理模型
                             reasoner_stream = await reasoner_client.chat.completions.create(
@@ -4473,44 +4457,49 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 while buffer:
                                     if not in_reasoning:
                                         # 寻找开始标签
-                                        start_pos = buffer.find(open_tag)
-                                        if start_pos != -1:
+                                        open_match = OPEN_TAG_PATTERN.search(buffer)
+                                        if open_match:
+                                            start_pos = open_match.start()
                                             # 处理开始标签前的内容
                                             content_buffer.append(buffer[:start_pos])
-                                            buffer = buffer[start_pos+len(open_tag):]
+                                            # open_match.end() 自动计算了标签的准确长度，完美替代 len(open_tag)
+                                            buffer = buffer[open_match.end():] 
                                             in_reasoning = True
                                         else:
                                             content_buffer.append(buffer)
                                             buffer = ""
                                     else:
                                         # 寻找结束标签
-                                        end_pos = buffer.find(close_tag)
-                                        if end_pos != -1:
+                                        close_match = CLOSE_TAG_PATTERN.search(buffer)
+                                        if close_match:
+                                            end_pos = close_match.start()
                                             # 处理思考内容
                                             reasoning_buffer.append(buffer[:end_pos])
-                                            buffer = buffer[end_pos+len(close_tag):]
+                                            buffer = buffer[close_match.end():]
                                             in_reasoning = False
                                         else:
                                             reasoning_buffer.append(buffer)
                                             buffer = ""
-                                
-                                # 构造新的delta内容
-                                new_content = "".join(content_buffer)
-                                new_reasoning = "".join(reasoning_buffer)
-                                
-                                # 更新chunk内容
-                                delta["content"] = new_content.strip("\x00")  # 保留未完成内容
-                                delta["reasoning_content"] = new_reasoning.strip("\x00") or None
-                                
-                                # 重置缓冲区但保留未完成部分
-                                if in_reasoning:
-                                    content_buffer = [new_content.split(open_tag)[-1]] 
-                                else:
-                                    content_buffer = []
-                                reasoning_buffer = []
-                                
-                                yield f"data: {json.dumps(chunk_dict)}\n\n"
-                                full_content += delta.get("content") or "" 
+
+                                        # 构造新的delta内容
+                                        new_content = "".join(content_buffer)
+                                        new_reasoning = "".join(reasoning_buffer)
+                                        
+                                        # 更新chunk内容
+                                        delta["content"] = new_content.strip("\x00")  # 保留未完成内容
+                                        delta["reasoning_content"] = new_reasoning.strip("\x00") or None
+                                        
+                                        # 重置缓冲区但保留未完成部分
+                                        if in_reasoning:
+                                            # 按照任何支持的开标签进行切割
+                                            content_buffer = [OPEN_TAG_PATTERN.split(new_content)[-1]] 
+                                        else:
+                                            content_buffer = []
+                                        reasoning_buffer = []
+                                        
+                                        yield f"data: {json.dumps(chunk_dict)}\n\n"
+                                        full_content += delta.get("content") or "" 
+                            
                     # 最终flush未完成内容
                     if content_buffer or reasoning_buffer:
                         final_chunk = {
