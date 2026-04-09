@@ -2592,6 +2592,32 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </el-tab-pane>
                   <!-- 添加新记忆标签页 -->
                   <el-tab-pane :label="t('addNewMemory')" name="add">
+                      <el-form-item :label="t('fastProvider')" class="form-item-align" label-position="left">
+                        <el-select
+                          v-model="fastSettings.selectedProvider"
+                          :placeholder="t('selectProvider')"
+                          filterable
+                          @change="selectFastProvider"
+                          @visible-change="handleFastProviderVisibleChange"
+                          class="full-width-input"
+                        >
+                          <el-option
+                            v-for="provider in modelProviders"
+                            :key="provider.id"
+                            :label="provider.vendor+' - '+provider.modelId"
+                            :value="provider.id"
+                          >
+                            <div class="provider-option">
+                              <img 
+                                :src="getVendorLogo(provider.vendor)" 
+                                class="mini-vendor-logo"
+                              />
+                              <span class="model-id">{{ provider.modelId }}</span>
+                            </div>
+                          </el-option>
+                        </el-select>
+                      </el-form-item>
+
                     <!-- 向量库交互 Dialog -->
                     <el-dialog
                       v-model="vectorDialogVisible"
@@ -2636,7 +2662,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </template>
                     </el-dialog>
 
-                    <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+                    <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">           
                       <!-- 大输入框：限制最大宽度，让出空间给按钮 -->
                       <el-input
                         v-model="quickCreatePrompt"
@@ -3097,6 +3123,32 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </el-tab-pane>
                   <!-- 系统提示词标签页 -->
                   <el-tab-pane :label="t('addSystemPrompt')" name="prompts">
+                    <el-form-item :label="t('fastProvider')" class="form-item-align" label-position="left">
+                      <el-select
+                        v-model="fastSettings.selectedProvider"
+                        :placeholder="t('selectProvider')"
+                        filterable
+                        @change="selectFastProvider"
+                        @visible-change="handleFastProviderVisibleChange"
+                        class="full-width-input"
+                      >
+                        <el-option
+                          v-for="provider in modelProviders"
+                          :key="provider.id"
+                          :label="provider.vendor+' - '+provider.modelId"
+                          :value="provider.id"
+                        >
+                          <div class="provider-option">
+                            <img 
+                              :src="getVendorLogo(provider.vendor)" 
+                              class="mini-vendor-logo"
+                            />
+                            <span class="model-id">{{ provider.modelId }}</span>
+                          </div>
+                        </el-option>
+                      </el-select>
+                    </el-form-item>
+
                     <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
                       <!-- 大输入框：限制最大宽度，让出空间给按钮 -->
                       <el-input
@@ -13029,7 +13081,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </div>
 
                         <!-- 目标语言 -->
-                        <el-form-item :label="t('targetLang')" style="margin-bottom:12px;" label-position="left">
+                        <el-form-item :label="t('targetLang')"  class="form-item-align"  label-position="left">
                           <el-select
                             v-model="targetLangSelected"
                             filterable
@@ -13037,7 +13089,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                             default-first-option
                             :placeholder="t('targetLangPlaceholder')"
                             @change="changeLanguage"
-                            style="width:220px"
                           >
                             <el-option :label="t('systemLanguage')" value="system"></el-option>
                             <el-option label="简体中文" value="简体中文"></el-option>
@@ -13050,6 +13101,32 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <el-option label="Portuguese" value="Portuguese"></el-option>
                             <el-option label="日本語" value="日本語"></el-option>
                             <el-option label="한국어" value="한국어"></el-option>
+                          </el-select>
+                        </el-form-item>
+
+                        <el-form-item :label="t('fastProvider')" class="form-item-align" label-position="left">
+                          <el-select
+                            v-model="fastSettings.selectedProvider"
+                            :placeholder="t('selectProvider')"
+                            filterable
+                            @change="selectFastProvider"
+                            @visible-change="handleFastProviderVisibleChange"
+                            class="full-width-input"
+                          >
+                            <el-option
+                              v-for="provider in modelProviders"
+                              :key="provider.id"
+                              :label="provider.vendor+' - '+provider.modelId"
+                              :value="provider.id"
+                            >
+                              <div class="provider-option">
+                                <img 
+                                  :src="getVendorLogo(provider.vendor)" 
+                                  class="mini-vendor-logo"
+                                />
+                                <span class="model-id">{{ provider.modelId }}</span>
+                              </div>
+                            </el-option>
                           </el-select>
                         </el-form-item>
 
