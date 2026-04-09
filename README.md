@@ -81,7 +81,7 @@
 
 👉 [International users click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-mac-v0.4.0.zip)  
 
-👉 [Chinese users click to download](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/super-agent-party-mac-v0.4.0.zip)
+👉 [中国用户点击下载](https://modelscope.cn/models/ailm32442/super-agent-party-portable/resolve/master/v0.4.0/super-agent-party-mac-v0.4.0.zip)
 
 #### 🚀 Usage Steps
 

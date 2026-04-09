@@ -3500,19 +3500,21 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                         break
                                     if not in_reasoning:
                                         # 寻找开放标签
-                                        start_pos = buffer.find(open_tag)
-                                        if start_pos != -1:
+                                        open_match = OPEN_TAG_PATTERN.search(buffer)
+                                        if open_match:
                                             # 开放标签前的内容（非思考内容）
+                                            start_pos = open_match.start()
                                             non_reasoning = buffer[:start_pos]
-                                            buffer = buffer[start_pos+len(open_tag):]
+                                            buffer = buffer[open_match.end():]
                                             in_reasoning = True
                                         else:
                                             break  # 无开放标签，保留后续处理
                                     else:
                                         # 寻找闭合标签
-                                        end_pos = buffer.find(close_tag)
-                                        if end_pos != -1:
+                                        close_match = CLOSE_TAG_PATTERN.search(buffer)
+                                        if close_match:
                                             # 提取思考内容并构造响应
+                                            end_pos = close_match.start()
                                             reasoning_part = buffer[:end_pos]
                                             chunk_dict["choices"][0]["delta"] = {
                                                 "reasoning_content": reasoning_part,
@@ -3520,8 +3522,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                             }
                                             yield f"data: {json.dumps(chunk_dict)}\n\n"
                                             full_reasoning += reasoning_part
-                                            buffer = buffer[end_pos+len(close_tag):]
-                                            in_reasoning = False     
+                                            buffer = buffer[close_match.end():]
+                                            in_reasoning = False
                 
                     else:
                         # 流式调用推理模型
@@ -4223,19 +4225,21 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                             break
                                         if not in_reasoning:
                                             # 寻找开放标签
-                                            start_pos = buffer.find(open_tag)
-                                            if start_pos != -1:
+                                            open_match = OPEN_TAG_PATTERN.search(buffer)
+                                            if open_match:
                                                 # 开放标签前的内容（非思考内容）
+                                                start_pos = open_match.start()
                                                 non_reasoning = buffer[:start_pos]
-                                                buffer = buffer[start_pos+len(open_tag):]
+                                                buffer = buffer[open_match.end():]
                                                 in_reasoning = True
                                             else:
                                                 break  # 无开放标签，保留后续处理
                                         else:
                                             # 寻找闭合标签
-                                            end_pos = buffer.find(close_tag)
-                                            if end_pos != -1:
+                                            close_match = CLOSE_TAG_PATTERN.search(buffer)
+                                            if close_match:
                                                 # 提取思考内容并构造响应
+                                                end_pos = close_match.start()
                                                 reasoning_part = buffer[:end_pos]
                                                 chunk_dict["choices"][0]["delta"] = {
                                                     "reasoning_content": reasoning_part,
@@ -4243,9 +4247,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                                 }
                                                 yield f"data: {json.dumps(chunk_dict)}\n\n"
                                                 full_reasoning += reasoning_part
-                                                buffer = buffer[end_pos+len(close_tag):]
-                                                in_reasoning = False     
-                    
+                                                buffer = buffer[close_match.end():]
+                                                in_reasoning = False
                         else:
                             # 流式调用推理模型
                             reasoner_stream = await reasoner_client.chat.completions.create(

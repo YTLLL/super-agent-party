@@ -28,7 +28,7 @@ twitch_task = None
 # Pydantic模型
 class LiveConfig(BaseModel):
     bilibili_enabled: bool = False
-    bilibili_type: str = "web"
+    bilibili_type: str = "open_live"
     bilibili_room_id: str = ""
     bilibili_sessdata: str = ""
     bilibili_ACCESS_KEY_ID: str = ""
@@ -92,17 +92,17 @@ async def start_live(request: LiveConfigRequest):
             if live_client is not None:
                 return ApiResponse(success=False, message="直播监听已在运行")
 
-            if config.bilibili_type == "web":
-                if not config.bilibili_room_id:
-                    return ApiResponse(success=False, message="请输入房间ID")
-            elif config.bilibili_type == "open_live":
-                if not all([
-                    config.bilibili_ACCESS_KEY_ID,
-                    config.bilibili_ACCESS_KEY_SECRET,
-                    config.bilibili_APP_ID,
-                    config.bilibili_ROOM_OWNER_AUTH_CODE
-                ]):
-                    return ApiResponse(success=False, message="请完整填写开放平台配置信息")
+            # if config.bilibili_type == "web":
+            #     if not config.bilibili_room_id:
+            #         return ApiResponse(success=False, message="请输入房间ID")
+            # elif config.bilibili_type == "open_live":
+            if not all([
+                config.bilibili_ACCESS_KEY_ID,
+                config.bilibili_ACCESS_KEY_SECRET,
+                config.bilibili_APP_ID,
+                config.bilibili_ROOM_OWNER_AUTH_CODE
+            ]):
+                return ApiResponse(success=False, message="请完整填写开放平台配置信息")
             
             # 创建停止事件
             stop_event = threading.Event()
@@ -333,40 +333,40 @@ async def start_live_client(config: dict):
     session = None
     
     try:
-        bilibili_type = config.get('bilibili_type', 'web')
+        bilibili_type = config.get('bilibili_type', 'open_live')
         
-        if bilibili_type == 'web':
-            # Web类型客户端
-            room_id = int(config.get('bilibili_room_id', 0))
-            sessdata = config.get('bilibili_sessdata', '')
+        # if bilibili_type == 'web':
+        #     # Web类型客户端
+        #     room_id = int(config.get('bilibili_room_id', 0))
+        #     sessdata = config.get('bilibili_sessdata', '')
             
-            # 初始化session
-            session = init_session(sessdata)
+        #     # 初始化session
+        #     session = init_session(sessdata)
             
-            live_client = blivedm.BLiveClient(room_id, session=session)
-            handler = WebSocketHandler()
-            live_client.set_handler(handler)
+        #     live_client = blivedm.BLiveClient(room_id, session=session)
+        #     handler = WebSocketHandler()
+        #     live_client.set_handler(handler)
             
-        elif bilibili_type == 'open_live':
-            # 开放平台类型客户端
-            access_key_id = config.get('bilibili_ACCESS_KEY_ID', '')
-            access_key_secret = config.get('bilibili_ACCESS_KEY_SECRET', '')
-            app_id = int(config.get('bilibili_APP_ID', 0))
-            room_owner_auth_code = config.get('bilibili_ROOM_OWNER_AUTH_CODE', '')
-            
-            live_client = blivedm.OpenLiveClient(
-                access_key_id=access_key_id,
-                access_key_secret=access_key_secret,
-                app_id=app_id,
-                room_owner_auth_code=room_owner_auth_code,
-            )
-            handler = OpenLiveWebSocketHandler()
-            live_client.set_handler(handler)
+        # elif bilibili_type == 'open_live':
+        # 开放平台类型客户端
+        access_key_id = config.get('bilibili_ACCESS_KEY_ID', '')
+        access_key_secret = config.get('bilibili_ACCESS_KEY_SECRET', '')
+        app_id = int(config.get('bilibili_APP_ID', 0))
+        room_owner_auth_code = config.get('bilibili_ROOM_OWNER_AUTH_CODE', '')
         
-        else:
-            raise ValueError(f"不支持的直播类型: {bilibili_type}")
+        live_client = blivedm.OpenLiveClient(
+            access_key_id=access_key_id,
+            access_key_secret=access_key_secret,
+            app_id=app_id,
+            room_owner_auth_code=room_owner_auth_code,
+        )
+        handler = OpenLiveWebSocketHandler()
+        live_client.set_handler(handler)
         
-        print(f"启动{bilibili_type}类型的直播客户端")
+        # else:
+        #     raise ValueError(f"不支持的直播类型: {bilibili_type}")
+        
+        # print(f"启动{bilibili_type}类型的直播客户端")
         live_client.start()
         
         # 保持运行，直到收到停止信号

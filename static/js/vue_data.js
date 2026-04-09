@@ -1547,7 +1547,7 @@ let vue_data = {
       danmakuQueueLimit: 5,
       wakeWord: '',
       bilibili_enabled: false,
-      bilibili_type: 'web',
+      bilibili_type: 'open_live',
       bilibili_room_id: '',
       bilibili_sessdata: '',
       bilibili_ACCESS_KEY_ID: '',

@@ -1519,15 +1519,15 @@ const handleRemoteInstall = (data) => {
     // },
     isLiveConfigValid() {
         if (this.liveConfig.bilibili_enabled) {
-            if(this.liveConfig.bilibili_type === 'web'){
-                return this.liveConfig.bilibili_room_id && this.liveConfig.bilibili_room_id.trim() !== '';
-            }
-            else if(this.liveConfig.bilibili_type === 'open_live'){
+            // if(this.liveConfig.bilibili_type === 'web'){
+            //     return this.liveConfig.bilibili_room_id && this.liveConfig.bilibili_room_id.trim() !== '';
+            // }
+            // else if(this.liveConfig.bilibili_type === 'open_live'){
                 return this.liveConfig.bilibili_ACCESS_KEY_ID !== '' &&
                 this.liveConfig.bilibili_SECRET_ACCESS_KEY !== '' &&
                 this.liveConfig.bilibili_APP_ID !== '' &&
                 this.liveConfig.bilibili_ROOM_OWNER_AUTH_CODE !== '';
-            }
+            // }
         }
         else if (this.liveConfig.youtube_enabled) {
           return this.liveConfig.youtube_video_id !== '' &&
