@@ -11,6 +11,8 @@ const os = require('os')
 const net = require('net') // 添加 net 模块用于端口检测
 const dgram = require('dgram');
 const osc = require('osc');
+const chokidar = require('chokidar');
+let workspaceWatcher = null; // 声明全局的 watcher 变量
 // ★ VMC：UDP 收发资源
 let vmcUdpPort = null;          // osc.UDPPort 实例
 let vmcReceiverActive = false;  // 接收是否运行
@@ -1781,6 +1783,59 @@ ipcMain.handle('upload-to-workspace', async (event, { targetDirPath, sourceFileP
       }
     });
     // ==============================================================
+
+// ================= [新增：实时监听工作区文件变化] =================
+ipcMain.handle('start-workspace-watch', (event, dirPath) => {
+  console.log(`[Chokidar] 请求开始监听工作区: ${dirPath}`);
+  
+  if (!fs.existsSync(dirPath)) {
+    console.log('[Chokidar] 目录不存在，监听失败');
+    return { success: false, error: 'Directory does not exist' };
+  }
+
+  // 如果已经有监听器，先关闭
+  if (workspaceWatcher) {
+    workspaceWatcher.close();
+  }
+
+  workspaceWatcher = chokidar.watch(dirPath, {
+    ignored: /(^|[\/\\])\..|node_modules/, 
+    persistent: true,
+    ignoreInitial: true, 
+    awaitWriteFinish: {  
+      stabilityThreshold: 100,
+      pollInterval: 50
+    }
+  });
+
+  // ⚠️ 关键修复：直接获取应用的主窗口，而不是依赖 event.sender，确保消息绝对能发出去
+  const notifyRenderer = (action, filePath) => {
+    console.log(`[Chokidar] 检测到文件变化: ${action} -> ${filePath}`);
+    const win = BrowserWindow.getAllWindows()[0]; // 获取主窗口
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('workspace-changed', { action, path: filePath });
+    }
+  };
+
+  workspaceWatcher
+    .on('add', path => notifyRenderer('add', path))
+    .on('unlink', path => notifyRenderer('unlink', path))
+    .on('addDir', path => notifyRenderer('addDir', path))
+    .on('unlinkDir', path => notifyRenderer('unlinkDir', path));
+
+  console.log('[Chokidar] 监听已成功启动');
+  return { success: true };
+});
+
+ipcMain.handle('stop-workspace-watch', () => {
+  if (workspaceWatcher) {
+    workspaceWatcher.close();
+    workspaceWatcher = null;
+    console.log('[Chokidar] 监听已停止');
+  }
+  return { success: true };
+});
+// ==============================================================
 
 })
 

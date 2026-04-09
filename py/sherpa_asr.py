@@ -12,16 +12,8 @@ _last_model_name = None
 
 # ---------- 懒加载工具函数 ----------
 def _detect_device() -> str:
-    """延迟检测最佳推理设备"""
-    try:
-        import pynvml
-        pynvml.nvmlInit()
-        count = pynvml.nvmlDeviceGetCount()
-        if count > 0:
-            return 'cuda'
-    except Exception:
-        pass
-        
+    """强制使用 CPU，避免 GPU 版本未安装的警告"""
+    # 暂时禁用 GPU，直到安装好 GPU 版本
     return 'cpu'
 
 # 关键修复：将函数名改回 _get_recognizer，并添加默认参数

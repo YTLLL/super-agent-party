@@ -1001,47 +1001,73 @@ from typing import Tuple
 
 def validate_bash_command(command: str, cwd: str, mode: str = "default") -> Tuple[bool, str]:
     """
-    安全校验策略（Windows 优化版）：
-    1. 移除了过于暴力的 '..' 正则拦截，允许正常的相对路径传参
-    2. 严格禁止绝对路径越权（访问 C盘根目录、Windows目录等）
-    3. 依靠底层执行时的 cwd 限制和专用文件工具来保障安全
+    增强版安全校验策略（支持 Win/Mac/Linux 跨平台）
     """
+    cmd_lower = command.lower()
     
-    # ===== 1. 绝对路径与敏感目录防御 =====
+    # ===== 1. 路径穿越与敏感目录防御 =====
+    # 防止多级向上跳转逃逸工作区 (例如 ../../../etc/passwd)
+    if re.search(r'(\.\.[/\\]){2,}', command):
+        return False, "Multiple path traversal (../../) is blocked"
+
+    # 跨平台敏感目录 (兼容 / 和 \ 写法)
     sensitive_roots = [
-        r'/etc', r'/var', r'/root', r'/bin', r'/sbin', r'/usr',  # Linux
-        r'C:\\Windows', r'C:\\Program Files', r'C:\\Users'       # Windows
+        # Linux / macOS
+        r'(?:\s|^)/etc', r'(?:\s|^)/var', r'(?:\s|^)/root', 
+        r'(?:\s|^)/bin', r'(?:\s|^)/sbin', r'(?:\s|^)/usr/local/bin',
+        r'(?:\s|^)/sys', r'(?:\s|^)/proc', 
+        # macOS 专属
+        r'(?:\s|^)/Library', r'(?:\s|^)/System',
+        # Windows (兼容 C:\Windows 和 C:/Windows)
+        r'(?:\s|^)[a-z]:[/\\]Windows', r'(?:\s|^)[a-z]:[/\\]Program Files', 
+        r'(?:\s|^)[a-z]:[/\\]Users[/\\](?:Default|Public|Administrator)' 
     ]
     
-    for root in sensitive_roots:
-        if re.search(r'(?:\s|^)' + root, command, re.IGNORECASE):
-            return False, f"Access to system directory '{root}' is blocked"
+    for pattern in sensitive_roots:
+        if re.search(pattern, command, re.IGNORECASE):
+            return False, f"Access to sensitive system directory blocked by pattern: {pattern}"
 
     # 禁止直接 cd 到根目录或其他盘符
-    if re.search(r'\bcd\s+/(?!(workspace|tmp|dev/null))', command, re.IGNORECASE):
-        return False, "Changing directory to outside workspace is blocked"
-    if re.search(r'\bcd\s+[a-zA-Z]:\\', command, re.IGNORECASE):
+    if re.search(r'\bcd\s+/[a-z0-9_]*$', command, re.IGNORECASE):
+        return False, "Changing directory to root is blocked"
+    if re.search(r'\bcd\s+[a-z]:[/\\]', command, re.IGNORECASE):
         return False, "Changing Windows drive directly is blocked"
 
-    # ===== 2. 毁灭性操作（保持原样）=====
+    # ===== 2. 跨平台毁灭性操作 =====
     destructive_patterns = [
-        (r'rm\s+-rf\s*/', "Recursive delete root"),                
+        # Linux/Mac 文件删除 (覆盖 rm -rf /, rm -rf /*, rm -r -f /)
+        (r'rm\s+-[rRfF\s]+\s*(/|[a-z]:[/\\])\*?', "Recursive delete root"),
+        # Linux 危险操作
         (r'mkfs\.[a-z]+', "Filesystem format"),                    
         (r'dd\s+if=.*of=/dev/[a-z]', "Direct device write"),       
         (r'>?\s*/dev/(sda|hd|nvme|mmcblk)', "Block device access"),
+        (r'chmod\s+-[R\s]*777\s+/', "Change root permissions"),
+        (r'chown\s+-[R\s]*root\s+/', "Change root ownership"),
         (r':\(\)\{\s*:\|:&?\s*\};\s*:', "Fork bomb"), 
+        # Windows 危险操作 (注册表破坏、危险格式化)
+        (r'(?:\s|^)format\s+[a-z]:', "Windows disk format"),
+        (r'(?:\s|^)reg\s+(delete|add)\s+(HKLM|HKEY_LOCAL_MACHINE)', "Modify system registry"),
+        (r'Remove-Item\s+-Recurse\s+-Force\s+[a-z]:[/\\]', "Powershell recursive delete root"),
+        # macOS 危险操作
+        (r'nvram\s+-c', "Clear Mac NVRAM"),
     ]
     
     for pattern, reason in destructive_patterns:
         if re.search(pattern, command, re.IGNORECASE):
             return False, f"Destructive operation blocked: {reason}"
     
-    # ===== 3. 风险操作 =====
+    # ===== 3. 风险操作 (提权、钓鱼、远程执行) =====
     if mode != "yolo":
         risk_patterns = [
+            # Linux/Mac 提权与远程加载
+            (r'(?:\s|^)sudo\s+', "sudo usage blocked (prevents password wait/escalation)"),
             (r'(curl|wget).*\|\s*(sh|bash|zsh|python|perl|php)', "Remote execution via pipe"),
             (r'\$\{?HOME\}?', "HOME env variable usage"),
             (r'~\s*/', "Home directory access via ~"),
+            # macOS 钓鱼警告 (防范 AI 弹窗骗取用户密码)
+            (r'(?:\s|^)osascript\s+-e\s+.*password', "AppleScript password prompt blocked"),
+            # Windows 远程加载 (Powershell IEX)
+            (r'(Invoke-WebRequest|iwr|Invoke-RestMethod|irm).*\|\s*(Invoke-Expression|iex)', "PowerShell remote script execution"),
         ]
         for pattern, reason in risk_patterns:
             if re.search(pattern, command, re.IGNORECASE):
@@ -1085,9 +1111,35 @@ async def shell_tool_local(command: str, background: bool = False) -> str | Asyn
     
     system = platform.system()
     if system == "Windows":
-        is_ps = any(x in command.lower() for x in ['get-', 'set-location', 'select-string'])
-        exe = "powershell.exe" if is_ps else "cmd.exe"
-        args = ["-Command", command] if is_ps else ["/c", command]
+        # 核心逻辑：判断是否为典型的 CMD 专属语法
+        def is_strictly_cmd(cmd_str: str) -> bool:
+            c = cmd_str.lower().strip()
+            # 1. 包含 CMD 的环境变量语法，例如 %PATH%, %USERPROFILE%
+            if re.search(r'%[a-z0-9_]+%', c): 
+                return True
+            # 2. 使用了 CMD 特有的斜杠参数（PS 使用横杠 -）
+            # 例如: dir /s /b, del /f /q, copy /y (这些如果在 PS 中运行会直接报错)
+            if re.search(r'^(dir|del|copy|xcopy|rmdir|rd|md|mkdir|ren|rename)\s+/[a-z]', c): 
+                return True
+            # 3. CMD 的变量赋值语法: set VAR=value (PS 中为 $VAR="value")
+            if re.search(r'^set\s+[a-z0-9_]+=', c): 
+                return True
+            # 4. CMD 独有的内置命令和批处理语法
+            if re.search(r'^(mklink|call|goto|if exist|for /)\b', c): 
+                return True
+            # 5. CMD 的命令连接符 && (Win10 自带的 PowerShell 5.1 不支持 &&，除非命令里也带了 $)
+            if '&&' in c and '$' not in c:
+                return True
+                
+            return False
+
+        if is_strictly_cmd(command):
+            exe = "cmd.exe"
+            args = ["/c", command]
+        else:
+            exe = "powershell.exe"
+            # 推荐加上 -NonInteractive 和 -NoProfile，能极大提升 PowerShell 的启动速度
+            args = ["-NonInteractive", "-NoProfile", "-Command", command]
     else:
         exe = os.environ.get('SHELL', '/bin/bash')
         args = ["-c", command]

@@ -16006,13 +16006,18 @@ closeTaskCenter() {
     // 校验通过或关闭开关，正常执行保存
     this.autoSaveSettings();
   },
-  // 1. 懒加载读取文件目录
+// 1. 懒加载读取文件目录
   async loadWorkspaceNode(node, resolve) {
     // 顶层节点：加载工作区根目录
     if (node.level === 0) {
       if (!this.CLISettings || !this.CLISettings.cc_path) {
         return resolve([]); 
       }
+      
+      // ⚠️ 暴力触发：只要根节点加载，就立刻启动监听器！
+      console.log('准备启动文件监听:', this.CLISettings.cc_path);
+      this.setupWorkspaceWatcher(this.CLISettings.cc_path);
+
       try {
         const res = await window.electronAPI.readDirectory(this.CLISettings.cc_path);
         if (res.success) {
@@ -16386,6 +16391,47 @@ closeTaskCenter() {
         this.visionControlSettings.isFullScreen = true;
         this.autoSaveSettings();
       }
+    },
+
+    // 开启工作区监控
+    setupWorkspaceWatcher(path) {
+      if (window.electronAPI && window.electronAPI.startWorkspaceWatch) {
+        window.electronAPI.startWorkspaceWatch(path);
+        
+        window.electronAPI.onWorkspaceChanged((data) => {
+          console.log('前端收到文件系统变化:', data.action, data.path);
+          
+          // ⚠️ 关键修复：使用原生定时器彻底解决 this 指向丢失的问题
+          if (this.workspaceRefreshTimer) {
+            clearTimeout(this.workspaceRefreshTimer);
+          }
+          
+          this.workspaceRefreshTimer = setTimeout(() => {
+            console.log('触发防抖更新 UI ...');
+            this.refreshWorkspaceTreeKeepExpanded();
+          }, 500);
+        });
+      }
+    },
+
+    // 刷新前保留展开状态
+    refreshWorkspaceTreeKeepExpanded() {
+      const treeRef = this.$refs.workspaceTreeRef;
+      if (treeRef) {
+        const store = treeRef.store;
+        const expandedKeys = [];
+        for (const key in store.nodesMap) {
+          if (store.nodesMap[key].expanded) {
+            expandedKeys.push(key);
+          }
+        }
+        this.expandedNodeKeys = expandedKeys;
+        console.log('当前记录的展开文件夹节点:', this.expandedNodeKeys);
+      } else {
+        console.warn('未找到 el-tree 的引用 (workspaceTreeRef)');
+      }
+      
+      this.refreshWorkspaceTree();
     },
 
 }

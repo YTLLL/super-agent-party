@@ -129,6 +129,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
   deleteWorkspaceFile: (filePath) => ipcRenderer.invoke('delete-workspace-file', filePath),
   uploadToWorkspace: (targetDirPath, sourceFilePaths) => ipcRenderer.invoke('upload-to-workspace', { targetDirPath, sourceFilePaths }),
+  startWorkspaceWatch: (dirPath) => ipcRenderer.invoke('start-workspace-watch', dirPath),
+  stopWorkspaceWatch: () => ipcRenderer.invoke('stop-workspace-watch'),
+  onWorkspaceChanged: (callback) => {
+    // 先移除可能存在的旧监听，防止组件重复挂载导致多次触发
+    ipcRenderer.removeAllListeners('workspace-changed');
+    ipcRenderer.on('workspace-changed', (_, data) => callback(data));
+  },
 });
 
 contextBridge.exposeInMainWorld('vmcAPI', {

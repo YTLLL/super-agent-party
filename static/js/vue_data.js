@@ -2084,6 +2084,8 @@ main();`,
     isPttRecording: false, // 控制是否正在录制
     isGlobalRecording: false, 
     workspaceTreeKey: 0, // 用于强制刷新整个树组件
+    expandedNodeKeys: [], // 用于保存刷新前展开的文件夹状态
+    workspaceRefreshTimer: null, 
     workspaceTreeProps: {
       label: 'name',
       children: 'children',
