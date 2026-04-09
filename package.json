@@ -3,7 +3,7 @@
   "version": "v0.4.0",
   "description": "超级智能体派对v0.4.0 | 轻松链接一切!",
   "main": "main.js",
-  "asar": true, 
+  "asar": true,
   "scripts": {
     "start": "node start.js",
     "dev": "node start.js",
@@ -135,7 +135,7 @@
       "uninstallDisplayName": "${productName}",
       "createDesktopShortcut": true,
       "differentialPackage": true,
-      "perMachine": false 
+      "perMachine": false
     }
   },
   "devDependencies": {
@@ -145,6 +145,7 @@
   },
   "dependencies": {
     "@electron/remote": "^2.1.3",
+    "chokidar": "^5.0.0",
     "cli-progress": "^3.12.0",
     "electron-dl": "3.5.0",
     "electron-updater": "^6.6.2",

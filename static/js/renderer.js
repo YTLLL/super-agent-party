@@ -1002,15 +1002,22 @@ const handleRemoteInstall = (data) => {
     }
     document.removeEventListener('click', this._toggleHighlight, false);
     window.removeEventListener('resize', this.handleResize);
+    if (window.electronAPI && window.electronAPI.stopWorkspaceWatch) {
+      window.electronAPI.stopWorkspaceWatch();
+    }
+
   },
   watch: {
-    'CLISettings.cc_path': function(newVal, oldVal) {
-      if (newVal && newVal !== oldVal) {
-        // 路径发生变化时，如果当前正好在工作区视图，则刷新树
-        if (this.activeSideView === 'workspace') {
-          this.refreshWorkspaceTree();
+    'CLISettings.cc_path': {
+      handler(newPath) {
+        if (newPath) {
+          console.log('工作区路径更新，准备启动文件监听:', newPath);
+          this.setupWorkspaceWatcher(newPath);
+        } else if (window.electronAPI && window.electronAPI.stopWorkspaceWatch) {
+          window.electronAPI.stopWorkspaceWatch();
         }
-      }
+      },
+      immediate: true
     },
 
     'asrSettings.interactionMethod': {
