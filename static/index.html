@@ -14248,7 +14248,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   @change="autoSaveSettings"
                                 />
                               </el-form-item>
-                              <el-form-item label="APP ID">
+                              <el-form-item label="App ID（项目ID）">
                                 <el-input
                                   v-model="liveConfig.bilibili_APP_ID"
                                   :placeholder="t('APP_ID_Placeholder')"
@@ -14256,7 +14256,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   @change="autoSaveSettings"
                                 />
                               </el-form-item>
-                              <el-form-item label="ROOM OWNER AUTH CODE">
+                              <el-form-item label="ROOM OWNER AUTH CODE（身份码）">
                                 <el-input
                                   v-model="liveConfig.bilibili_ROOM_OWNER_AUTH_CODE"
                                   :placeholder="t('ROOM_OWNER_AUTH_CODE_Placeholder')"
