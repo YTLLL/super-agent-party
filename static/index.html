@@ -14229,48 +14229,8 @@ function updateElement(el, rawMarkdown, formatFn) {
                               </div>
                               <el-switch v-model="liveConfig.bilibili_enabled" @click.stop @change="autoSaveSettings"/>
                             </div>
-                            <div class="tool-content">
-                              <el-form-item :label="t('liveType')">
-                                <el-select
-                                  v-model="liveConfig.bilibili_type"
-                                  :placeholder="t('liveTypePlaceholder')"
-                                  class="full-width-input"
-                                  @change="autoSaveSettings"
-                                >
-                                  <el-option :label="t('web')" value="web"></el-option>
-                                  <el-option :label="t('bilibili_open_live')" value="open_live"></el-option>
-                                </el-select>
-                              </el-form-item>      
-                              <el-form-item :label="t('roomID')" v-if="liveConfig.bilibili_type === 'web'">
-                                <el-input
-                                  v-model="liveConfig.bilibili_room_id"
-                                  :placeholder="t('roomIDPlaceholder')"
-                                  class="full-width-input"
-                                  @change="autoSaveSettings"
-                                />
-                              </el-form-item>
-                              <el-form-item :label="t('sessdata')" v-if="liveConfig.bilibili_type === 'web'">
-                                <el-input
-                                  v-model="liveConfig.bilibili_sessdata"
-                                  :placeholder="t('sessdataPlaceholder')"
-                                  class="full-width-input"
-                                  show-password
-                                  @change="autoSaveSettings"
-                                />
-                              </el-form-item>
-                              <el-alert
-                                type="info"
-                                :closable="false"
-                                class="mb-2"
-                                v-if="liveConfig.bilibili_type === 'web'"
-                              >
-                                <template #default>
-                                  <div class="alert-content">
-                                    {{ t('webBilibiliInfo') }}
-                                  </div>
-                                </template>
-                              </el-alert>
-                              <el-form-item label="ACCESS KEY ID" v-if="liveConfig.bilibili_type === 'open_live'">
+                            <div class="tool-content">    
+                              <el-form-item label="ACCESS KEY ID">
                                 <el-input
                                   v-model="liveConfig.bilibili_ACCESS_KEY_ID"
                                   :placeholder="t('ACCESS_KEY_ID_Placeholder')"
@@ -14279,7 +14239,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   @change="autoSaveSettings"
                                 />
                               </el-form-item>
-                              <el-form-item label="ACCESS KEY SECRET" v-if="liveConfig.bilibili_type === 'open_live'">
+                              <el-form-item label="ACCESS KEY SECRET">
                                 <el-input
                                   v-model="liveConfig.bilibili_ACCESS_KEY_SECRET"
                                   :placeholder="t('ACCESS_KEY_SECRET_Placeholder')"
@@ -14288,7 +14248,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   @change="autoSaveSettings"
                                 />
                               </el-form-item>
-                              <el-form-item label="APP ID" v-if="liveConfig.bilibili_type === 'open_live'">
+                              <el-form-item label="APP ID">
                                 <el-input
                                   v-model="liveConfig.bilibili_APP_ID"
                                   :placeholder="t('APP_ID_Placeholder')"
@@ -14296,7 +14256,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   @change="autoSaveSettings"
                                 />
                               </el-form-item>
-                              <el-form-item label="ROOM OWNER AUTH CODE" v-if="liveConfig.bilibili_type === 'open_live'">
+                              <el-form-item label="ROOM OWNER AUTH CODE">
                                 <el-input
                                   v-model="liveConfig.bilibili_ROOM_OWNER_AUTH_CODE"
                                   :placeholder="t('ROOM_OWNER_AUTH_CODE_Placeholder')"
