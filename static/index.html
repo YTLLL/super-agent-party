@@ -461,6 +461,13 @@ function updateElement(el, rawMarkdown, formatFn) {
           :default-active="activeMenu"
           class="el-menu-vertical"
           @select="handleSelect">
+          <el-menu-item index="dashboard" id="menu-dashboard">
+            <el-icon>
+              <i class="fa-solid fa-house-chimney"></i>
+            </el-icon>
+            <template #title>{{ t('dashboard') }}</template>
+          </el-menu-item>
+
           <el-menu-item index="home">
             <el-icon>
               <i class="fa-solid fa-comment"></i>
@@ -645,27 +652,41 @@ function updateElement(el, rawMarkdown, formatFn) {
           </div>
           <!-- 扩展列表 -->
           <el-empty v-if="extensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
-            <el-card
+          <el-card
               v-for="ext in extensions"
               :key="ext.id"
               class="extension-card"
               :class="{ active: currentExtension && currentExtension.id === ext.id }"
               @click="switchExtension(ext)">
               
-              <!-- 右上角按钮组 -->
+              <!-- 右上角按钮组 (整合了收藏按钮) -->
               <div class="btn-top-right">
-                <el-tooltip :content="t('openExtensionInBrowser')" placement="top">
-                  <!-- 浏览器打开按钮 -->
+                
+                <!-- 1. 收藏按钮 -->
+                <el-tooltip :content="favoriteExtensionIds.includes(ext.id) ? t('unfavorite') : t('favorite')" placement="top">
                   <el-button
                     type="default"
                     circle
                     size="small"
-                    @click.stop="openExtension(ext)">
+                    @click.stop="toggleFavoriteExtension(ext)">
+                    <i :class="favoriteExtensionIds.includes(ext.id) ? 'fa-solid fa-star star-active' : 'fa-regular fa-star'"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <!-- 2. 浏览器打开按钮 -->
+                <el-tooltip :content="t('openExtensionInBrowser')" placement="top">
+                  <el-button
+                    type="default"
+                    circle
+                    size="small"
+                    @click.stop="openExtension(ext)"
+                    style="margin-left: 8px;">
                     <i class="fa-solid fa-external-link"></i>
                   </el-button>
                 </el-tooltip>
+
+                <!-- 3. 独立窗口打开按钮（仅在Electron环境下显示） -->
                 <el-tooltip :content="t('openExtensionInWindow')" placement="top">
-                  <!-- 独立窗口打开按钮（仅在Electron环境下显示） -->
                   <el-button
                     v-if="isElectron"
                     type="primary"
@@ -686,7 +707,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <span>{{ ext.author }}</span>
                 </div>
               </div>
-            </el-card>
+          </el-card>
         </div>
         <template #footer>
           <div class="dialog-footer">
@@ -696,6 +717,186 @@ function updateElement(el, rawMarkdown, formatFn) {
       </el-dialog>
       <!-- 内容区 -->
       <el-main class="content">
+
+        <div v-show="activeMenu === 'dashboard'" class="page dashboard-container">
+          <div class="dashboard-hero">
+            <h1 class="dashboard-title">{{ t('whatToChatToday') }}</h1>
+            
+            <!-- 中心大输入框容器 -->
+            <div class="hero-input-wrapper" :class="{ 'is-focus': isHeroInputFocus }">
+              
+              <!-- ✨ 新增：附件预览区域 ✨ -->
+              <div class="attachment-preview-list" v-show="allItems.length > 0">
+                <div v-for="(item, index) in allItems" :key="index" class="attachment-item">
+                  
+                  <!-- 图片/视频类型 -->
+                  <div v-if="item.uiCategory === 'image'" class="preview-image-box">
+                    <video v-if="item.detectedType === 'video'" 
+                          :src="formatFileUrl(item.path)" 
+                          controls 
+                          style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                    </video>
+                    <img v-else :src="formatFileUrl(item.path)" />
+                    <div class="overlay">
+                      <el-button 
+                        type="danger" 
+                        circle 
+                        size="small" 
+                        @click.stop="removeItem(index, item.uiCategory)"
+                      >
+                        <i class="fa-solid fa-trash"></i>
+                      </el-button>
+                    </div>
+                  </div>
+
+                  <!-- 文件类型 -->
+                  <div v-else class="file-card-box">
+                    <div class="file-icon">
+                      <i class="fa-solid fa-file-lines"></i>
+                    </div>
+                    <div class="file-info">
+                      <span class="file-name" :title="item.name">{{ item.name }}</span>
+                    </div>
+                    <div class="remove-btn" @click.stop="removeItem(index, item.uiCategory)">
+                      <i class="fa-solid fa-xmark"></i>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- ✨ 新增：拖拽外壳与输入框 ✨ -->
+              <div 
+                class="input-container-wrapper"
+                :class="{ 'is-dragging': isDragging }"
+                @dragover.prevent="isDragging = true"
+                @dragleave.prevent="isDragging = false"
+                @drop.prevent="handleInputDrop"
+              >
+                <!-- 注意加入了 @paste="handleInputPaste" 和 class="input-box-transparent" -->
+                <el-input
+                  v-model="userInput"
+                  type="textarea"
+                  :rows="4"
+                  :placeholder="t('inputMessage')"
+                  resize="none"
+                  @focus="isHeroInputFocus = true"
+                  @blur="isHeroInputFocus = false"
+                  @paste="handleInputPaste"
+                  @keydown="handleKeyDown($event)"
+                  class="input-box-transparent hero-textarea"
+                ></el-input>
+
+                <!-- 拖拽时的遮罩提示 -->
+                <div v-if="isDragging" class="drop-overlay">
+                  <el-icon><Upload /></el-icon>
+                  <span>{{ t('dropToUpload') }}</span>
+                </div>
+              </div>
+              
+              <!-- 底部工具栏 -->
+              <div class="hero-input-footer">
+                <div class="left-actions" style="display: flex;">
+                  <el-tooltip :content="t('uploadFileorImage')" placement="top">
+                    <el-button @click="browseAllFiles">
+                      <i class="fa-solid fa-paperclip"></i>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+                
+                <div class="right-actions" style="display: flex;">
+                  <el-tooltip :content="t('randomTopic')" placement="top">
+                    <el-button @click="generateRandomTopic">
+                      <i v-if="!isTopicGenerating" class="fa-solid fa-dice"></i>
+                      <i v-else class="fa-solid fa-dice fa-spin"></i>
+                    </el-button>
+                  </el-tooltip>
+                  <el-button type="primary" class="hero-send-btn" @click="handleDashboardSend">
+                    <i class="fa-solid fa-paper-plane"></i>
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 引导卡片矩阵 (瀑布流布局) -->
+          <div class="guide-grid">
+            <!-- 1. 开始对话 -->
+            <div class="guide-card" @click="activeMenu = 'home'">
+              <div class="card-icon blue"><i class="fa-solid fa-comment"></i></div>
+              <div class="card-info">
+                <h3>{{ t('startChatting') }}</h3>
+                <p>{{ t('startChattingDesc') }}</p>
+              </div>
+            </div>
+
+            <!-- 2. 召唤伴侣 -->
+            <div class="guide-card" @click="startVRM">
+              <div class="card-icon pink"><i class="fa-solid fa-user-ninja"></i></div>
+              <div class="card-info">
+                <h3>{{ t('summonCompanion') }}</h3>
+                <p>{{ t('summonCompanionDesc') }}</p>
+              </div>
+            </div>
+
+            <!-- 3. 创建角色 -->
+            <div class="guide-card" @click="activeMenu = 'role'; subMenu = 'memory'">
+              <div class="card-icon gold"><i class="fa-solid fa-masks-theater"></i></div>
+              <div class="card-info">
+                <h3>{{ t('createRole') }}</h3>
+                <p>{{ t('createRoleDesc') }}</p>
+              </div>
+            </div>
+
+            <!-- 4. 万能智能体 (CLI 弹窗) -->
+            <div class="guide-card" @click="showOmniAgentDialog = true">
+              <div class="card-icon green"><i class="fa-solid fa-terminal"></i></div>
+              <div class="card-info">
+                <h3>{{ t('omniAgent') }}</h3>
+                <p>{{ t('omniAgentDesc') }}</p>
+              </div>
+            </div>
+
+            <!-- 收藏的扩展卡片动态渲染 -->
+            <div v-for="ext in favoriteExtensions" :key="ext.id" class="guide-card extension" @click="openExtensionInWindow(ext)">
+              <div class="card-icon purple"><i class="fa-solid fa-puzzle-piece"></i></div>
+              <div class="card-info">
+                <h3>{{ ext.name }}</h3>
+                <p>{{ ext.description }}</p>
+              </div>
+              <div class="fav-star active" @click.stop="toggleFavoriteExtension(ext)">
+                <i class="fa-solid fa-star"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- 万能智能体配置弹窗 -->
+          <el-dialog v-model="showOmniAgentDialog" :title="t('omniAgentConfig')" width="80%">
+            <el-form label-position="top">
+              <el-form-item :label="t('CLIEngine')">
+                <el-select v-model="CLISettings.engine" class="full-width">
+                  <el-option :label="t('localEnvironment')" value="local"></el-option>
+                  <el-option :label="t('dockerSandbox')" value="ds"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item :label="t('workspace')" required>
+                <el-input v-model="CLISettings.cc_path" readonly>
+                  <template #append>
+                    <el-button @click="browseDirectory"><i class="fa-solid fa-folder-open"></i></el-button>
+                  </template>
+                </el-input>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="showOmniAgentDialog = false">{{ t('cancel') }}</el-button>
+              <el-button type="primary" :disabled="!CLISettings.cc_path" @click="confirmOmniAgent">
+                {{ t('confirmAndStart') }}
+              </el-button>
+            </template>
+          </el-dialog>
+        </div>
+
+
         <!-- 聊天界面保持不变 -->
         <div v-show="activeMenu === 'home'" class="page chat-container">
         <!-- 最外层 wrapper，负责整体左右布局 -->
@@ -1914,6 +2115,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </span>
                   </div>
 
+                  <!-- 扩展列表 -->
                   <el-empty v-if="extensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
                   <el-card
                       v-for="ext in extensions"
@@ -1922,14 +2124,41 @@ function updateElement(el, rawMarkdown, formatFn) {
                       :class="{ active: currentExtension && currentExtension.id === ext.id }"
                       @click="switchExtension(ext)">
                       
+                      <!-- 右上角按钮组 (整合了收藏按钮) -->
                       <div class="btn-top-right">
+                        
+                        <!-- 1. 收藏按钮 -->
+                        <el-tooltip :content="favoriteExtensionIds.includes(ext.id) ? t('unfavorite') : t('favorite')" placement="top">
+                          <el-button
+                            type="default"
+                            circle
+                            size="small"
+                            @click.stop="toggleFavoriteExtension(ext)">
+                            <i :class="favoriteExtensionIds.includes(ext.id) ? 'fa-solid fa-star star-active' : 'fa-regular fa-star'"></i>
+                          </el-button>
+                        </el-tooltip>
+
+                        <!-- 2. 浏览器打开按钮 -->
                         <el-tooltip :content="t('openExtensionInBrowser')" placement="top">
-                          <el-button type="default" circle size="small" @click.stop="openExtension(ext)">
+                          <el-button
+                            type="default"
+                            circle
+                            size="small"
+                            @click.stop="openExtension(ext)"
+                            style="margin-left: 8px;">
                             <i class="fa-solid fa-external-link"></i>
                           </el-button>
                         </el-tooltip>
+
+                        <!-- 3. 独立窗口打开按钮（仅在Electron环境下显示） -->
                         <el-tooltip :content="t('openExtensionInWindow')" placement="top">
-                          <el-button v-if="isElectron" type="primary" circle size="small" @click.stop="openExtensionInWindow(ext)" style="margin-left: 8px;">
+                          <el-button
+                            v-if="isElectron"
+                            type="primary"
+                            circle
+                            size="small"
+                            @click.stop="openExtensionInWindow(ext)"
+                            style="margin-left: 8px;">
                             <i class="fa-solid fa-window-restore"></i>
                           </el-button>
                         </el-tooltip>

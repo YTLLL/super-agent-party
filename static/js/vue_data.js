@@ -87,7 +87,7 @@ let vue_data = {
     isElectron: isElectron,
     isCollapse: true,
     isBtnCollapse: true,
-    activeMenu: 'home',
+    activeMenu: 'dashboard',
     activeLiveTab: 'live',
     isMaximized: false,
     hasUpdate: false,
@@ -2111,4 +2111,10 @@ main();`,
     currentAffectionForm: { userName: '' },
     isForceScrollToBottom: false,
     activeAgentTab: 'settings',
+
+    isHeroInputFocus: false,
+    isTopicGenerating: false,
+    showOmniAgentDialog: false,
+    favoriteExtensionIds: [], // 用于存储收藏的插件 ID
+
 };

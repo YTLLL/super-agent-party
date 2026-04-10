@@ -1562,6 +1562,35 @@ key3`,
         'currentFieldOfView': '当前视野范围',
         'Reselect': '重新选择',
         'fastProvider': '快速应答模型供应商',
+        // 核心导航页标题与输入
+        'whatToChatToday': '你好，今天想聊点什么？',
+        'inputMessage': '输入你想说的话，或随时提问...',
+        
+        // 工具提示 (Tooltip)
+        'uploadFileorImage': '上传文件或图片',
+        'randomTopic': '给我一个随机话题',
+        
+        // 导航卡片 (Cards)
+        'dashboard': '仪表盘',
+        'startChatting': '开始对话',
+        'startChattingDesc': '开启一段全新的智能对话',
+        'summonCompanion': '召唤伴侣',
+        'summonCompanionDesc': '唤醒你的专属虚拟 3D 形象陪伴',
+        'createRole': '创建角色',
+        'createRoleDesc': '定制拥有独特记忆与身份设定的智能体',
+        'omniAgent': '创建智能体',
+        'omniAgentDesc': '调用强大的命令行与沙盒工具助手',
+        
+        // 万能智能体配置弹窗 (Dialog)
+        'omniAgentConfig': '智能体配置',
+        'CLIEngine': '运行引擎',
+        'localEnvironment': '本地环境',
+        'dockerSandbox': 'Docker 沙盒 (推荐)',
+        'workspace': '工作空间目录',
+        'cancel': '取消',
+        'confirmAndStart': '确认并启动',
+        'unfavorite': '取消收藏',
+        'favorite': '收藏',
     },
     'en-US': {
         'chat': 'Chat',
@@ -3123,5 +3152,34 @@ Key3`,
         'CurrentFieldOfView': 'Current Field of View Range',
         'Reselect': 'Reselect',
         'fastProvider': 'Fast response model Provider',
+        // 核心导航页标题与输入
+        'whatToChatToday': 'Hello, what can I help with today?',
+        'inputMessage': 'Ask me anything...',
+        
+        // 工具提示 (Tooltip)
+        'uploadFileorImage': 'Upload file or image',
+        'randomTopic': 'Surprise me with a topic',
+        
+        // 导航卡片 (Cards)
+        'startChatting': 'Start Chatting',
+        'startChattingDesc': 'Begin a new AI conversation.',
+        'summonCompanion': 'Summon Companion',
+        'summonCompanionDesc': 'Wake up your 3D virtual companion.',
+        'createRole': 'Create Role',
+        'createRoleDesc': 'Customize a persona with unique memories.',
+        'omniAgent': 'Create Agent',
+        'omniAgentDesc': 'Powerful CLI and sandbox assistant.',
+        
+        // 万能智能体配置弹窗 (Dialog)
+        'dashboard': 'Dashboard', // 仪表盘
+        'omniAgentConfig': 'Create Agent Configuration',
+        'CLIEngine': 'Execution Engine',
+        'localEnvironment': 'Local Environment',
+        'dockerSandbox': 'Docker Sandbox (Recommended)',
+        'workspace': 'Workspace Directory',
+        'cancel': 'Cancel',
+        'confirmAndStart': 'Confirm & Start',
+        'unfavorite': 'Unfavorite',
+        'favorite': 'Favorite',
     },
   };
