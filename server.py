@@ -1348,12 +1348,12 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         for server_name, mcp_client in mcp_client_list.items():
             if tool_name in mcp_client._conn.tools:
                 result = await mcp_client.call_tool(tool_name, tool_params)
-            if isinstance(result,str):
-                return result
-            elif hasattr(result, 'model_dump'):
-                return str(result.model_dump())
-            else:
-                return str(result)
+                if isinstance(result,str):
+                    return result
+                elif hasattr(result, 'model_dump'):
+                    return str(result.model_dump())
+                else:
+                    return str(result)
         return None
         
     tool_call = _TOOL_HOOKS[tool_name]
@@ -6358,8 +6358,9 @@ async def chat_endpoint(request: ChatRequest, fastapi_request: Request):
 async def simple_chat_endpoint(request: ChatRequest):
     """
     同时支持流式(stream=true)与非流式(stream=false)
+    默认使用 fast_client 以提高响应速度
     """
-    global client, settings
+    global fast_client, settings
 
     current_settings = await load_settings()
     if len(current_settings['modelProviders']) <= 0:
@@ -6369,26 +6370,34 @@ async def simple_chat_endpoint(request: ChatRequest):
                                "type": "server_error", "code": 500}}
         )
 
-    # --------------- 选 vendor & 初始化 client ---------------
-    vendor = 'OpenAI'
-    for mp in current_settings['modelProviders']:
-        if mp['id'] == current_settings['selectedProvider']:
-            vendor = mp['vendor']
-            break
-    client_class = DifyOpenAIAsync if vendor == 'Dify' else AsyncOpenAI
-    if (current_settings['api_key'] != settings['api_key'] or
-            current_settings['base_url'] != settings['base_url']):
-        client = client_class(
-            api_key=current_settings['api_key'],
-            base_url=current_settings['base_url'] or "https://api.openai.com/v1",
+    # --------------- 无脑使用 fast_client ---------------
+    fast_cfg = current_settings.get('fast', {})
+    
+    # 初始化或更新 fast_client
+    if (fast_client is None 
+        or fast_cfg.get('api_key') != settings.get('fast', {}).get('api_key')
+        or fast_cfg.get('base_url') != settings.get('fast', {}).get('base_url')):
+        
+        f_provider = fast_cfg.get('selectedProvider', current_settings.get('selectedProvider'))
+        f_class = get_client_class(current_settings, f_provider)
+        fast_client = f_class(
+            api_key=fast_cfg.get('api_key') or current_settings.get('api_key'),
+            base_url=fast_cfg.get('base_url') or current_settings.get('base_url') or "https://api.openai.com/v1"
         )
+    
+    # 使用 fast 配置覆盖当前配置
+    if fast_cfg:
+        exclude_keys = ['enabled', 'triggerMode', 'conditionMaxLen', 'conditionNoNewline', 'conditionNoFiles']
+        fast_config = {k: v for k, v in fast_cfg.items() if k not in exclude_keys}
+        for key, value in fast_config.items():
+            current_settings[key] = value
 
     # --------------- 调用大模型 ---------------
-    response = await client.chat.completions.create(
+    response = await fast_client.chat.completions.create(
         model=current_settings['model'],
         messages=request.messages,
         stream=request.stream,
-        temperature=request.temperature or settings['temperature'],
+        temperature=request.temperature or settings.get('temperature', 0.7),
     )
 
     # --------------- 非流式：一次性返回 JSON ---------------
@@ -6407,7 +6416,6 @@ async def simple_chat_endpoint(request: ChatRequest):
         media_type="text/plain",      # 也可以保持 "text/event-stream"
         headers={"Cache-Control": "no-cache"}
     )
-
 
 from py.task_center import get_task_center
 from py.sub_agent import run_subtask_in_background
