@@ -601,7 +601,7 @@ function updateElement(el, rawMarkdown, formatFn) {
         :title="t('switchExtension')"
         v-model="showExtensionsDialog"
         width="80%"
-        :close-on-click-modal="false">
+        >
         <div class="extensions-list" :style="{ 'overflow-x': 'hidden'}">
           <!-- 默认视图选项 -->
           <el-card 
@@ -816,6 +816,21 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </div>
                 
                 <div class="right-actions" style="display: flex; gap: 8px; align-items: center;">
+                 
+                  <!-- ✨ 移动端/桌面端 适配切换 ✨ -->
+                  <el-tooltip :content="t('clickToSwitchModel')" placement="top" :show-after="500">
+                    <!-- 桌面端：显示胶囊 Pill -->
+                    <div v-if="!isMobile" class="status-pill hero-model-pill" @click="showModelDialog = true">
+                      <i class="fa-solid fa-microchip"></i>
+                      <span class="pill-text">{{ settings?.model !== '' ? settings.model : t('noModelSelected') }}</span>
+                    </div>
+                    
+                    <!-- 移动端：显示图标按钮，与旁边按钮样式一致 -->
+                    <el-button v-else @click="showModelDialog = true" class="icon-btn">
+                      <i class="fa-solid fa-microchip"></i>
+                    </el-button>
+                  </el-tooltip>
+                 
                   <!-- 随机话题按钮 -->
                   <el-tooltip :content="t('randomTopic')" placement="top">
                     <el-button @click="generateRandomTopic">
@@ -4838,7 +4853,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   v-model="showBehaviorDialog"
                   :title="isEditingBehavior ? t('editBehavior') : t('addBehavior')"
                   width="80%"
-                  :close-on-click-modal="false"
+                  
                   class="mcp-dialog"
                   @closed="resetBehaviorDialogState"
                 >
@@ -10970,7 +10985,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     v-model="showAddMCPDialog"
                     :title="isEditMode ? t('editMCP') : t('addNewMCP')"
                     width="80%"
-                    :close-on-click-modal="false"
+                    
                     :close-on-press-escape="false"
                     class="mcp-dialog"
                     @closed="resetDialogState">

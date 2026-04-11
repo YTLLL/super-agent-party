@@ -9882,7 +9882,89 @@ code {
   opacity: 1 !important;
 }
 
+/* Dashboard 专用模型胶囊微调 */
+.hero-model-pill {
+  margin-right: 4px;
+  /* 增加背景饱和度，使其在 Dashboard 的浅色背景下更明显 */
+  background-color: color-mix(in srgb, var(--el-color-primary) 8%, var(--el-bg-color-page)) !important;
+}
 
+/* 移动端极致适配 */
+@media (max-width: 768px) {
+  .hero-input-footer {
+    padding: 8px 12px 10px 12px !important;
+    /* 允许工具栏在极端窄屏下换行，或者压缩 */
+    flex-wrap: nowrap; 
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  
+  .hero-input-footer::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hero-model-pill {
+    /* 移动端限制最大宽度，防止像 "claude-3-5-sonnet" 这种长名字挤走其他按钮 */
+    max-width: 120px !important; 
+    flex-shrink: 1; /* 允许它在空间不足时缩小 */
+  }
+
+  .hero-model-pill .pill-text {
+    font-size: 11px;
+    /* 强制单行并显示省略号 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* 如果屏幕真的非常小 (比如 320px) */
+@media (max-width: 360px) {
+  .hero-model-pill .pill-text {
+    display: none; /* 极小屏下只显示微芯片图标 */
+  }
+  .hero-model-pill {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+
+/* 确保 Dashboard 里的按钮和对话框里的一样干净 */
+.hero-input-footer .el-button {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--el-text-color-regular) !important;
+  padding: 0 !important;
+  width: 36px !important;
+  height: 36px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  /* 1. 彻底清除所有按钮之间的默认左边距 */
+  .hero-input-footer .el-button {
+    margin-left: 0 !important;
+  }
+
+  /* 2. 确保模型指示器（如果是 div 胶囊）和后面的按钮之间也没有间距 */
+  .hero-model-pill {
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  /* 3. 统一使用 gap 来控制间距 (如果之前没加，这里再确认一次) */
+  .hero-input-footer .right-actions,
+  .hero-input-footer .left-actions {
+    gap: 4px !important; 
+    display: flex;
+    align-items: center;
+  }
+}
 
 /* ====================================================
    ✨ SAP Premium Motion System (全局高级动效系统) ✨
@@ -10160,4 +10242,50 @@ code {
 /* 移除 Element Plus 默认的进入动画，使用我们的 sapDialogPopIn */
 .dialog-fade-enter-active, .dialog-fade-leave-active {
   animation: none !important;
+}
+
+/* =========================================
+   Mobile El-Dialog Vertical Centering
+   ========================================= */
+@media (max-width: 768px) {
+  /* 1. 让弹窗容器（遮罩层）变为 Flex 布局 */
+  .el-overlay-dialog {
+    display: flex !important;
+    align-items: center !important;   /* 垂直居中 */
+    justify-content: center !important; /* 水平居中 */
+    padding: 12px !important;         /* 视口四周留一点间距，防止贴边 */
+  }
+
+  /* 2. 重置弹窗自身的 Margin */
+  .el-dialog {
+    margin: 0 !important;      /* 彻底移除默认的 margin-top，由父级 flex 居中控制 */
+    width: 92% !important;     /* 宽度占满 92% */
+    max-height: 85vh !important; /* 限制最大高度，防止内容撑破屏幕 */
+    display: flex;
+    flex-direction: column;
+    border-radius: 20px !important; /* 保持高级大圆角 */
+  }
+
+  /* 3. 确保弹窗内容过多时可以内部滚动 */
+  .el-dialog__body {
+    flex: 1;
+    overflow-y: auto;          /* 开启内部滚动 */
+    -webkit-overflow-scrolling: touch; 
+    padding: 15px 20px !important;
+  }
+
+  /* 4. 优化页脚按钮布局：让两个按钮并排平分宽度 */
+  .el-dialog__footer {
+    padding: 12px 20px 20px !important;
+  }
+  
+  .el-dialog__footer .dialog-footer {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .el-dialog__footer .el-button {
+    flex: 1; /* 平分宽度 */
+    margin: 0 !important;
+  }
 }

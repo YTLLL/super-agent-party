@@ -3146,8 +3146,8 @@ Key3`,
         'whatToChatToday': 'Hello, what can I help with today?',
         
         // 导航卡片 (Cards)
-        'startChatting': 'Start Chatting',
-        'summonCompanion': 'Summon Desktop Companion',
+        'startChatting': 'Chat',
+        'summonCompanion': 'Summon Companion',
         'createRole': 'Create Role',
         'omniAgent': 'Create Agent',
         'omniAgentEnabled': 'Agent Enabled',
