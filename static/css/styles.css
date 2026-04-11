@@ -10289,3 +10289,305 @@ code {
     margin: 0 !important;
   }
 }
+
+
+/* =========================================
+   Extension Card Anti-Shake Optimization
+   ========================================= */
+
+/* 1. 稳定卡片：悬停时取消物理位移和缩放，改用纯颜色/阴影反馈 */
+.extension-card:hover {
+  transform: none !important; /* 彻底禁用物理上浮 */
+  border-color: var(--el-color-primary) !important;
+  /* 用更深更广的阴影来模拟“浮起感”，而不移动像素位置 */
+  box-shadow: 0 0 0 1px var(--el-color-primary), 
+              0 10px 30px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 2. 移除点击时的“按压”缩放 (关键修复) */
+/* 点击时如果发生 scale(0.96)，按钮会瞬间变小，导致鼠标滑出 */
+.extension-card:active, 
+.extension-card .el-button:active {
+  transform: none !important; 
+}
+
+/* 3. 稳定按钮：取消悬停时的位移，仅保留缩放或背景变化 */
+.extension-card .btn-top-right .el-button {
+  transform: none !important; /* 禁止移动 */
+  transition: background-color 0.2s, color 0.2s !important; /* 只保留颜色过渡 */
+  
+  /* 增大点击热区：使用透明边框扩大感应区，但不改变视觉大小 */
+  border: 4px solid transparent !important; 
+  background-clip: padding-box !important;
+}
+
+.extension-card .btn-top-right .el-button:hover {
+  transform: scale(1.1) !important; /* 只允许轻微缩放，不准位移 */
+  background-color: var(--el-fill-color-dark) !important;
+}
+
+/* 4. 隔离层：当鼠标进入按钮区域时，通过伪类确保卡片背景不会干扰 */
+.extension-card .btn-top-right {
+  padding: 10px;
+  margin: -10px; /* 负边距抵消 padding，扩大拦截区域 */
+  z-index: 100;
+}
+
+/* =========================================
+   Dashboard Chips (Guide Cards) Anti-Shake
+   ========================================= */
+
+/* 1. 降低进场动画的幅度：从 25px 减小到 8px，去掉回弹效果 */
+@keyframes dashboardPopIn {
+  0% { 
+    opacity: 0; 
+    transform: translateY(8px); /* 极小位移 */
+    filter: blur(4px);
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0); 
+    filter: blur(0);
+  }
+}
+
+/* 覆盖之前的动画 */
+.guide-grid > .guide-card {
+  animation: dashboardPopIn 0.4s var(--ease-out-smooth) both !important;
+  /* 移除弹性过渡，改用线性减速过渡 */
+  transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s, transform 0.2s ease-out !important;
+}
+
+/* 2. 移除点击时的物理按压感 (避免点击星星时卡片缩小) */
+.guide-card:active {
+  transform: none !important; 
+}
+
+/* 3. 悬停效果：仅保留极其轻微的上浮，不使用 scale */
+.guide-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 4. 重点优化：星星按钮 (收藏图标) */
+.guide-card .fav-star {
+  position: relative;
+  z-index: 10;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s !important;
+}
+
+/* 悬停在星星上时，只改变星星背景，不让卡片整体产生视觉干扰 */
+.guide-card .fav-star:hover {
+  background-color: rgba(128, 128, 128, 0.1);
+}
+
+/* 移除星星点击时的物理抖动 */
+.guide-card .fav-star:active {
+  transform: scale(0.9); /* 只有星星缩放，卡片不动 */
+}
+
+/* 5. 布局稳定性：防止取消收藏时，列表重排导致的瞬间位移跳动 */
+.guide-grid {
+  /* 启用平滑过渡，如果 Vue 使用了 transition-group 效果更好 */
+  transition: all 0.5s var(--ease-out-smooth);
+}
+
+
+/* =========================================
+   Storage Section Waterfall Entry
+   ========================================= */
+
+/* 1. 统一绑定进场动画：文本列表、图片网格、视频网格 */
+.text-list > .file-item,
+.image-grid > .image-item,
+.video-grid > .video-item {
+  /* 使用平滑曲线，避免存储列表在大面积重排时产生眩晕感 */
+  animation: cardPopIn 0.6s var(--ease-out-smooth) both;
+}
+
+/* 2. 动态交错延迟 (Staggered Delays) */
+/* 我们为前 12 个元素设置阶梯式延迟 */
+.text-list > .file-item:nth-child(1), .image-grid > .image-item:nth-child(1), .video-grid > .video-item:nth-child(1) { animation-delay: 0.05s; }
+.text-list > .file-item:nth-child(2), .image-grid > .image-item:nth-child(2), .video-grid > .video-item:nth-child(2) { animation-delay: 0.10s; }
+.text-list > .file-item:nth-child(3), .image-grid > .image-item:nth-child(3), .video-grid > .video-item:nth-child(3) { animation-delay: 0.15s; }
+.text-list > .file-item:nth-child(4), .image-grid > .image-item:nth-child(4), .video-grid > .video-item:nth-child(4) { animation-delay: 0.20s; }
+.text-list > .file-item:nth-child(5), .image-grid > .image-item:nth-child(5), .video-grid > .video-item:nth-child(5) { animation-delay: 0.25s; }
+.text-list > .file-item:nth-child(6), .image-grid > .image-item:nth-child(6), .video-grid > .video-item:nth-child(6) { animation-delay: 0.30s; }
+.text-list > .file-item:nth-child(7), .image-grid > .image-item:nth-child(7), .video-grid > .video-item:nth-child(7) { animation-delay: 0.35s; }
+.text-list > .file-item:nth-child(8), .image-grid > .image-item:nth-child(8), .video-grid > .video-item:nth-child(8) { animation-delay: 0.40s; }
+.text-list > .file-item:nth-child(9), .image-grid > .image-item:nth-child(9), .video-grid > .video-item:nth-child(9) { animation-delay: 0.45s; }
+.text-list > .file-item:nth-child(10),.image-grid > .image-item:nth-child(10),.video-grid > .video-item:nth-child(10){ animation-delay: 0.50s; }
+.text-list > .file-item:nth-child(11),.image-grid > .image-item:nth-child(11),.video-grid > .video-item:nth-child(11){ animation-delay: 0.55s; }
+.text-list > .file-item:nth-child(12),.image-grid > .image-item:nth-child(12),.video-grid > .video-item:nth-child(12){ animation-delay: 0.60s; }
+
+/* 超过12个的元素不再延迟，防止超长列表渲染过慢 */
+.text-list > .file-item:nth-child(n+13), 
+.image-grid > .image-item:nth-child(n+13), 
+.video-grid > .video-item:nth-child(n+13) { 
+  animation-delay: 0.65s; 
+}
+
+/* 3. 物理交互反馈加固 */
+/* 确保文件列表行在鼠标悬停时也有平滑的提升感 */
+.file-item {
+  transition: all 0.3s var(--ease-out-smooth) !important;
+  border: 1px solid transparent;
+}
+
+.file-item:hover {
+  background-color: var(--el-bg-color) !important;
+  transform: translateX(4px) !important; /* 文本列表适合向右微移，而不是向上浮 */
+  box-shadow: var(--shadow-sm);
+  border-color: var(--el-color-primary-light-8) !important;
+}
+
+/* 图片和视频卡片悬停上浮 */
+.image-item:hover, .video-item:hover {
+  transform: translateY(-5px) scale(1.02) !important;
+  box-shadow: var(--shadow-lg) !important;
+  z-index: 5;
+}
+
+/* 点击反馈：轻微按压 */
+.file-item:active, .image-item:active, .video-item:active {
+  transform: scale(0.98) !important;
+  transition-duration: 0.1s !important;
+}
+
+
+/* =========================================
+   Logo & License Page Waterfall Entry
+   ========================================= */
+
+/* 1. 主卡片整体进场 */
+.license-notice {
+  animation: pageSlideFadeIn 0.6s var(--ease-out-smooth) both;
+}
+
+/* 2. 内部区块序列进场 (标题、警告区、联系区、链接区、协议区) */
+.license-notice > h1,
+.license-notice > h3,
+.license-notice > .notice-section,
+.license-notice > .contact-section,
+.license-notice > .social-links,
+.license-notice > .agreement-section {
+  animation: cardPopIn 0.6s var(--ease-out-smooth) both;
+}
+
+/* 区块间的微小延迟，让页面自上而下“流”出来 */
+.license-notice > h1 { animation-delay: 0.05s; }
+.license-notice > h3 { animation-delay: 0.10s; }
+.license-notice > .notice-section { animation-delay: 0.15s; }
+.license-notice > .contact-section { animation-delay: 0.20s; }
+.license-notice > .social-links { animation-delay: 0.25s; }
+.license-notice > .agreement-section { animation-delay: 0.30s; }
+
+/* 3. 核心：社交链接列表的瀑布流 (Staggered Links) */
+.social-links > .link-item {
+  animation: cardPopIn 0.5s var(--ease-out-smooth) both;
+}
+
+/* 为 9 条社交链接设置阶梯延迟 */
+.social-links > .link-item:nth-child(1) { animation-delay: 0.30s; }
+.social-links > .link-item:nth-child(2) { animation-delay: 0.35s; }
+.social-links > .link-item:nth-child(3) { animation-delay: 0.40s; }
+.social-links > .link-item:nth-child(4) { animation-delay: 0.45s; }
+.social-links > .link-item:nth-child(5) { animation-delay: 0.50s; }
+.social-links > .link-item:nth-child(6) { animation-delay: 0.55s; }
+.social-links > .link-item:nth-child(7) { animation-delay: 0.60s; }
+.social-links > .link-item:nth-child(8) { animation-delay: 0.65s; }
+.social-links > .link-item:nth-child(9) { animation-delay: 0.70s; }
+
+/* 4. 交互加固：链接项悬停动效 */
+.link-item {
+  transition: all 0.3s var(--ease-out-smooth) !important;
+  cursor: default;
+}
+
+.link-item:hover {
+  transform: translateX(10px) !important; /* 保持你原本的向右位移设计，但使用平滑曲线 */
+  background-color: var(--el-color-primary-light-9) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* 链接文字点击时的反馈 */
+.social-link:active {
+  opacity: 0.7;
+  transform: scale(0.98);
+}
+
+
+/* =========================================
+   Settings Form & Items Advanced Motion
+   ========================================= */
+
+/* 1. 表单容器整体：柔和滑入 */
+.settings-form {
+  animation: pageSlideFadeIn 0.6s var(--ease-out-smooth) both;
+}
+
+/* 2. 工具项卡片：Q弹进场 */
+.settings-form .tool-item {
+  animation: cardPopIn 0.6s var(--ease-out-back) both;
+  transition: all 0.3s var(--ease-out-smooth) !important;
+}
+
+/* 3. 内容区 (tool-content)：呼吸感进场 */
+.tool-content {
+  animation: formContentSlideIn 0.5s var(--ease-out-smooth) both;
+  animation-delay: 0.1s; /* 稍微晚于表头出现 */
+}
+
+@keyframes formContentSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* 4. 核心：表单项 (el-form-item) 的序列化瀑布流 */
+/* 我们让每一个输入框行都有一个细微的阶梯式延迟 */
+.settings-form .el-form-item {
+  animation: cardPopIn 0.5s var(--ease-out-smooth) both;
+}
+
+.settings-form .el-form-item:nth-child(1) { animation-delay: 0.15s; }
+.settings-form .el-form-item:nth-child(2) { animation-delay: 0.20s; }
+.settings-form .el-form-item:nth-child(3) { animation-delay: 0.25s; }
+.settings-form .el-form-item:nth-child(4) { animation-delay: 0.30s; }
+.settings-form .el-form-item:nth-child(n+5) { animation-delay: 0.35s; }
+
+/* 5. 提示框 (el-alert) 进场优化 */
+.settings-form .el-alert {
+  animation: cardPopIn 0.5s var(--ease-out-smooth) both;
+  animation-delay: 0.4s; /* 最后出现提示，作为收尾 */
+}
+
+/* 6. 物理交互增强：输入框聚焦时的微位移 */
+.full-width-input .el-input__wrapper {
+  transition: all 0.3s var(--ease-out-smooth) !important;
+}
+
+.full-width-input .el-input__wrapper.is-focus {
+  transform: translateX(4px); /* 聚焦时向右微移，产生“被选中”的指向感 */
+  box-shadow: -4px 0 0 var(--el-color-primary), /* 左侧侧边条线 */
+              var(--el-box-shadow-light) !important;
+}
+
+/* 7. 物理反馈：点击整个工具项时的反馈 */
+.tool-item:hover {
+  border-color: var(--el-color-primary-light-7) !important;
+  background-color: color-mix(in srgb, var(--el-color-primary) 2%, var(--el-bg-color)) !important;
+}

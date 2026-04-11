@@ -667,7 +667,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     type="default"
                     circle
                     size="small"
-                    @click.stop="toggleFavoriteExtension(ext)">
+                    @click.stop.prevent="toggleFavoriteExtension(ext)">
                     <i :class="favoriteExtensionIds.includes(ext.id) ? 'fa-solid fa-star star-active' : 'fa-regular fa-star'"></i>
                   </el-button>
                 </el-tooltip>
@@ -678,7 +678,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     type="default"
                     circle
                     size="small"
-                    @click.stop="openExtension(ext)"
+                    @click.stop.prevent="openExtension(ext)"
                     style="margin-left: 8px;">
                     <i class="fa-solid fa-external-link"></i>
                   </el-button>
@@ -691,7 +691,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     type="primary"
                     circle
                     size="small"
-                    @click.stop="openExtensionInWindow(ext)"
+                    @click.stop.prevent="openExtensionInWindow(ext)"
                     style="margin-left: 8px;">
                     <i class="fa-solid fa-window-restore"></i>
                   </el-button>
@@ -2174,7 +2174,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             type="default"
                             circle
                             size="small"
-                            @click.stop="toggleFavoriteExtension(ext)">
+                            @click.stop.prevent="toggleFavoriteExtension(ext)">
                             <i :class="favoriteExtensionIds.includes(ext.id) ? 'fa-solid fa-star star-active' : 'fa-regular fa-star'"></i>
                           </el-button>
                         </el-tooltip>
@@ -2185,7 +2185,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             type="default"
                             circle
                             size="small"
-                            @click.stop="openExtension(ext)"
+                            @click.stop.prevent="openExtension(ext)"
                             style="margin-left: 8px;">
                             <i class="fa-solid fa-external-link"></i>
                           </el-button>
@@ -2198,7 +2198,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             type="primary"
                             circle
                             size="small"
-                            @click.stop="openExtensionInWindow(ext)"
+                            @click.stop.prevent="openExtensionInWindow(ext)"
                             style="margin-left: 8px;">
                             <i class="fa-solid fa-window-restore"></i>
                           </el-button>
