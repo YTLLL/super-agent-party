@@ -9881,3 +9881,109 @@ code {
   background-color: color-mix(in srgb, var(--el-color-danger) 15%, transparent) !important;
   opacity: 1 !important;
 }
+
+
+
+:root {
+  /* 苹果风格的高级抗锯齿贝塞尔曲线：极快启动，优雅缓停 */
+  --premium-bezier: cubic-bezier(0.16, 1, 0.3, 1);
+  --premium-duration: 0.5s;
+}
+
+/* 全局通用高级感淡入滑升动画 */
+@keyframes premiumFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+    filter: blur(4px); /* 增加轻微模糊，更有电影感 */
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* 略微缩放的入场动画，用于弹窗等 */
+@keyframes premiumScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+
+/* 为所有 .page 类（即你的各个功能版块）绑定入场动效 */
+.content .page {
+  animation: premiumFadeInUp var(--premium-duration) var(--premium-bezier) both;
+  will-change: transform, opacity; /* 开启GPU加速 */
+}
+
+/* 限制不同页面同时出现时的混乱 */
+.content {
+  position: relative;
+}
+
+
+.provider-grid .provider-card {
+  animation: premiumFadeInUp 0.6s var(--premium-bezier) both;
+}
+
+/* 为前8个卡片设置阶梯延迟，多余的会同时显示（防止长列表动画时间过长） */
+.provider-grid .provider-card:nth-child(1) { animation-delay: 0.03s; }
+.provider-grid .provider-card:nth-child(2) { animation-delay: 0.06s; }
+.provider-grid .provider-card:nth-child(3) { animation-delay: 0.09s; }
+.provider-grid .provider-card:nth-child(4) { animation-delay: 0.12s; }
+.provider-grid .provider-card:nth-child(5) { animation-delay: 0.15s; }
+.provider-grid .provider-card:nth-child(6) { animation-delay: 0.18s; }
+.provider-grid .provider-card:nth-child(7) { animation-delay: 0.21s; }
+.provider-grid .provider-card:nth-child(8) { animation-delay: 0.24s; }
+
+
+/* 覆盖 Element Plus 弹窗的默认动画 */
+.el-overlay-dialog {
+  transition-duration: 0.4s !important;
+}
+
+.el-dialog {
+  animation: premiumScaleIn 0.4s var(--premium-bezier) both !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 磨砂玻璃背景遮罩配合弹窗，高级感拉满 */
+.el-overlay {
+  background-color: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.4s ease !important;
+}
+
+
+/* 1. 按钮悬停：轻微上浮 + 呼吸发光 */
+.el-button {
+  transition: all 0.3s var(--premium-bezier) !important;
+}
+.el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(var(--el-color-primary-rgb), 0.2) !important;
+}
+.el-button:active {
+  transform: translateY(0.5px);
+}
+
+/* 2. 侧边栏菜单：平滑平移 */
+.el-menu-item {
+  transition: background-color 0.3s, color 0.3s, transform 0.3s var(--premium-bezier) !important;
+}
+.el-menu-item:hover {
+  transform: translateX(4px);
+}
+
+/* 3. 输入框聚焦：温和的阴影晕染 */
+.el-input__wrapper, .el-textarea__inner {
+  transition: all 0.3s var(--premium-bezier) !important;
+}

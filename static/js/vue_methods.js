@@ -11366,7 +11366,10 @@ stopTTSActivities() {
     this.showToolInfoDialog = true;
   },
   toggleAssistantMode() {
-    this.activeMenu = 'home';
+    if (this.activeMenu != 'home' && this.activeMenu != 'dashboard'){
+      this.activeMenu = 'home';
+    }
+
     this.isPttMode = false;
     console.log('切换助手模式，当前状态:', this.isAssistantMode);
 
