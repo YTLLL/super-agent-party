@@ -536,13 +536,12 @@ function updateElement(el, rawMarkdown, formatFn) {
         @click="sidebarVisible = false"></div>
 
     <!-- 后端日志弹窗 -->
-    <el-dialog
+    <el-dialog append-to-body
       v-model="showLogDialog"
       :title="t('serverLogs') || 'Backend Logs'"
       width="80%"
       top="5vh"
       class="log-dialog"
-      :append-to-body="true"
     >
       <div class="log-container" ref="logContainer">
         <pre>{{ logContent }}</pre>
@@ -557,7 +556,7 @@ function updateElement(el, rawMarkdown, formatFn) {
       </template>
     </el-dialog>
 
-      <el-dialog
+      <el-dialog append-to-body
         v-model="showModelDialog"
         :title="t('mainModel')"
         width="80%">
@@ -598,11 +597,11 @@ function updateElement(el, rawMarkdown, formatFn) {
         </div>
       </el-dialog>  
       <!-- 扩展选择对话框 -->
-      <el-dialog
+      <el-dialog append-to-body
         :title="t('switchExtension')"
         v-model="showExtensionsDialog"
         width="80%"
-        :close-on-click-modal="false">
+        >
         <div class="extensions-list" :style="{ 'overflow-x': 'hidden'}">
           <!-- 默认视图选项 -->
           <el-card 
@@ -668,7 +667,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     type="default"
                     circle
                     size="small"
-                    @click.stop="toggleFavoriteExtension(ext)">
+                    @click.stop.prevent="toggleFavoriteExtension(ext)">
                     <i :class="favoriteExtensionIds.includes(ext.id) ? 'fa-solid fa-star star-active' : 'fa-regular fa-star'"></i>
                   </el-button>
                 </el-tooltip>
@@ -679,7 +678,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     type="default"
                     circle
                     size="small"
-                    @click.stop="openExtension(ext)"
+                    @click.stop.prevent="openExtension(ext)"
                     style="margin-left: 8px;">
                     <i class="fa-solid fa-external-link"></i>
                   </el-button>
@@ -692,7 +691,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     type="primary"
                     circle
                     size="small"
-                    @click.stop="openExtensionInWindow(ext)"
+                    @click.stop.prevent="openExtensionInWindow(ext)"
                     style="margin-left: 8px;">
                     <i class="fa-solid fa-window-restore"></i>
                   </el-button>
@@ -740,7 +739,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <div class="overlay">
                       <el-button 
                         type="danger" 
-                        circle 
                         size="small" 
                         @click.stop="removeItem(index, item.uiCategory)"
                       >
@@ -796,24 +794,71 @@ function updateElement(el, rawMarkdown, formatFn) {
               
               <!-- 底部工具栏 -->
               <div class="hero-input-footer">
-                <div class="left-actions" style="display: flex;">
+                <div class="left-actions" style="display: flex; gap: 8px;">
+                  <!-- 附件上传按钮 -->
                   <el-tooltip :content="t('uploadFileorImage')" placement="top">
                     <el-button @click="browseAllFiles">
                       <i class="fa-solid fa-paperclip"></i>
                     </el-button>
                   </el-tooltip>
+
+                  <!-- ✨ 迁移：语音合成 (TTS) 开关 ✨ -->
+                  <el-tooltip :content="t('tts')" placement="top">
+                    <el-button
+                      @click="ttsSettings.enabled=!ttsSettings.enabled;changeTTSstatus();"
+                      class="icon-btn"
+                      :type="ttsSettings.enabled ? 'primary' : 'default'"
+                    >
+                      <i v-if="ttsSettings.enabled" class="fa-solid fa-volume-high"></i>
+                      <i v-else class="fa-solid fa-volume-xmark"></i>
+                    </el-button>
+                  </el-tooltip>
                 </div>
                 
-                <div class="right-actions" style="display: flex;">
+                <div class="right-actions" style="display: flex; gap: 8px; align-items: center;">
+                 
+                  <!-- ✨ 移动端/桌面端 适配切换 ✨ -->
+                  <el-tooltip :content="t('clickToSwitchModel')" placement="top" :show-after="500">
+                    <!-- 桌面端：显示胶囊 Pill -->
+                    <div v-if="!isMobile" class="status-pill hero-model-pill" @click="showModelDialog = true">
+                      <i class="fa-solid fa-microchip"></i>
+                      <span class="pill-text">{{ settings?.model !== '' ? settings.model : t('noModelSelected') }}</span>
+                    </div>
+                    
+                    <!-- 移动端：显示图标按钮，与旁边按钮样式一致 -->
+                    <el-button v-else @click="showModelDialog = true" class="icon-btn">
+                      <i class="fa-solid fa-microchip"></i>
+                    </el-button>
+                  </el-tooltip>
+                 
+                  <!-- 随机话题按钮 -->
                   <el-tooltip :content="t('randomTopic')" placement="top">
                     <el-button @click="generateRandomTopic">
                       <i v-if="!isTopicGenerating" class="fa-solid fa-dice"></i>
                       <i v-else class="fa-solid fa-dice fa-spin"></i>
                     </el-button>
                   </el-tooltip>
-                  <el-button type="primary" class="hero-send-btn" @click="handleDashboardSend">
-                    <i class="fa-solid fa-paper-plane"></i>
-                  </el-button>
+
+                  <!-- ✨ 迁移与逻辑切换：语音识别 (ASR) / 发送按钮 ✨ -->
+                  <template v-if="!userInput">
+                    <el-tooltip :content="t('asr')" placement="top">
+                      <el-button
+                        @click="toggleASR"
+                        class="icon-btn"
+                        :type="asrSettings.enabled ? 'primary' : 'default'"
+                      >
+                        <i class="fa-solid fa-microphone"></i>
+                      </el-button>
+                    </el-tooltip>
+                  </template>
+                  
+                  <template v-else>
+                    <el-tooltip :content="t('sendMessage')" placement="top">
+                      <el-button type="primary" class="hero-send-btn" @click="handleDashboardSend">
+                        <i class="fa-solid fa-paper-plane"></i>
+                      </el-button>
+                    </el-tooltip>
+                  </template>
                 </div>
               </div>
             </div>
@@ -826,7 +871,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon blue"><i class="fa-solid fa-comment"></i></div>
               <div class="card-info">
                 <h3>{{ t('startChatting') }}</h3>
-                <p>{{ t('startChattingDesc') }}</p>
               </div>
             </div>
 
@@ -835,7 +879,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon pink"><i class="fa-solid fa-user-ninja"></i></div>
               <div class="card-info">
                 <h3>{{ t('summonCompanion') }}</h3>
-                <p>{{ t('summonCompanionDesc') }}</p>
               </div>
             </div>
 
@@ -844,7 +887,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon gold"><i class="fa-solid fa-masks-theater"></i></div>
               <div class="card-info">
                 <h3>{{ t('createRole') }}</h3>
-                <p>{{ t('createRoleDesc') }}</p>
               </div>
             </div>
 
@@ -853,7 +895,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon green"><i class="fa-solid fa-terminal"></i></div>
               <div class="card-info">
                 <h3>{{ t('omniAgent') }}</h3>
-                <p>{{ t('omniAgentDesc') }}</p>
               </div>
             </div>
 
@@ -862,7 +903,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon purple"><i class="fa-solid fa-puzzle-piece"></i></div>
               <div class="card-info">
                 <h3>{{ ext.name }}</h3>
-                <p>{{ ext.description }}</p>
               </div>
               <div class="fav-star active" @click.stop="toggleFavoriteExtension(ext)">
                 <i class="fa-solid fa-star"></i>
@@ -871,12 +911,14 @@ function updateElement(el, rawMarkdown, formatFn) {
           </div>
 
           <!-- 万能智能体配置弹窗 -->
-          <el-dialog v-model="showOmniAgentDialog" :title="t('omniAgentConfig')" width="80%">
+          <el-dialog append-to-body v-model="showOmniAgentDialog" :title="t('omniAgentConfig')" width="80%">
             <el-form label-position="top">
               <el-form-item :label="t('CLIEngine')">
                 <el-select v-model="CLISettings.engine" class="full-width">
                   <el-option :label="t('localEnvironment')" value="local"></el-option>
                   <el-option :label="t('dockerSandbox')" value="ds"></el-option>
+                  <el-option label="Claude Code" value="cc" ></el-option>
+                  <el-option label="Qwen Code" value="qc" ></el-option>
                 </el-select>
               </el-form-item>
               <el-form-item :label="t('workspace')" required>
@@ -894,6 +936,24 @@ function updateElement(el, rawMarkdown, formatFn) {
               </el-button>
             </template>
           </el-dialog>
+        </div>
+
+        <div 
+          v-if="isPttRecording && asrSettings.interactionMethod === 'keyTriggered'" 
+          class="desktop-recording-overlay"
+        >
+          <div class="desktop-recording-content">
+            <!-- 麦克风图标 (你可以换成自己的 el-icon) -->
+            <el-icon class="mic-icon"><Microphone /></el-icon>
+            
+            <!-- 复用你的波纹动画 -->
+            <div class="recording-wave">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+
+            <!-- 文字提示 -->
+            <span class="ptt-text">{{ t('releaseToSend') }}</span>
+          </div>
         </div>
 
 
@@ -1648,25 +1708,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </span>
                         </div>
                       </div>
-              
-                      <div 
-                        v-if="isPttRecording && asrSettings.interactionMethod === 'keyTriggered'" 
-                        class="desktop-recording-overlay"
-                      >
-                        <div class="desktop-recording-content">
-                          <!-- 麦克风图标 (你可以换成自己的 el-icon) -->
-                          <el-icon class="mic-icon"><Microphone /></el-icon>
-                          
-                          <!-- 复用你的波纹动画 -->
-                          <div class="recording-wave">
-                            <span></span><span></span><span></span><span></span><span></span>
-                          </div>
-
-                          <!-- 文字提示 -->
-                          <span class="ptt-text">{{ t('releaseToSend') }}</span>
-                        </div>
-                      </div>
-
 
                     <div class="input-status-bar">
                       
@@ -2133,7 +2174,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             type="default"
                             circle
                             size="small"
-                            @click.stop="toggleFavoriteExtension(ext)">
+                            @click.stop.prevent="toggleFavoriteExtension(ext)">
                             <i :class="favoriteExtensionIds.includes(ext.id) ? 'fa-solid fa-star star-active' : 'fa-regular fa-star'"></i>
                           </el-button>
                         </el-tooltip>
@@ -2144,7 +2185,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             type="default"
                             circle
                             size="small"
-                            @click.stop="openExtension(ext)"
+                            @click.stop.prevent="openExtension(ext)"
                             style="margin-left: 8px;">
                             <i class="fa-solid fa-external-link"></i>
                           </el-button>
@@ -2157,7 +2198,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             type="primary"
                             circle
                             size="small"
-                            @click.stop="openExtensionInWindow(ext)"
+                            @click.stop.prevent="openExtensionInWindow(ext)"
                             style="margin-left: 8px;">
                             <i class="fa-solid fa-window-restore"></i>
                           </el-button>
@@ -2178,7 +2219,7 @@ function updateElement(el, rawMarkdown, formatFn) {
             </div>
 
             <!-- 任务结果 Dialog -->
-            <el-dialog
+            <el-dialog append-to-body
               v-model="showTaskResultDialog"
               :title="selectedTaskTitle"
               width="80%"
@@ -2195,7 +2236,7 @@ function updateElement(el, rawMarkdown, formatFn) {
             </el-dialog>
 
             <!-- 创建任务 Dialog -->
-            <el-dialog
+            <el-dialog append-to-body
               v-model="showCreateTaskDialog"
               :title="t('createNewTask')"
               width="80%"
@@ -2224,7 +2265,7 @@ function updateElement(el, rawMarkdown, formatFn) {
             </el-dialog>
           </div>
           <!-- 群聊设置弹窗 -->
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showGroupSettingsDialog"
             :title="t('groupChatSettings')"
             width="80%">
@@ -2286,7 +2327,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
           </el-dialog>
-            <el-dialog
+            <el-dialog append-to-body
               v-model="showKnowledgeDialog"
               :title="t('knowledgeBaseSelection')"
               width="80%">
@@ -2305,7 +2346,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </div>
               </div>
             </el-dialog>
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showMemoryDialog"
             :title="t('memory')"
             width="80%">
@@ -2343,7 +2384,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </el-form-item>
             </div>
           </el-dialog>
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showAgentDialog"
             :title="t('agentSettings')"
             width="80%">
@@ -2391,7 +2432,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
           </el-dialog>
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showMCPServerDialog"
             :title="t('mcpServersManagement')"
             width="80%">
@@ -2416,7 +2457,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
           </el-dialog>
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showA2AServerDialog"
             :title="t('a2aServersManagement')"
             width="80%">
@@ -2435,7 +2476,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
           </el-dialog>
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showLLMToolsDialog"
             :title="t('llmToolsManagement')"
             width="80%">
@@ -2461,7 +2502,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
           </el-dialog>
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showComfyUIDialog"
             :title="t('ComfyUIManagement')"
             width="80%">
@@ -2487,7 +2528,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
           </el-dialog>
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showStickerPacksDialog"
             :title="t('StickerPackManagement')"
             width="80%">
@@ -2512,7 +2553,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
           </el-dialog>
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showMoreButtonDialog"
             :title="t('showMoreButton')"
             width="80%">
@@ -2527,7 +2568,7 @@ function updateElement(el, rawMarkdown, formatFn) {
           </el-dialog>
         </div>
 
-          <el-dialog
+          <el-dialog append-to-body
             v-model="showEditDialog"
             :title="editType === 'system' ? t('editSystemPrompt') : t('editMessage')"
             width="80%">
@@ -2559,7 +2600,7 @@ function updateElement(el, rawMarkdown, formatFn) {
             </template>
           </el-dialog>
 
-        <el-dialog
+        <el-dialog append-to-body
           v-model="showHistoryDialog"
           :title="t('chatHistory')"
           width="80%">
@@ -2848,7 +2889,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </el-form-item>
 
                     <!-- 向量库交互 Dialog -->
-                    <el-dialog
+                    <el-dialog append-to-body
                       v-model="vectorDialogVisible"
                       :title="t('vectorInteractTitle') + ' —— ' + vectorDialogMemoryName"
                       width="80%"
@@ -2879,7 +2920,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </el-dialog>
 
                     <!-- 单行编辑小弹窗 -->
-                    <el-dialog
+                    <el-dialog append-to-body
                       v-model="editRowVisible"
                       width="40%"
                       :title="t('editText')"
@@ -3001,7 +3042,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </div>
                     </div>
                     <!-- 添加记忆对话框 -->
-                    <el-dialog v-model="showAddMemoryDialog" :title="t('memoryConfig')" width="80%">
+                    <el-dialog append-to-body v-model="showAddMemoryDialog" :title="t('memoryConfig')" width="80%">
                       <el-form label-position="top">
                         <el-form-item :label="t('memoryName')" required>
                           <el-input v-model="newMemory.name" />
@@ -3465,7 +3506,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </div>
 
                     <!-- 编辑/新增对话框 -->
-                    <el-dialog
+                    <el-dialog append-to-body
                       v-model="showPromptDialog"
                       :title="t('editSystemPrompt')"
                       width="80%"
@@ -3531,7 +3572,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </div>
 
                 <!-- 新增 TTS 配置对话框 -->
-                <el-dialog v-model="showAddTTSDialog" :title="t('addNewTTS')" width="80%">
+                <el-dialog append-to-body v-model="showAddTTSDialog" :title="t('addNewTTS')" width="80%">
                   <el-form ref="form" :model="newTTSConfig" label-position="top">
                     <!-- 名称输入 -->
                     <el-form-item :label="t('ttsName')" required>
@@ -4446,7 +4487,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <div style="color: #606266; margin-top: 10px;">{{ t('addNewAppearance') }}</div>
                   </div>
                 <!-- 新增 形象 配置对话框 -->
-                <el-dialog v-model="showAddAppearanceDialog" :title="t('addNewAppearance')" width="80%">
+                <el-dialog append-to-body v-model="showAddAppearanceDialog" :title="t('addNewAppearance')" width="80%">
                   <div class="tool-content">
                     <!-- 名称输入 -->
                     <el-form-item :label="t('AppearanceName')" required label-position="top">
@@ -4608,7 +4649,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </div>
 
                   <!-- VRM模型上传对话框 -->
-                  <el-dialog
+                  <el-dialog append-to-body
                     v-model="showVrmModelDialog"
                     :title="t('uploadVrmModel')"
                     width="80%"
@@ -4654,7 +4695,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </el-dialog>
 
                   <!-- VRMA动作上传对话框 -->
-                  <el-dialog
+                  <el-dialog append-to-body
                     v-model="showVrmaMotionDialog"
                     :title="t('uploadVrmaMotion')"
                     width="80%"
@@ -4808,11 +4849,11 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </div>
 
                 <!-- 添加/编辑 行为对话框 -->
-                <el-dialog
+                <el-dialog append-to-body
                   v-model="showBehaviorDialog"
                   :title="isEditingBehavior ? t('editBehavior') : t('addBehavior')"
                   width="80%"
-                  :close-on-click-modal="false"
+                  
                   class="mcp-dialog"
                   @closed="resetBehaviorDialogState"
                 >
@@ -5197,7 +5238,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
 
               <!-- 新增/编辑用户数据对话框 (放在 tabs 外面) -->
-              <el-dialog 
+              <el-dialog append-to-body 
                 v-model="showAffectionDataDialog" 
                 :title="isEditingAffection ? (t('editData') || '编辑羁绊数据') : (t('addData') || '新增羁绊数据')" 
                 width="400px"
@@ -5228,7 +5269,7 @@ function updateElement(el, rawMarkdown, formatFn) {
         </div>
 
         <!-- 音频上传对话框 -->
-        <el-dialog
+        <el-dialog append-to-body
           v-model="showGsvRefAudioPathDialog"
           :title="t('uploadGsvRefAudio')"
           width="80%"
@@ -5468,7 +5509,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </div>
 
                 <!-- 添加供应商对话框 -->
-                <el-dialog
+                <el-dialog append-to-body
                   v-model="showAddDialog"
                   id="show-Add-Dialog"
                   :title="t('addNewProvider')"
@@ -9225,7 +9266,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </el-tab-pane>
               </el-tabs>
                 <!-- 技能预览对话框 -->
-                <el-dialog 
+                <el-dialog append-to-body 
                   v-model="showSkillPreviewDialog" 
                   :title="t('skillPreview')" 
                   width="80%"
@@ -9242,7 +9283,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </template>
                 </el-dialog>
                 <!-- === 新增: 添加 Skill 对话框 === -->
-                <el-dialog v-model="showAddSkillDialog" :title="t('addSkill')" width="80%">
+                <el-dialog append-to-body v-model="showAddSkillDialog" :title="t('addSkill')" width="80%">
                   <el-tabs v-model="addSkillTab">
                     
                     <!-- GitHub 安装 -->
@@ -10233,7 +10274,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </div>
 
                     <!-- 添加知识库对话框 -->
-                    <el-dialog
+                    <el-dialog append-to-body
                       v-model="showAddKbDialog"
                       :title="t('addNewKnowledgeBase')"
                       width="80%"
@@ -10464,7 +10505,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </div>
 
                 <!-- 表情包创建对话框 -->
-                <el-dialog
+                <el-dialog append-to-body
                   v-model="showStickerDialog"
                   :title="t('createStickerPack')"
                   width="80%">
@@ -10489,7 +10530,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </el-form-item>
 
                     <!-- 预览弹窗 -->
-                    <el-dialog v-model="dialogVisible" width="80%">
+                    <el-dialog append-to-body v-model="dialogVisible" width="80%">
                       <img :src="imageUrl" style="width: 100%" alt="Preview">
                     </el-dialog>
 
@@ -10665,7 +10706,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </el-tab-pane>
                 </el-tabs>
                 <!-- 工作流上传对话框 -->
-                <el-dialog
+                <el-dialog append-to-body
                   v-model="showWorkflowUploadDialog"
                   :title="t('uploadWorkflowJson')"
                   width="80%"
@@ -10818,7 +10859,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </div>
             
                 <!-- 添加A2A服务器对话框 -->
-                <el-dialog v-model="showAddA2ADialog" :title="t('addA2AServer')" width="80%" label-position="top">
+                <el-dialog append-to-body v-model="showAddA2ADialog" :title="t('addA2AServer')" width="80%" label-position="top">
                   <el-form label-position="top">
                     <el-form-item :label="t('A2AUrl')" required>
                       <el-input v-model="newA2AUrl" placeholder="http://127.0.0.1:5000"></el-input>
@@ -10940,11 +10981,11 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </div>
 
                   <!-- 添加/编辑 MCP 对话框 -->
-                  <el-dialog
+                  <el-dialog append-to-body
                     v-model="showAddMCPDialog"
                     :title="isEditMode ? t('editMCP') : t('addNewMCP')"
                     width="80%"
-                    :close-on-click-modal="false"
+                    
                     :close-on-press-escape="false"
                     class="mcp-dialog"
                     @closed="resetDialogState">
@@ -11106,7 +11147,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </div>
                     </template>
                   </el-dialog>   
-                  <el-dialog
+                  <el-dialog append-to-body
                     v-model="showMCPConfirm"
                     :title="t('confirmDeleteTitle')"
                     width="80%"
@@ -11149,7 +11190,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </div>
 
                 <!-- 添加/编辑LLM工具对话框 -->
-                <el-dialog v-model="showLLMForm" :title="editingLLM ? t('editLLMTool') : t('addLLMTool')" width="80%">
+                <el-dialog append-to-body v-model="showLLMForm" :title="editingLLM ? t('editLLMTool') : t('addLLMTool')" width="80%">
                   <el-form label-position="top">
                     <el-form-item :label="t('toolName')" required>
                       <el-input v-model="newLLMTool.name" :placeholder="t('toolNamePlaceholder')"/>
@@ -11242,7 +11283,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </div>
 
                 <!-- 添加/编辑自定义HTTP工具对话框 -->
-                <el-dialog v-model="showCustomHttpToolForm" :title="editingCustomHttpTool ? t('editCustomHttpTool') : t('addCustomHttpTool')" width="80%">
+                <el-dialog append-to-body v-model="showCustomHttpToolForm" :title="editingCustomHttpTool ? t('editCustomHttpTool') : t('addCustomHttpTool')" width="80%">
                   <el-form label-position="top">
                     <el-form-item :label="t('toolName')" required>
                       <el-input v-model="newCustomHttpTool.name" :placeholder="t('HTTPNamePlaceholder')"></el-input>
@@ -11472,7 +11513,7 @@ function updateElement(el, rawMarkdown, formatFn) {
           </el-form>
         </div>
         <!--eldialog 询问用户是否立即重启-->
-        <el-dialog
+        <el-dialog append-to-body
           :title="t('restartConfirm')"
           v-model="showRestartDialog"
           width="80%">
@@ -11484,6 +11525,19 @@ function updateElement(el, rawMarkdown, formatFn) {
             </span>
           </template>
         </el-dialog>
+        <el-dialog append-to-body
+          :title="t('restartConfirm')"
+          v-model="showCDPRestartDialog"
+          width="80%">
+          <span>{{ t('restartCDPConfirmText') }}</span>
+          <template #footer>
+            <span class="dialog-footer">
+              <el-button @click="showCDPRestartDialog = false">{{ t('cancel') }}</el-button>
+              <el-button type="primary" @click="restartApp">{{ t('confirmRestart') }}</el-button>
+            </span>
+          </template>
+        </el-dialog>
+
         <!-- 在内容区添加存储空间界面 -->
         <div v-show="activeMenu === 'storage'" class="page storage-container">
           <div class="suite-layout">
@@ -11613,7 +11667,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 <div v-if="imageFiles.length === 0" class="no-Images">
                   <el-empty :description="t('noImages')" />
                 </div>
-                <el-dialog
+                <el-dialog append-to-body
                   v-model="previewVisible"
                   :title="t('preview')"
                   class="image-preview-dialog"
@@ -13811,7 +13865,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </div>
 
                   <!-- VRM模型上传对话框 -->
-                  <el-dialog
+                  <el-dialog append-to-body
                     v-model="showVrmModelDialog"
                     :title="t('uploadVrmModel')"
                     width="80%"
@@ -13857,7 +13911,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </el-dialog>
 
                   <!-- VRMA动作上传对话框 -->
-                  <el-dialog
+                  <el-dialog append-to-body
                     v-model="showVrmaMotionDialog"
                     :title="t('uploadVrmaMotion')"
                     width="80%"
@@ -13903,7 +13957,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </el-dialog>
 
                   <!-- 高斯场景上传对话框  GAUSS -->
-                  <el-dialog
+                  <el-dialog append-to-body
                     v-model="showGaussSceneDialog"
                     :title="t('uploadGaussScene')"
                     width="80%"
@@ -14238,7 +14292,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </el-tabs>
 
                     <!-- 文件上传对话框 -->
-                    <el-dialog 
+                    <el-dialog append-to-body 
                       :title="t('uploadFile')" 
                       v-model="showFileDialog" 
                       width="80%"
@@ -15023,7 +15077,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 </el-tabs>
 
                 <!-- 智能体编辑对话框 (保持原样，放在 tabs 外面但在页面内) -->
-                <el-dialog v-model="showAgentForm" :title="editingAgent ? t('editAgent') : t('addAgent')" width="80%">
+                <el-dialog append-to-body v-model="showAgentForm" :title="editingAgent ? t('editAgent') : t('addAgent')" width="80%">
                   <el-form label-position="top">
                     <el-form-item :label="t('agentName')" required>
                       <el-input v-model="newAgent.name" :placeholder="t('agentNamePlaceholder')"/>
@@ -15175,7 +15229,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </div>
                 </div>
                 <!-- 添加扩展对话框 -->
-                <el-dialog
+                <el-dialog append-to-body
                   v-model="showExtensionForm"
                   :title="t('addNewExtension')"
                   width="80%"

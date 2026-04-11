@@ -504,6 +504,7 @@ let vue_data = {
       { value: 'easyImage2', label: 'easyImage2' }
     ],
     showRestartDialog: false,
+    showCDPRestartDialog: false,
     agents: {},
     showAgentForm: false,
     editingAgent: null,
@@ -2116,5 +2117,5 @@ main();`,
     isTopicGenerating: false,
     showOmniAgentDialog: false,
     favoriteExtensionIds: [], // 用于存储收藏的插件 ID
-
+    isStartingASR: false,
 };
