@@ -2116,5 +2116,5 @@ main();`,
     isTopicGenerating: false,
     showOmniAgentDialog: false,
     favoriteExtensionIds: [], // 用于存储收藏的插件 ID
-
+    isStartingASR: false,
 };

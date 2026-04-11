@@ -10321,3 +10321,49 @@ code {
 }
 
 
+/* =========================================
+   Unified & Hero Input Buttons Fix
+   ========================================= */
+
+/* 1. 基础按钮样式 - 默认状态（灰色） */
+.unified-input-wrapper .el-button,
+.hero-input-wrapper .el-button {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--el-text-color-regular) !important; /* 默认灰色 */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  opacity: 0.7; /* 未激活时稍微半透明 */
+}
+
+/* 2. 激活状态样式 - 关键修复！ */
+/* 当按钮 type="primary" 时，强制显示主色调，即使不 hover */
+.unified-input-wrapper .el-button--primary,
+.hero-input-wrapper .el-button--primary {
+  color: var(--el-color-primary) !important; /* 图标变为主色 */
+  background-color: color-mix(in srgb, var(--el-color-primary) 15%, transparent) !important; /* 淡淡的底色 */
+  opacity: 1 !important; /* 取消半透明 */
+  font-weight: bold;
+}
+
+/* 3. 悬停状态 (Hover) */
+.unified-input-wrapper .el-button:hover,
+.hero-input-wrapper .el-button:hover {
+  opacity: 1 !important;
+  transform: scale(1.1);
+  background-color: rgba(128, 128, 128, 0.1) !important;
+}
+
+/* 激活状态下的悬停 - 背景稍微加深 */
+.unified-input-wrapper .el-button--primary:hover,
+.hero-input-wrapper .el-button--primary:hover {
+  background-color: color-mix(in srgb, var(--el-color-primary) 25%, transparent) !important;
+}
+
+/* 4. 危险状态 (比如停止生成) */
+.unified-input-wrapper .el-button--danger,
+.hero-input-wrapper .el-button--danger {
+  color: var(--el-color-danger) !important;
+  background-color: color-mix(in srgb, var(--el-color-danger) 15%, transparent) !important;
+  opacity: 1 !important;
+}

@@ -796,24 +796,56 @@ function updateElement(el, rawMarkdown, formatFn) {
               
               <!-- 底部工具栏 -->
               <div class="hero-input-footer">
-                <div class="left-actions" style="display: flex;">
+                <div class="left-actions" style="display: flex; gap: 8px;">
+                  <!-- 附件上传按钮 -->
                   <el-tooltip :content="t('uploadFileorImage')" placement="top">
                     <el-button @click="browseAllFiles">
                       <i class="fa-solid fa-paperclip"></i>
                     </el-button>
                   </el-tooltip>
+
+                  <!-- ✨ 迁移：语音合成 (TTS) 开关 ✨ -->
+                  <el-tooltip :content="t('tts')" placement="top">
+                    <el-button
+                      @click="ttsSettings.enabled=!ttsSettings.enabled;changeTTSstatus();"
+                      class="icon-btn"
+                      :type="ttsSettings.enabled ? 'primary' : 'default'"
+                    >
+                      <i v-if="ttsSettings.enabled" class="fa-solid fa-volume-high"></i>
+                      <i v-else class="fa-solid fa-volume-xmark"></i>
+                    </el-button>
+                  </el-tooltip>
                 </div>
                 
-                <div class="right-actions" style="display: flex;">
+                <div class="right-actions" style="display: flex; gap: 8px; align-items: center;">
+                  <!-- 随机话题按钮 -->
                   <el-tooltip :content="t('randomTopic')" placement="top">
                     <el-button @click="generateRandomTopic">
                       <i v-if="!isTopicGenerating" class="fa-solid fa-dice"></i>
                       <i v-else class="fa-solid fa-dice fa-spin"></i>
                     </el-button>
                   </el-tooltip>
-                  <el-button type="primary" class="hero-send-btn" @click="handleDashboardSend">
-                    <i class="fa-solid fa-paper-plane"></i>
-                  </el-button>
+
+                  <!-- ✨ 迁移与逻辑切换：语音识别 (ASR) / 发送按钮 ✨ -->
+                  <template v-if="!userInput">
+                    <el-tooltip :content="t('asr')" placement="top">
+                      <el-button
+                        @click="toggleASR"
+                        class="icon-btn"
+                        :type="asrSettings.enabled ? 'primary' : 'default'"
+                      >
+                        <i class="fa-solid fa-microphone"></i>
+                      </el-button>
+                    </el-tooltip>
+                  </template>
+                  
+                  <template v-else>
+                    <el-tooltip :content="t('sendMessage')" placement="top">
+                      <el-button type="primary" class="hero-send-btn" @click="handleDashboardSend" circle>
+                        <i class="fa-solid fa-paper-plane"></i>
+                      </el-button>
+                    </el-tooltip>
+                  </template>
                 </div>
               </div>
             </div>
