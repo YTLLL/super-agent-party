@@ -1188,6 +1188,11 @@ const handleRemoteInstall = (data) => {
     },
   },
   computed: {
+
+  favoriteExtensions() {
+    return this.extensions.filter(ext => this.favoriteExtensionIds.includes(ext.id));
+  },
+
     // 动态过滤表格数据
     filteredAffectionData() {
       console.log("计算属性触发，当前数据长度:", this.affectionDataList.length);
