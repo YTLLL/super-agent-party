@@ -9611,7 +9611,7 @@ copySubtitleOverlayEndpoint(){
         if (!cdpInfo.active) {
             // 严重情况：前端想开，但主进程没开端口（说明没重启）
             // this.chromeMCPSettings.enabled = false; // 回滚开关
-            this.showRestartDialog = true;
+            this.showCDPRestartDialog = true;
             
             return; // 终止后续流程
         }

@@ -740,7 +740,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <div class="overlay">
                       <el-button 
                         type="danger" 
-                        circle 
                         size="small" 
                         @click.stop="removeItem(index, item.uiCategory)"
                       >
@@ -841,7 +840,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   
                   <template v-else>
                     <el-tooltip :content="t('sendMessage')" placement="top">
-                      <el-button type="primary" class="hero-send-btn" @click="handleDashboardSend" circle>
+                      <el-button type="primary" class="hero-send-btn" @click="handleDashboardSend">
                         <i class="fa-solid fa-paper-plane"></i>
                       </el-button>
                     </el-tooltip>
@@ -858,7 +857,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon blue"><i class="fa-solid fa-comment"></i></div>
               <div class="card-info">
                 <h3>{{ t('startChatting') }}</h3>
-                <p>{{ t('startChattingDesc') }}</p>
               </div>
             </div>
 
@@ -867,7 +865,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon pink"><i class="fa-solid fa-user-ninja"></i></div>
               <div class="card-info">
                 <h3>{{ t('summonCompanion') }}</h3>
-                <p>{{ t('summonCompanionDesc') }}</p>
               </div>
             </div>
 
@@ -876,7 +873,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon gold"><i class="fa-solid fa-masks-theater"></i></div>
               <div class="card-info">
                 <h3>{{ t('createRole') }}</h3>
-                <p>{{ t('createRoleDesc') }}</p>
               </div>
             </div>
 
@@ -885,7 +881,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon green"><i class="fa-solid fa-terminal"></i></div>
               <div class="card-info">
                 <h3>{{ t('omniAgent') }}</h3>
-                <p>{{ t('omniAgentDesc') }}</p>
               </div>
             </div>
 
@@ -894,7 +889,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div class="card-icon purple"><i class="fa-solid fa-puzzle-piece"></i></div>
               <div class="card-info">
                 <h3>{{ ext.name }}</h3>
-                <p>{{ ext.description }}</p>
               </div>
               <div class="fav-star active" @click.stop="toggleFavoriteExtension(ext)">
                 <i class="fa-solid fa-star"></i>
@@ -909,6 +903,8 @@ function updateElement(el, rawMarkdown, formatFn) {
                 <el-select v-model="CLISettings.engine" class="full-width">
                   <el-option :label="t('localEnvironment')" value="local"></el-option>
                   <el-option :label="t('dockerSandbox')" value="ds"></el-option>
+                  <el-option label="Claude Code" value="cc" ></el-option>
+                  <el-option label="Qwen Code" value="qc" ></el-option>
                 </el-select>
               </el-form-item>
               <el-form-item :label="t('workspace')" required>
@@ -11515,6 +11511,19 @@ function updateElement(el, rawMarkdown, formatFn) {
             </span>
           </template>
         </el-dialog>
+        <el-dialog
+          :title="t('restartConfirm')"
+          v-model="showCDPRestartDialog"
+          width="80%">
+          <span>{{ t('restartCDPConfirmText') }}</span>
+          <template #footer>
+            <span class="dialog-footer">
+              <el-button @click="showCDPRestartDialog = false">{{ t('cancel') }}</el-button>
+              <el-button type="primary" @click="restartApp">{{ t('confirmRestart') }}</el-button>
+            </span>
+          </template>
+        </el-dialog>
+
         <!-- 在内容区添加存储空间界面 -->
         <div v-show="activeMenu === 'storage'" class="page storage-container">
           <div class="suite-layout">
