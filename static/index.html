@@ -896,6 +896,24 @@ function updateElement(el, rawMarkdown, formatFn) {
           </el-dialog>
         </div>
 
+        <div 
+          v-if="isPttRecording && asrSettings.interactionMethod === 'keyTriggered'" 
+          class="desktop-recording-overlay"
+        >
+          <div class="desktop-recording-content">
+            <!-- 麦克风图标 (你可以换成自己的 el-icon) -->
+            <el-icon class="mic-icon"><Microphone /></el-icon>
+            
+            <!-- 复用你的波纹动画 -->
+            <div class="recording-wave">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+
+            <!-- 文字提示 -->
+            <span class="ptt-text">{{ t('releaseToSend') }}</span>
+          </div>
+        </div>
+
 
         <!-- 聊天界面保持不变 -->
         <div v-show="activeMenu === 'home'" class="page chat-container">
@@ -1648,25 +1666,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </span>
                         </div>
                       </div>
-              
-                      <div 
-                        v-if="isPttRecording && asrSettings.interactionMethod === 'keyTriggered'" 
-                        class="desktop-recording-overlay"
-                      >
-                        <div class="desktop-recording-content">
-                          <!-- 麦克风图标 (你可以换成自己的 el-icon) -->
-                          <el-icon class="mic-icon"><Microphone /></el-icon>
-                          
-                          <!-- 复用你的波纹动画 -->
-                          <div class="recording-wave">
-                            <span></span><span></span><span></span><span></span><span></span>
-                          </div>
-
-                          <!-- 文字提示 -->
-                          <span class="ptt-text">{{ t('releaseToSend') }}</span>
-                        </div>
-                      </div>
-
 
                     <div class="input-status-bar">
                       

@@ -1757,7 +1757,9 @@ let vue_methods = {
         // 基础校验
         if (!this.userInput.trim() && (!this.files || this.files.length === 0) && (!this.images || this.images.length === 0)) return;
         if (this.isTyping) return;
-
+        if (this.activeMenu === 'dashboard'){
+          this.activeMenu = 'home'
+        }
         // 处理 TTS/Read 中断
         if (this.readState.isPlaying && this.ttsSettings.enabled) { 
             if (this.isReadRunning){
@@ -6985,27 +6987,31 @@ handleCreateSlackSeparator(val) {
     },
     // 初始化ASR WebSocket连接（修改版本，支持Web Speech API）
     async initASRWebSocket() {
-      // 如果选择了Web Speech API，不需要WebSocket连接
       if (this.asrSettings.engine === 'webSpeech') {
         return;
       }
       
+      // 如果已有连接，先关闭
+      if (this.asrWs) {
+        this.asrWs.close();
+      }
+
       const http_protocol = window.location.protocol;
       const ws_protocol = http_protocol === 'https:' ? 'wss:' : 'ws:';
       const ws_url = `${ws_protocol}//${window.location.host}/ws/asr`;
 
       this.asrWs = new WebSocket(ws_url);
       
-      // WebSocket 打开事件
       this.asrWs.onopen = () => {
         console.log('ASR WebSocket connection established');
-        // 发送初始化消息，包含当前使用的模型信息
-        this.asrWs.send(JSON.stringify({
-          type: 'init',
-        }));
+        // 🌟 修复点：确保状态为 OPEN 再发送
+        if (this.asrWs.readyState === WebSocket.OPEN) {
+          this.asrWs.send(JSON.stringify({
+            type: 'init',
+          }));
+        }
       };
 
-      // 接收消息
       this.asrWs.onmessage = (event) => {
         let data;
         try {
@@ -7014,24 +7020,23 @@ handleCreateSlackSeparator(val) {
           console.error('Invalid JSON from ASR server:', event.data);
           return;
         }
-        
         this.handleASRResult(data);
       };
 
-      // WebSocket 关闭事件
       this.asrWs.onclose = (event) => {
         console.log('ASR WebSocket connection closed:', event.reason);
-        if (this.asrSettings.enabled) {
-          // 如果ASR仍处于启用状态，尝试重新连接
-          setTimeout(() => this.initASRWebSocket(), 3000);
+        // 🌟 修复点：只有在 ASR 依然启用，且不是手动置空的情况下才重连
+        if (this.asrSettings.enabled && this.asrWs !== null) {
+          setTimeout(() => {
+            if (this.asrSettings.enabled) this.initASRWebSocket();
+          }, 3000);
         }
       };
 
-      // WebSocket 错误事件
       this.asrWs.onerror = (error) => {
         console.error('ASR WebSocket error:', error);
       };
-    },
+    },  
 
     // 修改：初始化Web Speech API（不自动启动）
     initWebSpeechAPI() {
@@ -7304,45 +7309,138 @@ handleCreateSlackSeparator(val) {
       }
     },
 
-    // 修改：处理ASR设置变化
+// 修改：处理ASR设置变化（开关或切换引擎）
     async handleASRchange() {
+      // 无论开启还是关闭，先彻底清理旧资源
+      await this.stopASR(); 
+      
       if (this.asrSettings.enabled) {
+        // 给硬件一点响应时间再重新启动
+        await new Promise(resolve => setTimeout(resolve, 300));
         await this.startASR();
-      } else {
-        this.stopASR();
       }
     },
 
     // 修改：启动ASR
     async startASR() {
-      // 按键模式无效
+      // 如果处于按键触发模式，不需要常驻麦克风，直接返回
       if (this.asrSettings.interactionMethod === 'globalKeyTriggered' || this.asrSettings.interactionMethod === 'keyTriggered'){
         return;
       }
-      // 无论哪种模式都需要VAD
-      if (this.vad == null) {
+
+      try {
+        // 1. 获取麦克风权限（统管流）
+        if (!this.mediaStream) {
+          this.mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true, // 回声消除
+              noiseSuppression: true, // 降噪
+              autoGainControl: true   // 自动增益
+            }
+          });
+        }
+
+        // 2. 初始化 VAD (所有模式都需要 VAD 来检测停顿)
         await this.initVAD();
+
+        // 3. 根据引擎初始化
+        if (this.asrSettings.engine === 'webSpeech') {
+          // 初始化 Web Speech API
+          const success = this.initWebSpeechAPI();
+          if (!success) {
+            this.stopASR();
+            return;
+          }
+          this.isWebSpeechRecognizing = false;
+        } else {
+          // 初始化 WebSocket
+          await this.initASRWebSocket();
+        }
+
+        // 4. 启动 VAD 检测
+        if (this.vad) {
+          await this.vad.start();
+        }
+        
+        this.isRecording = true;
+        console.log('ASR Started successfully');
+      } catch (error) {
+        console.error('Failed to start ASR:', error);
+        showNotification(this.t('micPermissionDenied'), 'error');
+        this.asrSettings.enabled = false;
+        this.stopASR();
+      }
+    },
+
+    // 修改：停止ASR并彻底释放麦克风（红点消失的关键）
+    stopASR() {
+      console.log('Stopping ASR and cleaning up resources...');
+
+      // 1. 销毁 VAD
+      if (this.vad) {
+        try {
+          this.vad.pause();
+          // 如果 VAD 库有销毁方法则调用
+          if (typeof this.vad.destroy === 'function') {
+            this.vad.destroy();
+          }
+        } catch (e) {
+          console.error('VAD cleanup error:', e);
+        }
+        this.vad = null;
       }
 
-      if (this.asrSettings.engine === 'webSpeech') {
-        // 使用Web Speech API + VAD控制
-        if (this.initWebSpeechAPI()) {
-          // 初始化识别状态标志
-          this.isWebSpeechRecognizing = false;
-          
-          // 开始录音和VAD检测
-          await this.startRecording();
-          
-          showNotification(this.t('webSpeechStarted'), 'success');
+      // 2. 停止 Web Speech API
+      if (this.recognition) {
+        try {
+          this.recognition.onend = null; // 移除监听防止触发自动重启
+          this.recognition.onerror = null;
+          this.recognition.abort(); // 立即强行停止
+        } catch (e) {
+          console.error('WebSpeech cleanup error:', e);
         }
-      } else {
-        // 使用WebSocket方式
-        // 初始化ASR WebSocket
-        await this.initASRWebSocket();
-        
-        // 开始录音
-        await this.startRecording();
+        this.recognition = null;
+        this.isWebSpeechRecognizing = false;
       }
+
+      // 3. 关闭 ASR WebSocket
+      if (this.asrWs) {
+        try {
+          this.asrWs.onclose = null; // 移除监听，防止触发自动重连逻辑
+          this.asrWs.close();
+        } catch (e) {
+          console.error('WebSocket cleanup error:', e);
+        }
+        this.asrWs = null;
+      }
+
+      // 4. 【核心】释放麦克风流，使红点消失
+      if (this.mediaStream) {
+        try {
+          this.mediaStream.getTracks().forEach(track => {
+            track.stop(); // 停止硬件轨道
+            console.log('Microphone track stopped:', track.label);
+          });
+        } catch (e) {
+          console.error('MediaStream cleanup error:', e);
+        }
+        this.mediaStream = null;
+      }
+
+      // 5. 清理音频上下文
+      if (this.audioContext) {
+        try {
+          if (this.audioContext.state !== 'closed') {
+            this.audioContext.close();
+          }
+        } catch (e) {
+          console.error('AudioContext cleanup error:', e);
+        }
+        this.audioContext = null;
+      }
+
+      this.isRecording = false;
+      this.ASRrunning = false;
     },
 
     // 修改：停止ASR
@@ -7381,36 +7479,31 @@ handleCreateSlackSeparator(val) {
 
     // 修改：初始化VAD（Web Speech模式也使用VAD）
     async initVAD() {
+      // 🌟 修复点：判断是否开启 WebSpeech 调整灵敏度
       let min_probabilities = 0.2;
       if (this.asrSettings.engine === 'webSpeech') {
         min_probabilities = 0.7;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true, // 核心：开启回声消除
-          noiseSuppression: true, // 建议开启：降噪
-          autoGainControl: true   // 建议开启：自动增益
-        }
-      });
-      
-      // 保存流引用，以便后续关闭或用于其他用途（如录音）
-      this.mediaStream = stream; 
+      // 🌟 核心点：直接使用 startASR 中已经获取到的 this.mediaStream
+      if (!this.mediaStream) {
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+      }
 
-      // 初始化VAD
       this.vad = await vad.MicVAD.new({
-        stream: stream,
+        stream: this.mediaStream, // 使用全局统一流
         preSpeechPadFrames: 10,
         onSpeechStart: () => {
           this.ASRrunning = true;
-          // 语音开始时的处理
           this.handleSpeechStart();
         },
         onFrameProcessed: (probabilities, frame) => {
-          // 处理每一帧
+          // 检测到语音
           if (probabilities["isSpeech"] > min_probabilities) {
+            // TTS 打断逻辑
             if (this.ttsSettings.enabledInterruption) {
-              // 关闭正在播放的音频
               if (this.currentAudio) {
                 this.currentAudio.pause();
                 this.currentAudio = null;
@@ -7418,12 +7511,11 @@ handleCreateSlackSeparator(val) {
               this.stopGenerate();
               this.sendTTSStatusToVRM('stopSpeaking', {});
             }
+
             if (!this.currentAudio || this.currentAudio.paused) {
               if (this.asrSettings.engine === 'webSpeech') {
-                // Web Speech API模式：不处理音频帧，只是检测到语音
                 this.handleWebSpeechFrameProcessed();
               } else {
-                // WebSocket模式：处理音频帧
                 this.handleFrameProcessed(frame);
               }
             }
@@ -7431,7 +7523,6 @@ handleCreateSlackSeparator(val) {
         },
         onSpeechEnd: (audio) => {
           this.ASRrunning = false;
-          // 语音结束时的处理
           if (this.asrSettings.engine === 'webSpeech') {
             this.handleWebSpeechEnd();
           } else {
@@ -7441,37 +7532,29 @@ handleCreateSlackSeparator(val) {
       });
     },
 
-    // 新增：Web Speech模式的语音开始处理
     handleWebSpeechSpeechStart() {
       console.log('VAD detected speech start for Web Speech API');
-      // 如果Web Speech API没有在识别，则启动它
       if (!this.isWebSpeechRecognizing && this.recognition) {
         try {
           this.recognition.start();
         } catch (error) {
-          console.error('Failed to start Web Speech API:', error);
+          // 忽略已经启动的报错
         }
       }
     },
 
-    // 新增：Web Speech模式的帧处理
     handleWebSpeechFrameProcessed() {
-      // 在Web Speech模式下，我们不需要处理具体的音频帧
-      // 只需要确保Web Speech API正在运行
       if (!this.isWebSpeechRecognizing && this.recognition) {
         try {
           this.recognition.start();
         } catch (error) {
-          // 可能已经在运行中，忽略错误
-          console.log('Web Speech API already running or failed to start:', error.message);
+          // 忽略已经启动的报错
         }
       }
     },
 
-    // 新增：Web Speech模式的语音结束处理
     handleWebSpeechEnd() {
       console.log('VAD detected speech end for Web Speech API');
-      // 停止Web Speech API识别
       if (this.isWebSpeechRecognizing && this.recognition) {
         try {
           this.recognition.stop();
@@ -7522,13 +7605,14 @@ handleCreateSlackSeparator(val) {
       this.isRecording = false;
     },
     // 修改：统一的语音开始处理
+
     async handleSpeechStart() {
       if (this.asrSettings.engine === 'webSpeech') {
         this.handleWebSpeechSpeechStart();
       } else {
-        // WebSocket模式的处理
+        if (!this.asrWs || this.asrWs.readyState !== WebSocket.OPEN) return;
+        
         this.currentTranscriptionId = uuid.v4();
-        this.frame_buffer = [];
         this.asrWs.send(JSON.stringify({
           type: 'audio_start',
           id: this.currentTranscriptionId,
@@ -7537,19 +7621,14 @@ handleCreateSlackSeparator(val) {
     },
 
     async handleFrameProcessed(frame) {
-      // 新增检查：确保 frame 存在且是 Float32Array
-      if (!frame || !(frame instanceof Float32Array)) {
-        console.error('Invalid audio frame:', frame);
-        return;
-      }
+      if (!frame || !(frame instanceof Float32Array)) return;
 
+      // 🌟 修复点：增加 WebSocket 状态检查，避免发送报错
       if (!this.asrWs || this.asrWs.readyState !== WebSocket.OPEN) {
-        console.warn('WebSocket not ready');
         return;
       }
 
       try {
-        // 转换和处理逻辑...
         const int16Pcm = new Int16Array(frame.length);
         for (let i = 0; i < frame.length; i++) {
           int16Pcm[i] = Math.max(-32768, Math.min(32767, frame[i] * 32767));
@@ -7564,13 +7643,13 @@ handleCreateSlackSeparator(val) {
           id: this.currentTranscriptionId,
           audio: base64Audio,
           format: 'pcm',
-          sample_rate: 16000 // 明确采样率
+          sample_rate: 16000 
         }));
-
       } catch (e) {
         console.error('Frame processing error:', e);
       }
     },
+
     async handleSpeechEnd(audio) {
       // 语音结束时的处理
       if (!this.asrWs || this.asrWs.readyState !== WebSocket.OPEN) return;
@@ -16434,11 +16513,14 @@ closeTaskCenter() {
       this.refreshWorkspaceTree();
     },
 
-// 1. 随机话题生成逻辑
+// 1. 修改后的流式随机话题生成逻辑
 async generateRandomTopic() {
   if (this.isTopicGenerating) return;
   this.isTopicGenerating = true;
   
+  // 开始前清空输入框，方便看到打字机效果
+  this.userInput = ''; 
+
   try {
     const res = await fetch('/simple_chat', {
       method: 'POST',
@@ -16455,15 +16537,52 @@ async generateRandomTopic() {
             content: `给我一个有趣的话题，请使用${this.currentLanguage}语言。`
           }
         ],
-        stream: false
+        temperature: 1,
+        stream: true // 开启流式
       })
     });
-    const data = await res.json();
-    if (data.choices && data.choices[0]) {
-      this.userInput = data.choices[0].message.content;
+
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      // 解码并合并到缓冲区
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      // 留下最后一行可能不完整的在 buffer 中
+      buffer = lines.pop(); 
+
+      for (const line of lines) {
+        let trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+
+        // 兼容 SSE 格式 (去掉 data: 前缀)
+        if (trimmed.startsWith('data:')) {
+          trimmed = trimmed.replace(/^data:\s?/, '');
+        }
+
+        try {
+          const data = JSON.parse(trimmed);
+          const content = data.choices?.[0]?.delta?.content;
+          if (content) {
+            // 实时追加到 userInput，实现打字机效果
+            this.userInput += content;
+          }
+        } catch (e) {
+          // 忽略解析失败的行
+        }
+      }
     }
+
   } catch (e) {
     console.error("生成话题失败", e);
+    // 降级处理：直接显示一个随机话题
     const fallbackTopics = ["Will future AI have emotions?", "Recommend a book you've read recently", "If you could teleport instantly, where would you want to go?"];
     this.userInput = fallbackTopics[Math.floor(Math.random() * fallbackTopics.length)];
   } finally {

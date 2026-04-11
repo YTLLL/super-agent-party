@@ -1574,7 +1574,7 @@ key3`,
         'dashboard': '仪表盘',
         'startChatting': '开始对话',
         'startChattingDesc': '开启一段全新的智能对话',
-        'summonCompanion': '召唤伴侣',
+        'summonCompanion': '召唤桌面伴侣',
         'summonCompanionDesc': '唤醒你的专属虚拟 3D 形象陪伴',
         'createRole': '创建角色',
         'createRoleDesc': '定制拥有独特记忆与身份设定的智能体',
@@ -1583,6 +1583,7 @@ key3`,
         
         // 万能智能体配置弹窗 (Dialog)
         'omniAgentConfig': '智能体配置',
+        'omniAgentEnabled': '智能体已启用',
         'CLIEngine': '运行引擎',
         'localEnvironment': '本地环境',
         'dockerSandbox': 'Docker 沙盒 (推荐)',
@@ -3163,12 +3164,13 @@ Key3`,
         // 导航卡片 (Cards)
         'startChatting': 'Start Chatting',
         'startChattingDesc': 'Begin a new AI conversation.',
-        'summonCompanion': 'Summon Companion',
+        'summonCompanion': 'Summon Desktop Companion',
         'summonCompanionDesc': 'Wake up your 3D virtual companion.',
         'createRole': 'Create Role',
         'createRoleDesc': 'Customize a persona with unique memories.',
         'omniAgent': 'Create Agent',
         'omniAgentDesc': 'Powerful CLI and sandbox assistant.',
+        'omniAgentEnabled': 'Agent Enabled',
         
         // 万能智能体配置弹窗 (Dialog)
         'dashboard': 'Dashboard', // 仪表盘
