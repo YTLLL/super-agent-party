@@ -2116,6 +2116,6 @@ main();`,
     isHeroInputFocus: false,
     isTopicGenerating: false,
     showOmniAgentDialog: false,
-    favoriteExtensionIds: [], // 用于存储收藏的插件 ID
+    favoriteExtensionIds: JSON.parse(localStorage.getItem('favorite_extensions')) || [],
     isStartingASR: false,
 };

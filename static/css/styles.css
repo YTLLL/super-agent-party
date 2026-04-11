@@ -10589,3 +10589,82 @@ code {
   border-color: var(--el-color-primary-light-7) !important;
   background-color: color-mix(in srgb, var(--el-color-primary) 2%, var(--el-bg-color)) !important;
 }
+
+
+/* =========================================
+   Dashboard Adaptive Centering (The "Perfect" Fix)
+   ========================================= */
+
+/* 1. 主容器：负责滚动和基础对齐 */
+.dashboard-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  
+  /* 🌟 核心：不要使用 justify-content: center，否则会导致溢出裁剪 */
+  justify-content: flex-start; 
+  
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  
+  /* 给予一个顶部和底部的最小安全间距，防止顶到头 */
+  padding: 40px 20px 60px 20px !important;
+  box-sizing: border-box;
+  
+  /* 平滑滚动 */
+  scroll-behavior: smooth;
+}
+
+/* 2. Hero 区域：通过 margin-top: auto 实现自适应垂直居中 */
+.dashboard-hero {
+  width: 100%;
+  max-width: 760px;
+  flex-shrink: 0;
+  
+  /* 🌟 核心魔法：
+     1. margin-top: auto 会自动吃掉顶部的所有剩余空间
+     2. 配合下方的 margin-bottom: auto，会让整个内容组在有空间时完美居中
+     3. 设定一个最小间距，确保扩展极多时，对话框离顶部还有一段距离 */
+  margin-top: auto; 
+  margin-bottom: 24px;
+  
+  /* 动画保持 */
+  animation: cardPopIn 0.7s var(--ease-out-smooth) both;
+  animation-delay: 0.1s;
+}
+
+/* 3. 建议卡片网格：通过 margin-bottom: auto 配合 Hero 实现上下平分空间 */
+.guide-grid {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  
+  /* 🌟 核心：吃掉底部剩余空间 */
+  margin-bottom: auto; 
+  
+  height: auto;
+}
+
+/* 4. 优化：如果屏幕太矮（比如手机横屏或调小窗口），手动设置一个更小的顶部边距 */
+@media (max-height: 500px) {
+  .dashboard-hero {
+    margin-top: 10px !important;
+  }
+}
+
+/* 5. 滚动条美化 (Mac 风格隐身滚动条) */
+.dashboard-container::-webkit-scrollbar {
+  width: 5px;
+}
+.dashboard-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dashboard-container::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.2);
+  border-radius: 10px;
+}
