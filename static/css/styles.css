@@ -9884,106 +9884,280 @@ code {
 
 
 
+/* ====================================================
+   ✨ SAP Premium Motion System (全局高级动效系统) ✨
+   主打：丝滑页面切换、网格瀑布流进场、物理回弹交互
+   ==================================================== */
+
+/* 1. 核心动效变量 (物理曲线) */
 :root {
-  /* 苹果风格的高级抗锯齿贝塞尔曲线：极快启动，优雅缓停 */
-  --premium-bezier: cubic-bezier(0.16, 1, 0.3, 1);
-  --premium-duration: 0.5s;
+  /* Apple 风格的丝滑减速曲线 (适合进场、移动) */
+  --ease-out-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 带有物理弹性的曲线 (适合卡片弹出、对话气泡) */
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* 舒适的过渡时间 */
+  --motion-duration: 0.5s;
 }
 
-/* 全局通用高级感淡入滑升动画 */
-@keyframes premiumFadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(15px);
-    filter: blur(4px); /* 增加轻微模糊，更有电影感 */
+/* ----------------------------------------------------
+   2. 页面级平滑切换 (Page Transitions)
+   当点击左侧菜单切换页面时，整体页面柔和淡入上浮
+---------------------------------------------------- */
+.page {
+  animation: pageSlideFadeIn var(--motion-duration) var(--ease-out-smooth) both;
+  transform-origin: top center;
+}
+
+@keyframes pageSlideFadeIn {
+  0% { 
+    opacity: 0; 
+    transform: translateY(15px) scale(0.995); 
+    filter: blur(2px); /* 极轻微的模糊增加景深感 */
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  100% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
     filter: blur(0);
   }
 }
 
-/* 略微缩放的入场动画，用于弹窗等 */
-@keyframes premiumScaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96) translateY(10px);
+/* ----------------------------------------------------
+   3. 高级网格瀑布流进场 (Staggered Waterfall)
+   自动应用于知识库、模型配置、插件等所有的网格布局
+---------------------------------------------------- */
+/* 为网格内的子元素绑定弹跳进场动画 */
+.provider-grid > div, 
+.guide-grid > div, 
+.plugins-grid > div,
+.vendor-grid > div {
+  animation: cardPopIn 0.6s var(--ease-out-back) both;
+}
+
+/* 动态交错延迟 (利用 nth-child 实现纯 CSS 瀑布流) */
+.provider-grid > div:nth-child(1), .guide-grid > div:nth-child(1), .plugins-grid > div:nth-child(1), .vendor-grid > div:nth-child(1) { animation-delay: 0.05s; }
+.provider-grid > div:nth-child(2), .guide-grid > div:nth-child(2), .plugins-grid > div:nth-child(2), .vendor-grid > div:nth-child(2) { animation-delay: 0.10s; }
+.provider-grid > div:nth-child(3), .guide-grid > div:nth-child(3), .plugins-grid > div:nth-child(3), .vendor-grid > div:nth-child(3) { animation-delay: 0.15s; }
+.provider-grid > div:nth-child(4), .guide-grid > div:nth-child(4), .plugins-grid > div:nth-child(4), .vendor-grid > div:nth-child(4) { animation-delay: 0.20s; }
+.provider-grid > div:nth-child(5), .guide-grid > div:nth-child(5), .plugins-grid > div:nth-child(5), .vendor-grid > div:nth-child(5) { animation-delay: 0.25s; }
+.provider-grid > div:nth-child(6), .guide-grid > div:nth-child(6), .plugins-grid > div:nth-child(6), .vendor-grid > div:nth-child(6) { animation-delay: 0.30s; }
+.provider-grid > div:nth-child(7), .guide-grid > div:nth-child(7), .plugins-grid > div:nth-child(7), .vendor-grid > div:nth-child(7) { animation-delay: 0.35s; }
+.provider-grid > div:nth-child(8), .guide-grid > div:nth-child(8), .plugins-grid > div:nth-child(8), .vendor-grid > div:nth-child(8) { animation-delay: 0.40s; }
+.provider-grid > div:nth-child(9), .guide-grid > div:nth-child(9), .plugins-grid > div:nth-child(9), .vendor-grid > div:nth-child(9) { animation-delay: 0.45s; }
+.provider-grid > div:nth-child(10),.guide-grid > div:nth-child(10),.plugins-grid > div:nth-child(10),.vendor-grid > div:nth-child(10){ animation-delay: 0.50s; }
+.provider-grid > div:nth-child(11),.guide-grid > div:nth-child(11),.plugins-grid > div:nth-child(11),.vendor-grid > div:nth-child(11){ animation-delay: 0.55s; }
+.provider-grid > div:nth-child(12),.guide-grid > div:nth-child(12),.plugins-grid > div:nth-child(12),.vendor-grid > div:nth-child(12){ animation-delay: 0.60s; }
+/* 超过12个的元素统一延迟，防止等待过久 */
+.provider-grid > div:nth-child(n+13), .guide-grid > div:nth-child(n+13), .plugins-grid > div:nth-child(n+13) { animation-delay: 0.65s; }
+
+@keyframes cardPopIn {
+  0% { 
+    opacity: 0; 
+    transform: translateY(25px) scale(0.92); 
   }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
+  100% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
   }
 }
 
-
-/* 为所有 .page 类（即你的各个功能版块）绑定入场动效 */
-.content .page {
-  animation: premiumFadeInUp var(--premium-duration) var(--premium-bezier) both;
-  will-change: transform, opacity; /* 开启GPU加速 */
+/* ----------------------------------------------------
+   4. 物理反馈交互 (Tactile Micro-interactions)
+   针对卡片、按钮的悬停与点击物理反馈
+---------------------------------------------------- */
+/* 确保这些元素使用物理曲线进行形变 */
+.provider-card, .guide-card, .extension-card, .vendor-card, .tool-item, .el-button, .market-link-banner {
+  transition: transform 0.3s var(--ease-out-back), box-shadow 0.4s var(--ease-out-smooth), border-color 0.3s ease !important;
 }
 
-/* 限制不同页面同时出现时的混乱 */
-.content {
-  position: relative;
+/* 悬停时：上浮放大，产生“吸附”感 */
+.provider-card:hover, .guide-card:hover, .extension-card:hover, .vendor-card:hover, .tool-item:hover {
+  transform: translateY(-4px) scale(1.01) !important;
+  z-index: 10; /* 悬停时提层，防止阴影被遮挡 */
 }
 
-
-.provider-grid .provider-card {
-  animation: premiumFadeInUp 0.6s var(--premium-bezier) both;
+/* 点击时：模拟物理按压，微缩小 */
+.provider-card:active, .guide-card:active, .extension-card:active, .vendor-card:active, .el-button:active, .market-link-banner:active {
+  transform: scale(0.96) !important;
+  transition-duration: 0.1s !important; /* 按下瞬间响应变快 */
 }
 
-/* 为前8个卡片设置阶梯延迟，多余的会同时显示（防止长列表动画时间过长） */
-.provider-grid .provider-card:nth-child(1) { animation-delay: 0.03s; }
-.provider-grid .provider-card:nth-child(2) { animation-delay: 0.06s; }
-.provider-grid .provider-card:nth-child(3) { animation-delay: 0.09s; }
-.provider-grid .provider-card:nth-child(4) { animation-delay: 0.12s; }
-.provider-grid .provider-card:nth-child(5) { animation-delay: 0.15s; }
-.provider-grid .provider-card:nth-child(6) { animation-delay: 0.18s; }
-.provider-grid .provider-card:nth-child(7) { animation-delay: 0.21s; }
-.provider-grid .provider-card:nth-child(8) { animation-delay: 0.24s; }
-
-
-/* 覆盖 Element Plus 弹窗的默认动画 */
-.el-overlay-dialog {
-  transition-duration: 0.4s !important;
-}
-
-.el-dialog {
-  animation: premiumScaleIn 0.4s var(--premium-bezier) both !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-
-/* 磨砂玻璃背景遮罩配合弹窗，高级感拉满 */
-.el-overlay {
-  background-color: rgba(0, 0, 0, 0.45) !important;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  transition: all 0.4s ease !important;
-}
-
-
-/* 1. 按钮悬停：轻微上浮 + 呼吸发光 */
-.el-button {
-  transition: all 0.3s var(--premium-bezier) !important;
-}
-.el-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--el-color-primary-rgb), 0.2) !important;
-}
-.el-button:active {
-  transform: translateY(0.5px);
-}
-
-/* 2. 侧边栏菜单：平滑平移 */
-.el-menu-item {
-  transition: background-color 0.3s, color 0.3s, transform 0.3s var(--premium-bezier) !important;
-}
-.el-menu-item:hover {
-  transform: translateX(4px);
-}
-
-/* 3. 输入框聚焦：温和的阴影晕染 */
+/* ----------------------------------------------------
+   5. 输入系统与菜单 (Input & Navigation Flow)
+---------------------------------------------------- */
+/* 输入框聚焦时的平滑光晕扩散 */
 .el-input__wrapper, .el-textarea__inner {
-  transition: all 0.3s var(--premium-bezier) !important;
+  transition: transform 0.3s var(--ease-out-smooth), box-shadow 0.3s var(--ease-out-smooth), background-color 0.3s ease !important;
+}
+.el-input__wrapper.is-focus, .el-textarea__inner:focus {
+  transform: translateY(-1px) !important;
+  /* 光晕扩散效果已在前面主体样式中定义，此处增强平滑度 */
+}
+
+/* 左侧菜单点击水波纹/平滑滑块 */
+.el-menu-item {
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s var(--ease-out-back) !important;
+}
+.el-menu-item:active {
+  transform: scale(0.95) !important;
+}
+
+/* ----------------------------------------------------
+   6. 对话列表进场动效 (Chat Messages Entry)
+   让新生成的消息气泡从下向上 Q弹入场
+---------------------------------------------------- */
+.message {
+  animation: messagePop 0.5s var(--ease-out-back) both;
+  transform-origin: bottom left; /* AI 消息从左下角生长 */
+}
+.message.user {
+  transform-origin: bottom right; /* User 消息从右下角生长 */
+}
+
+@keyframes messagePop {
+  0% { 
+    opacity: 0; 
+    transform: translateY(15px) scale(0.95); 
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+
+/* ----------------------------------------------------
+   7. 弹窗高级感 (Dialog / Overlays) - 最终兼容版
+---------------------------------------------------- */
+
+/* 1. 遮罩层：增加毛玻璃感 */
+.el-overlay {
+  backdrop-filter: blur(6px) saturate(150%);
+  -webkit-backdrop-filter: blur(6px) saturate(150%);
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 2. 对话框本体：弹性进入 */
+.dialog-fade-enter-active .el-dialog {
+  animation: sapDialogPopIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+}
+
+@keyframes sapDialogPopIn {
+  0% { opacity: 0; transform: scale(0.9) translateY(30px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* 3. 重要：移除之前建议的 .el-popup-parent--hidden .main-container { filter: ... } */
+/* 因为 filter 会导致 fixed 定位失效，弹窗无法全屏 */
+.el-popup-parent--hidden .main-container {
+  filter: none !important; 
+}
+
+/* 4. 修改之前的页面进入动画，防止干扰弹窗 */
+/* 将之前的 .page 动画改为只针对 page 内部的直接子元素（不含弹窗） */
+.page > *:not(.el-dialog):not(.el-overlay) {
+  animation: pageSlideFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+/* =========================================
+   Modernized El-Dialog (高级大圆角弹窗)
+   ========================================= */
+
+/* 1. 弹窗主体容器 */
+.el-dialog {
+  /* 🌟 核心：20px 大圆角 */
+  border-radius: 20px !important; 
+  /* 确保内部背景不刺破圆角 */
+  overflow: hidden; 
+  
+  /* 背景与边框适配 */
+  background: var(--el-bg-color) !important;
+  border: 1px solid var(--el-border-color-lighter) !important;
+  
+  /* 深度感：多层物理阴影 */
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15), 
+              0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  
+  /* 针对不同主题微调 */
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+/* 2. 标题栏区域 (Header) */
+.el-dialog__header {
+  padding: 24px 28px 12px !important; /* 增加边距，更有呼吸感 */
+  margin-right: 0 !important;
+  /* 移除底部线条，采用纯净风格 */
+  border-bottom: none !important;
+}
+
+.el-dialog__title {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--el-text-color-primary);
+  letter-spacing: -0.5px;
+}
+
+/* 3. 关闭按钮重制 (Close Button) */
+.el-dialog__headerbtn {
+  top: 20px !important;
+  right: 20px !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important; /* 圆形背景 */
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.el-dialog__headerbtn:hover {
+  background-color: rgba(128, 128, 128, 0.1) !important;
+  transform: rotate(90deg); /* 悬停时轻轻旋转，增加交互感 */
+}
+
+.el-dialog__headerbtn .el-dialog__close {
+  color: var(--el-text-color-secondary) !important;
+  font-size: 16px !important;
+}
+
+/* 4. 内容区域 (Body) */
+.el-dialog__body {
+  padding: 12px 28px 24px !important;
+  color: var(--el-text-color-regular);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* 5. 底部操作栏 (Footer) */
+.el-dialog__footer {
+  padding: 16px 28px 24px !important;
+  /* 顶部的极细分割线，适配深浅色 */
+  border-top: 1px solid color-mix(in srgb, var(--el-border-color-lighter) 50%, transparent) !important;
+  background-color: transparent !important;
+}
+
+/* 6. 弹窗内的按钮间距优化 */
+.el-dialog__footer .el-button {
+  padding: 10px 20px !important;
+  border-radius: 10px !important; /* 按钮也跟进大圆角逻辑 */
+  font-weight: 600;
+}
+
+/* =========================================
+   针对特定主题的微调 (Optional Extras)
+   ========================================= */
+
+/* Dark / Midnight / Neon 主题下的内发光，增加实体感 */
+[data-theme="dark"] .el-dialog,
+[data-theme="midnight"] .el-dialog,
+[data-theme="neon"] .el-dialog {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  /* 添加一条极细的顶边光，像玻璃边缘 */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+              0 20px 50px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 移除 Element Plus 默认的进入动画，使用我们的 sapDialogPopIn */
+.dialog-fade-enter-active, .dialog-fade-leave-active {
+  animation: none !important;
 }
