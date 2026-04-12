@@ -4753,7 +4753,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                 
                 <!-- 顶部全局设置区域 (保留原有逻辑，但样式优化) -->
                 <div class="market-link-banner behavior-banner">
-                  <div class="banner-accent-bar">{{ t('AutoBehavior') }}</div>
                   <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
                     
                     <!-- 左侧：图标和说明 -->
@@ -5342,8 +5341,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'service'" class="page">
                 <!-- 顶部全局设置区域 (模型配置样式优化) -->
                 <div class="market-link-banner model-config-banner">
-                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
-                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
                   
                   <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
                     
@@ -5590,8 +5587,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'main'" class="page">
                 <!-- 顶部全局设置区域 (模型配置样式优化) -->
                 <div class="market-link-banner model-config-banner">
-                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
-                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
                   
                   <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
                     
@@ -5851,8 +5846,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'fast'" class="page">
                 <!-- 顶部全局设置区域 (模型配置样式优化) -->
                 <div class="market-link-banner model-config-banner">
-                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
-                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
                   
                   <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
                     
@@ -6153,8 +6146,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'reasoner'" class="page">
                 <!-- 顶部全局设置区域 (模型配置样式优化) -->
                 <div class="market-link-banner model-config-banner">
-                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
-                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
                   
                   <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
                     
@@ -6293,8 +6284,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'vision'" class="page">
                 <!-- 顶部全局设置区域 (模型配置样式优化) -->
                 <div class="market-link-banner model-config-banner">
-                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
-                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
                   
                   <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
                     
@@ -6394,8 +6383,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'text2img'" class="page">
                 <!-- 顶部全局设置区域 (模型配置样式优化) -->
                 <div class="market-link-banner model-config-banner">
-                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
-                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
                   
                   <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
                     
@@ -6620,8 +6607,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'asr'" class="page">
                 <!-- 顶部全局设置区域 (模型配置样式优化) -->
                 <div class="market-link-banner model-config-banner">
-                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
-                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
                   
                   <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
                     
@@ -6968,8 +6953,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'tts'" class="page">
                 <!-- 顶部全局设置区域 (模型配置样式优化) -->
                 <div class="market-link-banner model-config-banner">
-                  <!-- 左侧装饰条：显示“MODELS”或类似文字 -->
-                  <div class="banner-accent-bar">{{ t('modelConfig') || 'MODELS' }}</div>
                   
                   <div class="banner-main" style="justify-content: space-between; padding: 0 20px;">
                     
@@ -9122,8 +9105,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                 <el-tab-pane :label="t('agentSkills')" name="skills">
                   <!-- 官网技能市场跳转横幅 (Skills Version) -->
                   <div class="market-link-banner" @click="openRepository('https://www.agentparty.top/skills.html')">
-                    <!-- 顶部装饰条文字改为 OFFICIAL SKILLS -->
-                    <div class="banner-accent-bar">OFFICIAL SKILLS</div>
                     
                     <div class="banner-main">
                       <!-- 图标换成闪电 -->
@@ -10880,7 +10861,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'mcp'" class="page mcp-container">
                   <!-- 官网 MCP 市场跳转横幅 -->
                   <div class="market-link-banner" @click="openRepository('https://www.agentparty.top/mcp.html')">
-                    <div class="banner-accent-bar">OFFICIAL SERVERS</div>
                     <div class="banner-main">
                       <div class="banner-icon-box">
                         <i class="fa-solid fa-network-wired"></i>
@@ -13445,8 +13425,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <div v-show="subMenu === 'table_pet'">
 
                   <div class="market-link-banner" @click="openRepository('https://www.agentparty.top/blog/en/article-0yuan.html')">
-
-                    <div class="banner-accent-bar">VRM Table Pet</div>
                     
                     <div class="banner-main">
                       <!-- 图标换成闪电 -->
@@ -15116,7 +15094,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               <div v-show="subMenu === 'extension'" class="page extension-container">
                 <!-- 官网插件市场跳转卡片 -->
                 <div class="market-link-banner" @click="openRepository('https://www.agentparty.top/plugins.html')">
-                  <div class="banner-accent-bar">OFFICIAL</div>
                   
                   <div class="banner-main">
                     <div class="banner-icon-box">
