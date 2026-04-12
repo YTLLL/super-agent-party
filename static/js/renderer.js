@@ -1630,7 +1630,7 @@ const handleRemoteInstall = (data) => {
     },
     validProvider() {
       if (!this.newProviderTemp.vendor) return false
-      if (this.newProviderTemp.vendor === 'custom') {
+      if (this.newProviderTemp.vendor === 'custom' || this.newProviderTemp.vendor === 'customAnthropic') {
         return this.newProviderTemp.url.startsWith('http')
       }
       return true

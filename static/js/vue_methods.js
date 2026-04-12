@@ -1685,6 +1685,15 @@ let vue_methods = {
             }
         }
       }
+
+      if (event.key === 'Enter' && this.activeMenu ==='dashboard') {
+            if (event.shiftKey) {
+              return;
+            } else {
+              event.preventDefault();
+              this.handleDashboardSend();
+            }
+      }
     },
 
     // 【修改】键盘松开事件 (只处理局部 keyTriggered)
@@ -3844,7 +3853,7 @@ let vue_methods = {
         'tencent': 'https://api.lkeap.cloud.tencent.com/v1',
       }
       
-      if (value !== 'custom') {
+      if (value !== 'custom' && value !== 'customAnthropic' ) {
         this.newProviderTemp.url = defaultUrls[value] || ''
       }
       if (value === 'Ollama') {
@@ -4427,7 +4436,7 @@ let vue_methods = {
     },
     // 在 methods 中添加
     t(key) {
-      return this.translations[this.currentLanguage][key] || key;
+      return this.translations[this.currentLanguage][key] || this.translations[this.currentLanguage]['en-US'] || key;
     },
     async handleSystemLanguageChange(val) {
       this.systemSettings.language = val;
@@ -6520,6 +6529,9 @@ handleCreateSlackSeparator(val) {
           if (url.endsWith('/v1')) {
             url = url.slice(0, -3);
           }
+        }
+        else if (provider.vendor === 'customAnthropic'){
+          url = provider.url;
         }
         else {
           url = this.vendorAPIpage[provider.vendor];
