@@ -4427,7 +4427,7 @@ let vue_methods = {
     },
     // 在 methods 中添加
     t(key) {
-      return this.translations[this.currentLanguage][key] || key;
+      return this.translations[this.currentLanguage][key] || this.translations[this.currentLanguage]['en-US'] || key;
     },
     async handleSystemLanguageChange(val) {
       this.systemSettings.language = val;
