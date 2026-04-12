@@ -3853,7 +3853,7 @@ let vue_methods = {
         'tencent': 'https://api.lkeap.cloud.tencent.com/v1',
       }
       
-      if (value !== 'custom') {
+      if (value !== 'custom' && value !== 'customAnthropic' ) {
         this.newProviderTemp.url = defaultUrls[value] || ''
       }
       if (value === 'Ollama') {
@@ -6529,6 +6529,9 @@ handleCreateSlackSeparator(val) {
           if (url.endsWith('/v1')) {
             url = url.slice(0, -3);
           }
+        }
+        else if (provider.vendor === 'customAnthropic'){
+          url = provider.url;
         }
         else {
           url = this.vendorAPIpage[provider.vendor];

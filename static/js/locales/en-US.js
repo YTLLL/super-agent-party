@@ -107,6 +107,7 @@ window.lang_enUS = {
         'reasonerConfig': 'Reasoner Config',
         'createImmediately': 'Create Immediately',
         'vendor.custom': 'Custom OpenAI',
+        'vendor.customAnthropic': 'Custom Anthropic',
         'vendor.OpenAI': 'OpenAI',
         'vendor.Ollama': 'Ollama',
         'vendor.Vllm': 'Vllm',

@@ -1741,7 +1741,7 @@ let vue_data = {
     },
     editingCustomHttpTool: false,
     vendorValues: [
-      'custom', 'OpenAI', 'Ollama','Vllm','LMstudio','xinference','Dify','newapi','LocalAI','ttswebui', 'Deepseek', 'Volcano','302.AI',
+      'custom','customAnthropic', 'OpenAI', 'Ollama','Vllm','LMstudio','xinference','Dify','newapi','LocalAI','ttswebui', 'Deepseek', 'Volcano','302.AI',
       'siliconflow', 'aliyun', 'ZhipuAI', 'moonshot', 'minimax', 'Gemini','Anthropic', 
       'Grok', 'mistral', 'lingyi','baichuan', 'qianfan', 'hunyuan', 'stepfun', 'Github', 
       'openrouter','together', 'fireworks', '360', 'Nvidia',
@@ -1750,6 +1750,7 @@ let vue_data = {
     ],
     vendorLogoList: {
       'custom': 'source/providers/logo.png',
+      'customAnthropic': 'source/providers/logo.png',
       'OpenAI': 'source/providers/openai.jpeg',
       'Ollama': 'source/providers/ollama.png',
       'Vllm': 'source/providers/vllm.png',

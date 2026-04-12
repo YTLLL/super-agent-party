@@ -107,6 +107,7 @@ window.lang_zhCN = {
         'reasonerConfig': '推理配置',
         'createImmediately': '立即创建',
         'vendor.custom': '自定义OpenAI',
+        'vendor.customAnthropic': '自定义Anthropic',
         'vendor.OpenAI': 'OpenAI',
         'vendor.Ollama': 'Ollama',
         'vendor.Vllm': 'Vllm',

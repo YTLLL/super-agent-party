@@ -5538,17 +5538,17 @@ function updateElement(el, rawMarkdown, formatFn) {
 
 
                     <el-form-item
-                      v-if="newProviderTemp.vendor === 'custom'"
+                      v-if="newProviderTemp.vendor === 'custom' || newProviderTemp.vendor === 'customAnthropic'"
                       :label="t('customURL')"
                       required
                     >
                       <el-input
                         v-model="newProviderTemp.url"
-                        placeholder="https://api.example.com/v1"
+                        :placeholder=" newProviderTemp.vendor === 'custom' ? 'https://api.example.com/v1' : 'https://api.example.com'"
                       />
                     </el-form-item>
 
-                    <div v-if="newProviderTemp.vendor && newProviderTemp.vendor !== 'custom'">
+                    <div v-if="newProviderTemp.vendor && newProviderTemp.vendor !== 'custom' && newProviderTemp.vendor !== 'customAnthropic'">
                       <el-alert
                         :title="t('defaultConfigInfo')"
                         type="info"
