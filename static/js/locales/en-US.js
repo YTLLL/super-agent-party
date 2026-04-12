@@ -1576,4 +1576,6 @@ Key3`,
         'confirmAndStart': 'Confirm & Start',
         'unfavorite': 'Unfavorite',
         'favorite': 'Favorite',
+
+        'maxIterations': 'Subagent Max Iterations',
     }

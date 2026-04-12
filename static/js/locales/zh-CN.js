@@ -1578,4 +1578,6 @@ key3`,
         'confirmAndStart': '确认并启动',
         'unfavorite': '取消收藏',
         'favorite': '收藏',
+
+        'maxIterations': '子智能体最大迭代次数',
     }

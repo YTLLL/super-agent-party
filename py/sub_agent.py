@@ -20,12 +20,11 @@ class SubAgentExecutor:
         self,
         task_id: str,
         consensus_content: Optional[str] = None,
-        max_iterations: int = 30
     ) -> Dict[str, Any]:
         """执行子任务的主循环"""
         task_center = await get_task_center(self.workspace_dir)
         task = await task_center.get_task(task_id)
-        
+        max_iterations = self.settings.get("CLISettings", {}).get("max_iterations", 100)
         if not task:
             return {"success": False, "error": f"Task {task_id} not found"}
         
