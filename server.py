@@ -219,6 +219,24 @@ from urllib.parse import urlparse, urlunparse, urljoin
 from urllib.robotparser import RobotFileParser
 import websockets
 from py.load_files import check_robots_txt, get_file_content, is_private_ip, sanitize_url
+
+# 修复 sherpa-onnx 在 macOS arm64 上的 onnxruntime dylib 路径问题
+import site
+try:
+    _sp = site.getsitepackages()[0]
+    _sherpa_lib = os.path.join(_sp, "sherpa_onnx", "lib")
+    _onnx_capi = os.path.join(_sp, "onnxruntime", "capi")
+    import glob as _glob
+    _dylibs = _glob.glob(os.path.join(_onnx_capi, "libonnxruntime*.dylib"))
+    if _dylibs:
+        _dylib = _dylibs[0]
+        _target = os.path.join(_sherpa_lib, os.path.basename(_dylib))
+        if not os.path.exists(_target):
+            os.makedirs(_sherpa_lib, exist_ok=True)
+            os.symlink(os.path.abspath(_dylib), _target)
+except Exception:
+    pass
+
 def fix_macos_environment():
     """
     专门修复 macOS 下找不到 node (nvm) 和 uv (python framework) 的问题

@@ -1685,6 +1685,15 @@ let vue_methods = {
             }
         }
       }
+
+      if (event.key === 'Enter' && this.activeMenu ==='dashboard') {
+            if (event.shiftKey) {
+              return;
+            } else {
+              event.preventDefault();
+              this.handleDashboardSend();
+            }
+      }
     },
 
     // 【修改】键盘松开事件 (只处理局部 keyTriggered)

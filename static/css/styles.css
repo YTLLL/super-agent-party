@@ -10668,3 +10668,76 @@ code {
   background: rgba(128, 128, 128, 0.2);
   border-radius: 10px;
 }
+
+/* =========================================
+   🚨 修复：卡片防抖与交互稳定性优化
+   ========================================= */
+
+/* 1. 悬停 (Hover) 优化：取消缩放，仅保留极其轻微的上浮，防止误触 */
+.provider-card:hover, 
+.guide-card:hover, 
+.extension-card:hover, 
+.vendor-card:hover, 
+.tool-item:hover,
+.market-link-banner:hover {
+  transform: translateY(-2px) !important; /* 取消 scale(1.01)，减少上浮幅度到 2px */
+}
+
+/* 2. 点击 (Active) 优化：彻底取消容器卡片的物理缩放 */
+/* 仅保留纯粹的按钮或允许整体缩放的非复合组件 */
+.provider-card:active, 
+.guide-card:active, 
+.extension-card:active, 
+.vendor-card:active, 
+.tool-item:active,
+.market-link-banner:active {
+  transform: none !important; /* 彻底禁止卡片在点击时形变 */
+}
+
+/* 3. 针对普通按钮的点击反馈：减小缩放幅度，确保焦点不偏移 */
+.el-button:active {
+  transform: scale(0.98) !important; /* 从 0.96 改为 0.98，保证微小点击感的同时不移位 */
+}
+
+/* 4. 卡片内右上角/操作区按钮的防抖隔离 */
+.card-actions .el-button:hover,
+.btn-top-right .el-button:hover {
+  transform: none !important; /* 悬停卡片内按钮时不放大 */
+  background-color: var(--el-fill-color-dark) !important; /* 用颜色代替物理形变 */
+}
+
+.card-actions .el-button:active,
+.btn-top-right .el-button:active {
+  transform: scale(0.95) !important; /* 按钮自身的点击反馈独立，不影响父级卡片 */
+}
+
+
+/* =========================================
+   🚨 修复：移除动态列表的长延迟，解决添加卡片时的卡顿感
+   ========================================= */
+
+/* 彻底取消所有网格/列表元素的 CSS 排队等待时间 */
+/* 让元素在 Vue 渲染出 DOM 的瞬间立刻播放弹出动画，实现 0 延迟响应 */
+.provider-grid > div, 
+.guide-grid > div, 
+.plugins-grid > div,
+.vendor-grid > div,
+.text-list > .file-item, 
+.image-grid > .image-item, 
+.video-grid > .video-item,
+.social-links > .link-item,
+.settings-form .el-form-item {
+  animation-delay: 0s !important; 
+}
+
+/* 稍微缩短一下卡片的入场动画时间，让它感觉更干脆、响应更迅速 */
+@keyframes cardPopIn {
+  0% { 
+    opacity: 0; 
+    transform: translateY(15px) scale(0.95); /* 缩小了起始位移，减少浮夸感 */
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
