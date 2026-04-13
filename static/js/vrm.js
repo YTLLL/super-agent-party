@@ -545,10 +545,6 @@ class IdleAnimationManager {
         
         console.log('IdleAnimationManager initialized (Conflict Fix Version)');
     }
-    
-    // ... (保留 createDefaultPoseAction, createProceduralIdleAction, createDefaultPoseClip, easeInOutCubic, getNaturalRotation, setAnimationQueue 方法不变) ...
-    // 为了节省篇幅，这些辅助方法逻辑通常不需要变，只需确保类结构完整。
-    // 如果你之前的代码里这些方法没变，直接复制即可。这里重点修改逻辑控制方法。
 
     createDefaultPoseAction() {
         try {
@@ -574,13 +570,8 @@ class IdleAnimationManager {
         }
     }
     
-    // ... (createDefaultPoseClip, easeInOutCubic, getNaturalRotation, setAnimationQueue 同原代码) ...
-    createDefaultPoseClip() { /* 同原代码，略 */ return super.createDefaultPoseClip ? super.createDefaultPoseClip() : this._createDefaultPoseClipImpl(); }
-    // 补全缺失的辅助函数实现，防止复制出错，这里使用之前提供的逻辑
+    createDefaultPoseClip() { return super.createDefaultPoseClip ? super.createDefaultPoseClip() : this._createDefaultPoseClipImpl(); }
     _createDefaultPoseClipImpl() {
-        // ... 请保持原有的 createDefaultPoseClip 实现 ...
-        // 为保证代码完整性，建议保留你文件中已有的 createDefaultPoseClip 实现
-        // 这里仅展示 createDefaultPoseClip 引用
          const tracks = [];
         const duration = 1.0;
         const fps = 30;
@@ -588,7 +579,6 @@ class IdleAnimationManager {
         const times = [];
         for (let i = 0; i <= frameCount; i++) times.push(i / fps);
 
-        // 简化的骨骼列表，实际使用你原代码中完整的列表
         const bonesToReset = ['hips', 'spine', 'chest', 'neck', 'head', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftHand', 'rightHand', 'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg', 'leftFoot', 'rightFoot']; 
         
         bonesToReset.forEach(boneName => {
@@ -617,21 +607,18 @@ class IdleAnimationManager {
          const euler = new THREE.Euler(0, 0, 0);
          const v = isVRM1 ? 1 : -1;
          
-         // 手臂更贴身，微微前倾
          if(boneName === 'leftUpperArm') {
              euler.set(0.05, 0, -0.45 * Math.PI * v);
          }
          else if(boneName === 'rightUpperArm') {
              euler.set(0.05, 0, 0.45 * Math.PI * v);
          }
-         // 手腕微曲
          else if(boneName === 'leftHand') {
              euler.set(0.05, 0, 0.1 * v);
          }
          else if(boneName === 'rightHand') {
              euler.set(0.05, 0, -0.1 * v);
          }
-         // 双腿微岔
          else if(boneName === 'leftUpperLeg') {
              euler.set(0, 0.05 * v, 0.04 * v);
          }
@@ -649,13 +636,7 @@ class IdleAnimationManager {
         this.currentIndex = 0;
     }
 
-    // ============================================================
-    // 核心逻辑修改区域
-    // ============================================================
-
-    // 开始闲置循环
     startIdleLoop() {
-        // 如果正在播放 OneShot 动作，绝对不要打断它来播放闲置
         if (this.currentOneShotAction && this.currentOneShotAction.isRunning()) return;
         
         if (this.animationQueue.length === 0) {
@@ -669,17 +650,13 @@ class IdleAnimationManager {
     }
     
     playNextVRMAAnimation() {
-        // 安全检查
         if (!this.isActive || this.currentMode !== 'vrma' || this.animationQueue.length === 0) return;
         if (this.currentOneShotAction && this.currentOneShotAction.isRunning()) return;
-        
-        // 简单的防重入
         if (this.isTransitioning) return;
 
         const animation = this.animationQueue[this.currentIndex];
         this.playVRMAAnimation(animation);
         
-        // 随机索引
         const previousIndex = this.currentIndex;
         if (this.animationQueue.length > 1) {
             let newIndex;
@@ -699,7 +676,6 @@ class IdleAnimationManager {
             const clip = createVRMAnimationClip(animationData.animation, this.vrm);
             if (!clip) return;
 
-            // 停止旧的 VRMA 动作
             if (this.currentIdleAction) {
                 this.currentIdleAction.stop();
             }
@@ -708,15 +684,13 @@ class IdleAnimationManager {
             this.currentIdleAction.setLoop(THREE.LoopOnce);
             this.currentIdleAction.clampWhenFinished = true;
             this.currentIdleAction.reset();
-            this.currentIdleAction.setEffectiveWeight(1.0); // 确保权重为1
+            this.currentIdleAction.setEffectiveWeight(1.0); 
             this.currentIdleAction.play();
-            // 淡入效果让循环更自然，但不要太长以免穿帮
             this.currentIdleAction.fadeIn(0.5);
 
             const onFinished = (event) => {
                 if (event.action === this.currentIdleAction) {
                     this.mixer.removeEventListener('finished', onFinished);
-                    // 只有在没有 OneShot 打断的情况下才继续循环
                     if (this.currentMode === 'vrma' && !this.currentOneShotAction) {
                         this.onVRMAAnimationFinished();
                     }
@@ -731,16 +705,12 @@ class IdleAnimationManager {
     }
 
     onVRMAAnimationFinished() {
-        // 闲置动画播放完一个片段，过渡到 Default Pose 再播放下一个
-        // 这段逻辑保持不变，但要增加 check
         if (this.currentOneShotAction) return; 
 
         this.isTransitioning = true;
         
-        // 淡出当前 VRMA
         if (this.currentIdleAction) this.currentIdleAction.fadeOut(1.0);
         
-        // 淡入 Default Pose
         if (this.defaultPoseAction) {
             this.defaultPoseAction.reset().setEffectiveWeight(1.0).play();
             this.defaultPoseAction.fadeIn(0.5);
@@ -749,7 +719,6 @@ class IdleAnimationManager {
         setTimeout(() => {
             if (this.currentOneShotAction) { this.isTransitioning = false; return; }
             
-            // 准备播放下一个
             if (this.defaultPoseAction) this.defaultPoseAction.fadeOut(0.5);
             this.isTransitioning = false;
             
@@ -758,7 +727,7 @@ class IdleAnimationManager {
                     this.playNextVRMAAnimation();
                 }
             }, 300);
-        }, 1500); // 暂停一会儿
+        }, 1500);
     }
 
     scheduleNextVRMAAnimation() {
@@ -767,26 +736,20 @@ class IdleAnimationManager {
         }, 1000);
     }
 
-    // ==========================================
-    // 关键修复：One Shot 动作播放逻辑
-    // ==========================================
     async playOneShotAnimation(url) {
         if (!url) return;
         console.log(`[IdleManager] Requesting One-Shot: ${url}`);
 
-        // 1. 清理旧状态：如果有正在播放的 OneShot，立即停止并移除监听
         if (this.currentOneShotAction) {
             if (this._onOneShotFinished) {
                 this.mixer.removeEventListener('finished', this._onOneShotFinished);
                 this._onOneShotFinished = null;
             }
-            this.currentOneShotAction.stop(); // 立即硬停止，防止叠加
+            this.currentOneShotAction.stop();
             this.currentOneShotAction = null;
         }
 
-        // 2. 压制当前的 Idle 动作 (无论是 VRMA 还是 Procedural)
-        // 使用 fadeOut 并在短时间内让权重归零
-        const fadeDuration = 0.3; // 快速过渡
+        const fadeDuration = 0.3; 
         
         if (this.currentMode === 'vrma' && this.currentIdleAction) {
             this.currentIdleAction.fadeOut(fadeDuration);
@@ -799,7 +762,6 @@ class IdleAnimationManager {
         }
 
         try {
-            // 3. 加载新动作
             const gltf = await new Promise((resolve, reject) => {
                 loader.load(url, resolve, undefined, reject);
             });
@@ -809,25 +771,22 @@ class IdleAnimationManager {
             const clip = createVRMAnimationClip(vrmAnimations[0], this.vrm);
             if (!clip) throw new Error('Failed to create clip');
 
-            // 4. 创建并播放新动作
             const action = this.mixer.clipAction(clip);
             action.setLoop(THREE.LoopOnce);
-            action.clampWhenFinished = true; // 动作结束后保持姿势，直到我们淡出它
+            action.clampWhenFinished = true;
             action.reset();
-            action.setEffectiveWeight(1.0); // 确保权重占满
+            action.setEffectiveWeight(1.0);
             action.play();
-            action.fadeIn(fadeDuration); // 与 Idle 的淡出同步
+            action.fadeIn(fadeDuration);
 
             this.currentOneShotAction = action;
 
-            // 5. 设置结束回调
             this._onOneShotFinished = (e) => {
                 if (e.action === action) {
                     console.log(`[IdleManager] One-Shot finished: ${url}`);
                     this.mixer.removeEventListener('finished', this._onOneShotFinished);
                     this._onOneShotFinished = null;
                     
-                    // 动作完成，开始恢复 Idle
                     this.resetToIdle();
                 }
             };
@@ -835,32 +794,25 @@ class IdleAnimationManager {
 
         } catch (err) {
             console.error('[IdleManager] Failed to play one-shot:', err);
-            this.resetToIdle(); // 发生错误也要确保恢复 Idle
+            this.resetToIdle(); 
         }
     }
 
-    // ==========================================
-    // 关键修复：强制恢复 Idle 状态
-    // ==========================================
     resetToIdle() {
         console.log('[IdleManager] Resetting to Idle state...');
         const fadeDuration = 0.5;
 
-        // 1. 淡出并销毁 OneShot
         if (this.currentOneShotAction) {
             this.currentOneShotAction.fadeOut(fadeDuration);
-            // 延迟清空引用，等待淡出完成
             const oldAction = this.currentOneShotAction;
             setTimeout(() => {
-                oldAction.stop(); // 彻底停止
-                // 不要在这里设 null，因为可能已经开始了新的 OneShot
+                oldAction.stop(); 
                 if (this.currentOneShotAction === oldAction) {
                     this.currentOneShotAction = null;
                 }
             }, fadeDuration * 1000);
         }
 
-        // 2. 强制恢复当前的 Idle 模式
         if (useVRMAIdleAnimations) {
             this.switchToVRMAMode(fadeDuration);
         } else {
@@ -869,17 +821,14 @@ class IdleAnimationManager {
     }
 
     switchToVRMAMode(fadeInTime = 0.5) {
-        // 停止程序化
         this.stopProceduralAnimations();
         this.currentMode = 'vrma';
         this.isActive = true;
 
         if (this.animationQueue.length > 0) {
-            // 如果已经在播放，调整权重即可；如果没播放，重新开始
             if (!this.currentIdleAction || !this.currentIdleAction.isRunning()) {
                 this.playNextVRMAAnimation();
             } else {
-                // 已经在跑，把权重拉回来
                 this.currentIdleAction.enabled = true;
                 this.currentIdleAction.setEffectiveWeight(1.0);
                 this.currentIdleAction.fadeIn(fadeInTime);
@@ -896,9 +845,8 @@ class IdleAnimationManager {
 
         if (this.proceduralIdleAction) {
             this.proceduralIdleAction.enabled = true;
-            this.proceduralIdleAction.reset(); // 重置以防之前状态不对
+            this.proceduralIdleAction.reset();
             this.proceduralIdleAction.play();
-            // 关键：强制设置权重目标为 1
             this.proceduralIdleAction.setEffectiveWeight(1.0); 
             this.proceduralIdleAction.fadeIn(fadeInTime);
         } else {
@@ -2661,6 +2609,15 @@ function addcontrolPanel() {
         pointer-events: none;
         `;
 
+        // 注入全局 CSS 清理移动端点击方块高亮
+        const globalStyle = document.createElement('style');
+        globalStyle.textContent = `
+            #control-panel div, #sub-control-panel div {
+                -webkit-tap-highlight-color: transparent;
+            }
+        `;
+        document.head.appendChild(globalStyle);
+
         // ==========================================
         // ======= 创建左侧子面板 (用于收纳更多按钮) =======
         // ==========================================
@@ -2748,6 +2705,25 @@ function addcontrolPanel() {
                 hideTooltip();
             });
         };
+
+        // 【新增】绑定点击与触摸事件，解决移动端点击无响应或需要双击的问题
+        function bindTapEvent(element, callback) {
+            let touchMoved = false;
+            element.addEventListener('touchstart', () => { touchMoved = false; }, { passive: true });
+            element.addEventListener('touchmove', () => { touchMoved = true; }, { passive: true });
+            element.addEventListener('touchend', (e) => {
+                if (!touchMoved) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    callback(e);
+                }
+            }, { passive: false });
+            element.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                callback(e);
+            });
+        }
 
         // 1. 拖拽按钮
         const dragButton = document.createElement('div');
@@ -2838,9 +2814,8 @@ function addcontrolPanel() {
             lockButton.style.transform = 'scale(1)';
             lockButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
         });
-        lockButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+        
+        bindTapEvent(lockButton, (e) => {
             toggleMouseLock();
         });
 
@@ -2914,11 +2889,11 @@ function addcontrolPanel() {
             hideButton.style.transform = 'scale(1)';
             hideButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
         });
-        hideButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+
+        bindTapEvent(hideButton, (e) => {
             toggleAutoHide();
         });
+
         await initHideButton();
 
         function handleModelHoverDetection(event) {
@@ -3049,8 +3024,13 @@ function addcontrolPanel() {
             nextModelButton.style.transform = 'scale(1)';
             nextModelButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
         });
-        prevModelButton.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); if (allModels.length > 1) switchToModel(currentModelIndex - 1); });
-        nextModelButton.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); if (allModels.length > 1) switchToModel(currentModelIndex + 1); });
+
+        bindTapEvent(prevModelButton, (e) => { 
+            if (allModels.length > 1) switchToModel(currentModelIndex - 1); 
+        });
+        bindTapEvent(nextModelButton, (e) => { 
+            if (allModels.length > 1) switchToModel(currentModelIndex + 1); 
+        });
 
         async function initModelButtons() {
             if (allModels.length <= 1) {
@@ -3099,8 +3079,7 @@ function addcontrolPanel() {
             showTooltip(moreButton, moreButton.title);
         }
 
-        moreButton.addEventListener('click', async (e) => {
-            e.preventDefault(); e.stopPropagation();
+        bindTapEvent(moreButton, async (e) => {
             isSubPanelOpen = !isSubPanelOpen;
             updateMoreButtonState();
         });
@@ -3132,8 +3111,8 @@ function addcontrolPanel() {
         `;
         subtitleButton.addEventListener('mouseenter', () => { subtitleButton.style.background = 'rgba(255,255,255,1)'; subtitleButton.style.transform = 'scale(1.1)'; subtitleButton.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; });
         subtitleButton.addEventListener('mouseleave', () => { subtitleButton.style.background = 'rgba(255,255,255,0.95)'; subtitleButton.style.transform = 'scale(1)'; subtitleButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; });
-        subtitleButton.addEventListener('click', async (e) => {
-            e.preventDefault(); e.stopPropagation();
+        
+        bindTapEvent(subtitleButton, async (e) => {
             isSubtitleEnabled = !isSubtitleEnabled;
             toggleSubtitle(isSubtitleEnabled);
             subtitleButton.style.color = isSubtitleEnabled ? '#28a745' : '#dc3545';
@@ -3157,7 +3136,7 @@ function addcontrolPanel() {
         refreshButton.addEventListener('mouseleave', () => {
             refreshButton.style.background = 'rgba(255,255,255,0.95)'; refreshButton.style.transform = 'scale(1)'; refreshButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
         });
-        refreshButton.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); window.location.reload(); });
+        bindTapEvent(refreshButton, (e) => { window.location.reload(); });
 
         const closeButton = document.createElement('div');
         closeButton.id = 'close-handle';
@@ -3175,7 +3154,7 @@ function addcontrolPanel() {
         closeButton.addEventListener('mouseleave', () => {
             closeButton.style.background = 'rgba(255,255,255,0.95)'; closeButton.style.transform = 'scale(1)'; closeButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
         });
-        closeButton.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); window.close(); });
+        bindTapEvent(closeButton, (e) => { window.close(); });
 
         // ======= 以下为收纳在子面板中的按钮 =======
 
@@ -3192,8 +3171,7 @@ function addcontrolPanel() {
             font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform 0.2s;
             user-select: none; pointer-events: auto; backdrop-filter: blur(10px);
         `;
-        moveModeBtn.addEventListener('click', async (e) => {
-            e.preventDefault(); e.stopPropagation();
+        bindTapEvent(moveModeBtn, async (e) => {
             if (!currentVrm) return;
             transformState = (transformState + 1) % 4;
             updateTransformState();
@@ -3231,8 +3209,7 @@ function addcontrolPanel() {
             user-select: none; pointer-events: auto; backdrop-filter: blur(10px);
             color: ${wsConnected ? '#28a745' : '#dc3545'};
         `;
-        wsStatusButton.addEventListener('click', (e) => {
-            e.preventDefault(); e.stopPropagation();
+        bindTapEvent(wsStatusButton, (e) => {
             if (wsConnected) { if (ttsWebSocket) ttsWebSocket.close(); } else { initTTSWebSocket(); }
         });
         wsStatusButton.addEventListener('mouseenter', () => { wsStatusButton.style.background = 'rgba(255,255,255,1)'; wsStatusButton.style.transform = 'scale(1.1)'; wsStatusButton.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; });
@@ -3253,8 +3230,8 @@ function addcontrolPanel() {
         `;
         idleAnimationButton.addEventListener('mouseenter', () => { idleAnimationButton.style.background = 'rgba(255,255,255,1)'; idleAnimationButton.style.transform = 'scale(1.1)'; idleAnimationButton.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; });
         idleAnimationButton.addEventListener('mouseleave', () => { idleAnimationButton.style.background = 'rgba(255,255,255,0.95)'; idleAnimationButton.style.transform = 'scale(1)'; idleAnimationButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; });
-        idleAnimationButton.addEventListener('click', async (e) => {
-            e.preventDefault(); e.stopPropagation();
+        
+        bindTapEvent(idleAnimationButton, async (e) => {
             if (isIdleAnimationModeChanging) return;
             await toggleIdleAnimationMode();
         });
@@ -3276,8 +3253,8 @@ function addcontrolPanel() {
         ]).then(()=>{ xrAutoBtn.style.display = (canAR || canVR) ? 'flex' : 'none'; });
         let xrSession = null;
         let xrRefSpace = null;
-        // 替换原有的 xrAutoBtn.addEventListener('click', ...) 逻辑
-        xrAutoBtn.addEventListener('click', async () => {
+        
+        bindTapEvent(xrAutoBtn, async (e) => {
             if (renderer.xr.isPresenting) {
                 await renderer.xr.getSession().end();
                 return;
@@ -3287,7 +3264,6 @@ function addcontrolPanel() {
             const mode = canAR ? 'immersive-ar' : 'immersive-vr';
             
             // 关键点：指定 UI 容器，而不是整个 body，这样交互更精准
-            // 确保你的 control-panel 和 subtitle-container 都在 body 下
             const sessionInit = {
                 optionalFeatures: ['local-floor', 'hit-test', 'dom-overlay'],
                 domOverlay: { root: document.body } 
@@ -3298,9 +3274,6 @@ function addcontrolPanel() {
                 renderer.xr.setSession(session);
                 xrSession = session;
 
-                // XR 模式下绝对不能请求 PointerLock，否则会导致无法交互
-                // if (document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock(); // 删除或注释这行
-
                 renderer.setAnimationLoop(xrAnimate);
                 
                 if (currentVrm) {
@@ -3310,8 +3283,6 @@ function addcontrolPanel() {
 
                 // 处理 XR 输入（点击控制器触发点击 UI）
                 session.addEventListener('select', (event) => {
-                    // 这个事件在用户按下控制器扳机键时触发
-                    // DOM Overlay 会尝试将控制器的指向映射为点击
                     console.log('XR Select triggered');
                 });
 
@@ -3341,7 +3312,8 @@ function addcontrolPanel() {
             user-select: none; pointer-events: auto; backdrop-filter: blur(10px);`;
         let vmcApp = null;
         let vmcWrapper = null;
-        vmcButton.addEventListener('click', async () => {
+        
+        bindTapEvent(vmcButton, async (e) => {
             if (vmcApp) {
                 vmcApp.unmount(); document.body.removeChild(vmcWrapper); vmcApp = null; vmcWrapper = null; return;
             }
@@ -3426,7 +3398,9 @@ function addcontrolPanel() {
                 if (orbitControlsSaved) orbitControlsSaved.enabled = true;
             }
         }
-        switchCtrlBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); toggleControls(); });
+        
+        bindTapEvent(switchCtrlBtn, (e) => { toggleControls(); });
+
         switchCtrlBtn.addEventListener('mouseenter', async () => {
             switchCtrlBtn.style.background = 'rgba(255,255,255,1)'; switchCtrlBtn.style.transform = 'scale(1.1)'; switchCtrlBtn.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)';
             switchCtrlBtn.title = pointerLocked ? await t('ExitFirstPerson') || 'Exit First-Person' : await t('EnterFirstPerson') || 'Enter First-Person';
@@ -3457,8 +3431,7 @@ function addcontrolPanel() {
 
         // 3. 点击事件中增加标题动态更新
         let pttVisible = false;
-        voiceControlBtn.addEventListener('click', async (e) => {
-            e.preventDefault(); e.stopPropagation();
+        bindTapEvent(voiceControlBtn, async (e) => {
             pttVisible = !pttVisible;
             const fBtn = document.getElementById('ptt-floating-btn');
             
@@ -3583,7 +3556,7 @@ function addcontrolPanel() {
         }
         setInterval(updateButtonTooltips, 1000);
 
-        // 显示/隐藏控制逻辑 (整个面板的自动淡出)
+        // ======= 显示/隐藏控制逻辑 (整个面板的自动淡出) =======
         let hideTimeout;
         let isControlPanelHovered = false;
         
@@ -3611,26 +3584,50 @@ function addcontrolPanel() {
         
         function scheduleHide() {
             clearTimeout(hideTimeout);
-            hideTimeout = setTimeout(hideControlPanel, 2000); 
+            hideTimeout = setTimeout(hideControlPanel, 3000); // 移动端建议延长时间到3秒更方便操作
         }
         
         document.body.addEventListener('mouseenter', () => { showControlPanel(); });
         document.body.addEventListener('mousemove', () => { showControlPanel(); scheduleHide(); });
         document.body.addEventListener('mouseleave', () => { if (!isControlPanelHovered) scheduleHide(); });
+
+        // 【新增移动端优化】点击屏幕呼出控制面板并隐藏 Tooltip
+        document.body.addEventListener('touchstart', (e) => {
+            hideTooltip();
+            // 如果点击的是控制面板内的元素，不处理，让面板自己处理
+            if (controlPanel.contains(e.target)) return;
+            showControlPanel(); 
+            scheduleHide(); 
+        }, { passive: true });
         
         controlPanel.addEventListener('mouseenter', () => {
             if (renderer.xr.isPresenting) return; 
             isControlPanelHovered = true;
             clearTimeout(hideTimeout);
             showControlPanel();
-            if (isMouseLocked) window.electronAPI.setIgnoreMouseEvents(false);
+            if (isMouseLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
         });
         
         controlPanel.addEventListener('mouseleave', () => {
             isControlPanelHovered = false;
             scheduleHide();
-            if (isMouseLocked) window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+            if (isMouseLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
         });
+
+        // 【新增移动端优化】触控面板时保持面板显示
+        controlPanel.addEventListener('touchstart', () => {
+            if (renderer.xr.isPresenting) return; 
+            isControlPanelHovered = true;
+            clearTimeout(hideTimeout);
+            showControlPanel();
+            if (isMouseLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+        }, { passive: true });
+
+        controlPanel.addEventListener('touchend', () => {
+            isControlPanelHovered = false;
+            scheduleHide();
+            if (isMouseLocked && window.electronAPI) window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+        }, { passive: true });
         
         let mouseStopTimeout;
         document.body.addEventListener('mousemove', () => {
