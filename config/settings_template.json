@@ -185,7 +185,8 @@
       "visibilityScope": "workspace",
       "engine": "local",
       "cc_path": "",
-      "shortcut": true
+      "shortcut": true,
+      "max_iterations": 100
     },
     "visionControlSettings":{
       "enabled": false,

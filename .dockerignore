@@ -32,3 +32,5 @@ static/ext/*
 
 /build/
 /dist/
+
+.agent/

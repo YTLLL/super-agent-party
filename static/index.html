@@ -8815,6 +8815,17 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </el-input>
                         </el-form-item>
 
+                        <el-form-item :label="t('maxIterations')" class="form-item-align">
+                          <el-slider
+                            v-model="CLISettings.max_iterations"
+                            :min="10"
+                            :max="500"
+                            :step="1"
+                            show-input
+                            @input="autoSaveSettings"
+                          />
+                        </el-form-item>
+
                         <el-form-item :label="t('enabledShortCut')" class="form-item-align" label-position="left">
                           <el-switch
                             v-model="CLISettings.shortcut"

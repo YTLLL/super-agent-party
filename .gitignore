@@ -198,3 +198,5 @@ runtime/
 一键更新(update).sh
 
 nodejs/
+
+.agent/
