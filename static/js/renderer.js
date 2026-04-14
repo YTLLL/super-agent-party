@@ -838,6 +838,7 @@ const app = Vue.createApp({
       window.stopDiscordBotHandler = this.requestDiscordBotStopIfRunning;
       window.stopTelegramBotHandler = this.requestTelegramBotStopIfRunning;
       window.stopSlackBotHandler = this.requestSlackBotStopIfRunning;
+      window.stopWeComBotHandler = this.requestWeComBotStopIfRunning;
       window.electronAPI.onWindowState((_, state) => {
         this.isMaximized = state === 'maximized'
       });
@@ -996,6 +997,7 @@ const handleRemoteInstall = (data) => {
       delete window.stopDiscordBotHandler;
       delete window.stopTelegramBotHandler;
       delete window.stopSlackBotHandler;
+      delete window.stopWeComBotHandler;
     }
     if (this.ttsWebSocket) {
       this.ttsWebSocket.close();
@@ -1459,6 +1461,14 @@ const handleRemoteInstall = (data) => {
         }));
       return [...this.defaultSeparators, ...custom];
     },
+      isWeComBotConfigValid() {
+        return this.weComBotConfig.bot_id && this.weComBotConfig.secret;
+      },
+      filteredWeComSeparators() {
+        // 逻辑与飞书完全相同
+        return [...this.defaultSeparators, ...custom];
+      },
+
   // 校验配置是否填写完整
   isdingtalkBotConfigValid() {
     return this.dingtalkBotConfig.appKey && this.dingtalkBotConfig.appSecret;

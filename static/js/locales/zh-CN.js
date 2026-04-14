@@ -1580,4 +1580,7 @@ key3`,
         'favorite': '收藏',
 
         'maxIterations': '子智能体最大迭代次数',
+
+        'weComBot': '企业微信机器人',
+        'wecom_bot_config': '企业微信机器人配置',
     }

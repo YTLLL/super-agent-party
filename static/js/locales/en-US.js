@@ -1578,4 +1578,7 @@ Key3`,
         'favorite': 'Favorite',
 
         'maxIterations': 'Subagent Max Iterations',
+
+        'weComBot': 'WeCom Bot',
+        'wecom_bot_config': 'WeCom Bot Configuration',
     }

@@ -1433,6 +1433,22 @@ let vue_data = {
     isFeishuStopping: false,
     isFeishuReloading: false,
 
+    weComBotConfig: {
+      WeComAgent: 'super-model',
+      memoryLimit: 30,
+      bot_id: '',
+      secret: '',
+      reasoningVisible: true,
+      quickRestart: true,
+      enableTTS: false,
+      wakeWord: '',
+      behaviorTargetChatIds: [],
+    },
+    isWeComBotRunning: false,
+    isWeComStarting: false,
+    isWeComStopping: false,
+    isWeComReloading: false,
+
     // 钉钉机器人状态控制
     isDingtalkStarting: false,
     isDingtalkStopping: false,

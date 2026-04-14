@@ -2,6 +2,7 @@ import io
 import json
 import logging
 import os
+import shutil
 import sys
 import time
 import asyncio
@@ -291,6 +292,56 @@ def convert_to_opus_simple(audio_data):
     except Exception as e:
         logging.error(f"Opus conversion failed: {e}")
         return _wrap_pcm_to_wav(audio_data), False
+
+def convert_to_amr_simple(audio_data: bytes) -> bytes:
+    """
+    将音频转换为企业微信 AMR 格式
+    """
+    try:
+        from pydub import AudioSegment
+        import io, os, subprocess, tempfile, shutil
+
+        # 1. 自动定位 ffmpeg
+        ffmpeg_path = shutil.which("ffmpeg")
+        if not ffmpeg_path:
+            logging.error("未找到 ffmpeg，请确保已安装并加入环境变量")
+            return None
+
+        # 2. 读取音频并标准化 (8000Hz, Mono)
+        audio = AudioSegment.from_file(io.BytesIO(audio_data))
+        audio = audio.set_frame_rate(8000).set_channels(1)
+        
+        # 3. 创建临时文件
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            audio.export(tmp.name, format="wav")
+            wav_name = tmp.name
+        amr_name = wav_name.replace(".wav", ".amr")
+        
+        try:
+            # 4. 执行转换并捕获错误输出
+            cmd = [
+                ffmpeg_path, "-y", "-i", wav_name, 
+                "-ar", "8000", "-ab", "12.2k", "-ac", "1", 
+                "-c:a", "libopencore_amrnb", amr_name
+            ]
+            process = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if process.returncode != 0:
+                # 【核心日志】这里会告诉你为什么 exit 8
+                logging.error(f"FFmpeg 转换失败 (Code {process.returncode})")
+                logging.error(f"FFmpeg 错误详情: {process.stderr}")
+                return None
+            
+            with open(amr_name, "rb") as f:
+                return f.read()
+        finally:
+            if os.path.exists(wav_name): os.remove(wav_name)
+            if os.path.exists(amr_name): os.remove(amr_name)
+
+    except Exception as e:
+        logging.error(f"AMR 转换流程异常: {e}")
+        return None
+
 
 def _wrap_pcm_to_wav(pcm_data):
     try:

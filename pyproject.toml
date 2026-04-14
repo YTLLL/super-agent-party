@@ -74,4 +74,5 @@ dependencies = [
     "pyautogui>=0.9.54",
     "elevenlabs>=2.41.0",
     "litellm>=1.83.0",
+    "wecom-aibot-python-sdk>=1.0.2",
 ]
