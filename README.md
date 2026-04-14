@@ -15,6 +15,13 @@
 ####
 
 <div align="center">
+<a href="https://www.producthunt.com/products/super-agent-party?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-super-agent-party" target="_blank" rel="noopener noreferrer"><img alt="Super Agent Party - AI companion with Fast &amp; Slow brains: Empathizes &amp; Executes | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1091325&amp;theme=light&amp;t=1776217919630"></a>
+<a href="https://trendshift.io/repositories/16259" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16259" alt="heshengtao%2Fsuper-agent-party | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+</div>
+
+####
+
+<div align="center">
   <a href="https://www.agentparty.top/"><img src="https://img.shields.io/badge/Official website-AgentParty-blueviolet?style=for-the-badge"/></a>
   <a href="https://www.agentparty.top/blog.html"><img src="https://img.shields.io/badge/Official%20Blog-Blog-orange?style=for-the-badge&logo=rss&logoColor=white"/></a>
   <a href="https://space.bilibili.com/26978344"><img src="https://img.shields.io/badge/B站-观看教程-red?style=for-the-badge&logo=bilibili"/></a>
