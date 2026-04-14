@@ -2396,23 +2396,23 @@ const pttStyle = document.createElement('style');
 pttStyle.textContent = `
     #ptt-floating-btn {
         position: fixed;
-        bottom: 40px; /* 稍微下移一点，更贴合大拇指 */
+        bottom: 80px; /* 抬高一点防底部小白条 */
         left: 50%;
         transform: translateX(-50%) scale(0);
-        width: 48px;
-        height: 48px;
+        width: 80px;   /* 增大尺寸，符合触控 */
+        height: 80px;  /* 增大尺寸 */
         background: linear-gradient(135deg, #ff6b35, #ff8c5a);
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        /* 阴影更精细，匹配小尺寸 */
-        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3); 
+        box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4); 
         cursor: pointer;
         z-index: 10002;
-        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
         user-select: none;
-        touch-action: none;
+        touch-action: none; /* 必须，防止滑动页面 */
+        -webkit-touch-callout: none; /* 防止长按弹出菜单 */
         opacity: 0;
         pointer-events: none;
     }
@@ -2421,17 +2421,14 @@ pttStyle.textContent = `
         opacity: 1;
         pointer-events: auto;
     }
-    #ptt-floating-btn:active { 
-        transform: translateX(-50%) scale(0.92); 
-        background: #ff5010; /* 按下时颜色加深 */
+    #ptt-floating-btn:active, #ptt-floating-btn.active { 
+        transform: translateX(-50%) scale(0.9); 
+        background: #e65c2b; 
     }
-    
-    /* 图标调小到 20-22px，看起来比例最舒服 */
     #ptt-floating-btn i { 
         color: white; 
-        font-size: 20px; 
+        font-size: 36px; /* 图标放大 */
     }
-    
     .ptt-recording-pulse {
         position: absolute;
         width: 100%; height: 100%;
@@ -2453,7 +2450,7 @@ let pttAsrWs = null;
 let pttMediaRecorder = null;
 let pttAudioChunks = [];
 let isPttActive = false;
-
+let pttVisible = false;
 // 初始化通往主界面的控制 WS
 function initPttMainWs() {
     if (pttMainWs && pttMainWs.readyState === WebSocket.OPEN) return;
@@ -2524,58 +2521,88 @@ async function pttEncodeWav(blob) {
 }
 
 // 初始化 PTT 按钮与录音逻辑
+// 初始化 PTT 按钮与录音逻辑 (支持长按、防快按误触、XR射线)
 function setupPttInteraction() {
     const floatingBtn = document.createElement('div');
     floatingBtn.id = 'ptt-floating-btn';
     floatingBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
     document.body.appendChild(floatingBtn);
 
+    let isRecordingRequested = false; // 防极快点击导致异步 Bug
+
     const startRecording = async (e) => {
         if (e.cancelable) e.preventDefault();
         if (isPttActive) return;
         isPttActive = true;
+        isRecordingRequested = true;
         pttAudioChunks = [];
+        
+        floatingBtn.classList.add('active'); // 视觉反馈
         floatingBtn.innerHTML = '<i class="fa-solid fa-microphone"></i><div class="ptt-recording-pulse"></div>';
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            // 如果用户松手太快，授权结束后立刻清理，不开始录音
+            if (!isRecordingRequested) {
+                stream.getTracks().forEach(t => t.stop());
+                isPttActive = false;
+                floatingBtn.classList.remove('active');
+                floatingBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+                return;
+            }
+
             pttMediaRecorder = new MediaRecorder(stream);
             pttMediaRecorder.ondataavailable = (ev) => pttAudioChunks.push(ev.data);
             pttMediaRecorder.onstop = async () => {
-                const webmBlob = new Blob(pttAudioChunks, { type: 'audio/webm' });
-                const wavBlob = await pttEncodeWav(webmBlob);
-                
-                const ws = await initPttAsrWs();
-                const reader = new FileReader();
-                reader.readAsDataURL(wavBlob);
-                reader.onloadend = () => {
-                    ws.send(JSON.stringify({
-                        type: 'audio_complete',
-                        audio: reader.result.split(',')[1],
-                        format: 'wav'
-                    }));
-                };
                 stream.getTracks().forEach(t => t.stop());
+                
+                // 只有录到了数据才发送（防秒松手发空包）
+                if (pttAudioChunks.length > 0) {
+                    const webmBlob = new Blob(pttAudioChunks, { type: 'audio/webm' });
+                    const wavBlob = await pttEncodeWav(webmBlob);
+                    
+                    const ws = await initPttAsrWs();
+                    const reader = new FileReader();
+                    reader.readAsDataURL(wavBlob);
+                    reader.onloadend = () => {
+                        ws.send(JSON.stringify({
+                            type: 'audio_complete',
+                            audio: reader.result.split(',')[1],
+                            format: 'wav'
+                        }));
+                    };
+                }
             };
             pttMediaRecorder.start();
         } catch (err) {
             console.error("Mic error:", err);
             isPttActive = false;
+            floatingBtn.classList.remove('active');
+            floatingBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
         }
     };
 
     const stopRecording = (e) => {
-        if (e.cancelable) e.preventDefault();
+        if (e && e.cancelable) e.preventDefault();
+        isRecordingRequested = false;
         if (!isPttActive) return;
         isPttActive = false;
+        
+        floatingBtn.classList.remove('active');
         floatingBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-        if (pttMediaRecorder) pttMediaRecorder.stop();
+        
+        if (pttMediaRecorder && pttMediaRecorder.state === 'recording') {
+            pttMediaRecorder.stop();
+        }
     };
 
-    floatingBtn.addEventListener('mousedown', startRecording);
-    window.addEventListener('mouseup', stopRecording);
-    floatingBtn.addEventListener('touchstart', startRecording);
-    window.addEventListener('touchend', stopRecording);
+    // 使用 Pointer Events，完美兼顾 鼠标、触摸屏、XR射线
+    floatingBtn.addEventListener('pointerdown', startRecording);
+    floatingBtn.addEventListener('pointerup', stopRecording);
+    floatingBtn.addEventListener('pointercancel', stopRecording);
+    // 监听全局，防止手指/鼠标滑出按钮区域外松开导致没停止
+    window.addEventListener('pointerup', stopRecording);
     
     initPttMainWs();
 }
@@ -3276,6 +3303,9 @@ function addcontrolPanel() {
 
                 renderer.setAnimationLoop(xrAnimate);
                 
+                document.getElementById('control-panel').style.display = 'none'; 
+                document.getElementById('ptt-floating-btn').classList.add('visible');
+
                 if (currentVrm) {
                     // 在 VR 中将模型稍微放远一点，否则会“贴脸”
                     currentVrm.scene.position.set(0, 0, -1.5);
@@ -3291,7 +3321,18 @@ function addcontrolPanel() {
                 alert('无法进入 XR 模式: ' + e.message);
             }
         });
-        renderer.xr.addEventListener('sessionend', () => { renderer.setAnimationLoop(null); animate(); xrSession = null; });
+        renderer.xr.addEventListener('sessionend', () => { 
+            renderer.setAnimationLoop(null); 
+            animate(); 
+            xrSession = null; 
+            
+            // === 退出 XR 恢复 UI ===
+            document.getElementById('control-panel').style.display = 'flex';
+            // 如果进 XR 之前没开语音，退出来后也把它隐藏回去
+            if (!pttVisible) {
+                document.getElementById('ptt-floating-btn').classList.remove('visible');
+            }
+        });
         function xrAnimate(time, frame) {
           const delta = clock.getDelta();
           if (currentVrm) currentVrm.update(delta);
@@ -3430,7 +3471,6 @@ function addcontrolPanel() {
         })();
 
         // 3. 点击事件中增加标题动态更新
-        let pttVisible = false;
         bindTapEvent(voiceControlBtn, async (e) => {
             pttVisible = !pttVisible;
             const fBtn = document.getElementById('ptt-floating-btn');
