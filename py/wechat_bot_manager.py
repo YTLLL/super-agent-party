@@ -371,6 +371,7 @@ class WeChatClient:
         self._manager_ref = None
         self.enableTTS = False
         self.wakeWord = None
+        self.last_active_chat_id = None
         global_behavior_engine.register_handler("wechat", self.execute_behavior_event)
 
     async def handle_message(self, msg) -> None:
@@ -378,6 +379,9 @@ class WeChatClient:
         if self._shutdown_requested: return
         
         chat_id = getattr(msg, 'user_id', 'unknown_user')
+
+        self.last_active_chat_id = chat_id 
+
         global_behavior_engine.report_activity("wechat", chat_id)
         
         user_text = getattr(msg, 'text', '')
@@ -484,91 +488,125 @@ class WeChatClient:
 
     async def execute_behavior_event(self, chat_id: str, behavior_item: BehaviorItem):
         """
-        回调函数：响应行为引擎的指令（主动推送到微信）
-        已支持：流式分段发送（一句一句出）
+        [完整版] 响应行为引擎的主动推送指令
+        特性：自动回退活跃ID、流式分段发送、TTS同步
         """
-        # 1. 检查 Context Token (微信协议硬性要求)
-        ct = self.bot._context_tokens.get(chat_id)
+        # 1. 目标 ID 决策逻辑
+        target_id = chat_id
+        
+        # 如果前端没配置固定 ID，尝试使用最后一次对话的活跃 ID
+        if not target_id or target_id == "":
+            target_id = getattr(self, 'last_active_chat_id', None)
+            
+        if not target_id:
+            logging.info("ℹ️ [微信行为引擎] 行为触发，但既无配置 ID 也无活跃记录，跳过执行。")
+            return
+            
+        # 2. 微信 Context Token 检查 (核心限制)
+        ct = self.bot._context_tokens.get(target_id)
         if not ct:
-            logging.warning(f"⚠️ [微信行为引擎] 无法向 {chat_id} 推送：缺少 Context Token。")
+            logging.warning(f"⚠️ [微信行为引擎] 无法向 {target_id} 推送消息：缺少 Context Token。")
+            logging.warning(f"💡 请先在微信里给机器人发个消息（或表情）激活会话。")
             return
 
-        logging.info(f"[WeChatClient] 行为引擎触发! 正在流式生成并分段推送...")
+        logging.info(f"🚀 [微信行为引擎] 触发主动行为! 目标: {target_id}, 类型: {behavior_item.action.type}")
         
+        # 3. 解析 Prompt
         prompt_content = await self._resolve_behavior_prompt(behavior_item)
-        if not prompt_content: return
+        if not prompt_content: 
+            return
 
-        if chat_id not in self.memoryList: self.memoryList[chat_id] = []
+        # 4. 准备 AI 请求
+        if target_id not in self.memoryList: 
+            self.memoryList[target_id] = []
         
-        # 构造上下文
-        messages = self.memoryList[chat_id].copy()
+        # 拷贝记忆，防止干扰主循环
+        messages = self.memoryList[target_id].copy()
         messages.append({"role": "user", "content": f"[system]: {prompt_content}"})
 
-        client = AsyncOpenAI(api_key="super-secret-key", base_url=f"http://127.0.0.1:{self.port}/v1")
+        client = AsyncOpenAI(
+            api_key="super-secret-key", 
+            base_url=f"http://127.0.0.1:{self.port}/v1"
+        )
         
         state = {"text_buffer": ""}
-        full_response = []
+        full_response_list = []
         
         try:
-            # 改为流式请求实现“一句一句发”
-            stream = await client.chat.completions.create(
-                model=self.WeChatAgent,
-                messages=messages,
-                stream=True, 
-                extra_body={"is_app_bot": True, "behavior_trigger": True}
+            # 使用流式请求实现“一句一句出”的效果
+            stream = await asyncio.wait_for(
+                client.chat.completions.create(
+                    model=self.WeChatAgent,
+                    messages=messages,
+                    stream=True, 
+                    extra_body={"is_app_bot": True, "behavior_trigger": True}
+                ),
+                timeout=60.0
             )
             
             async for chunk in stream:
                 if not chunk.choices: continue
-                content = chunk.choices[0].delta.content or ""
-                full_response.append(content)
+                delta = chunk.choices[0].delta
+                
+                # 处理内容和推理内容
+                content = delta.content or ""
+                if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                    if self.reasoningVisible:
+                        content = delta.reasoning_content
+                
+                if not content: continue
+                
+                full_response_list.append(content)
                 state["text_buffer"] += content
                 
                 # --- 分段切割逻辑 ---
                 buffer = state["text_buffer"]
                 split_pos = -1
                 
-                # 检查分隔符
+                # 在缓冲区中寻找分隔符（。 \n ？ ！）
                 for sep in self.separators:
                     pos = buffer.find(sep)
                     if pos != -1:
                         split_pos = pos + len(sep)
                         break
                 
-                # 如果缓冲区过长（超过800字）还没找到分隔符，强制切割
+                # 如果单句实在太长了（超过800字），强行切割
                 if split_pos == -1 and len(buffer) > 800:
                     split_pos = 800
 
+                # 命中切割点，发送气泡
                 if split_pos != -1:
                     current_chunk = buffer[:split_pos]
                     state["text_buffer"] = buffer[split_pos:]
                     
                     clean_text = self._clean_text(current_chunk)
                     if clean_text:
-                        # 主动推送使用 bot.send
-                        await self.bot.send(chat_id, clean_text)
-                        # 给微信接口留一点空隙，防止气泡顺序错乱
+                        await self.bot.send(target_id, clean_text)
+                        # 给微信接口留 0.5 秒间隔，防止手机端乱序或合并气泡
                         await asyncio.sleep(0.5)
 
-            # --- 处理残留内容 ---
+            # 5. 处理流结束后的残留文本
             if state["text_buffer"]:
                 clean_text = self._clean_text(state["text_buffer"])
                 if clean_text:
-                    await self.bot.send(chat_id, clean_text)
+                    await self.bot.send(target_id, clean_text)
 
-            # 更新记忆
-            full_content = "".join(full_response)
+            # 6. 更新长期记忆
+            full_content = "".join(full_response_list)
             if full_content:
-                self.memoryList[chat_id].append({"role": "user", "content": f"[system]: {prompt_content}"})
-                self.memoryList[chat_id].append({"role": "assistant", "content": full_content})
-                logging.info(f"✅ [微信行为引擎] 主动消息已分段送达 {chat_id}")
+                # 记录 [system] 指令及 AI 的完整回答
+                self.memoryList[target_id].append({"role": "user", "content": f"[system]: {prompt_content}"})
+                self.memoryList[target_id].append({"role": "assistant", "content": full_content})
+                logging.info(f"✅ [微信行为引擎] 主动消息已成功推送到 {target_id}")
                 
-                # 如果开启了 TTS，发送全量语音文件
+                # 7. 同步下发 TTS 语音文件
                 if self.enableTTS:
-                    await self._send_voice(chat_id, full_content)
+                    await self._send_voice(target_id, full_content)
                     
+        except asyncio.TimeoutError:
+            logging.error(f"❌ [微信行为引擎] AI 请求超时")
         except Exception as e:
-            logging.error(f"❌ [微信行为引擎] 流式发送异常: {e}")
+            logging.error(f"❌ [微信行为引擎] 运行时异常: {e}")
             import traceback
             traceback.print_exc()
 
