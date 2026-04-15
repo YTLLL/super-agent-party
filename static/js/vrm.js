@@ -115,22 +115,42 @@ const modelConfig = await fetchVRMConfig();
 // NEW: Initialize Motion Map for ID Lookup
 // ==========================================
 const motionUrlMap = new Map();
+
 function initMotionMap(config) {
     motionUrlMap.clear();
     const allMotions = [...(config.defaultMotions || []), ...(config.userMotions || [])];
+    
     allMotions.forEach(motion => {
-        if (motion.id && motion.path) {
+        if (motion.path) {
             try {
-                let motionUrl = new URL(motion.path);
+                let motionUrl = new URL(motion.path, window.location.origin);
                 motionUrl.protocol = window.location.protocol;
                 motionUrl.host = window.location.host;
-                motionUrlMap.set(motion.id, motionUrl.toString());
+                const finalUrl = motionUrl.toString();
+
+                // 1. 使用 ID 绑定（保证唯一性，用于系统内部逻辑）
+                if (motion.id) {
+                    motionUrlMap.set(motion.id, finalUrl);
+                }
+
+                // 2. 关键：使用显示名称（Name）绑定（用于 AI 语义化调用）
+                // 这样 AI 如果说 "点点头"，只要 display_name 是 "点点头"，就能匹配上
+                if (motion.name) {
+                    // 如果名字里有空格或特殊字符，AI 可能会处理得不一致，可以考虑转小写或去空格
+                    motionUrlMap.set(motion.name, finalUrl);
+                    
+                    // 额外兼容：去掉后缀的名字（防止 AI 带了 .vrma 后缀）
+                    const nameWithoutExt = motion.name.replace(/\.[^/.]+$/, "");
+                    if (nameWithoutExt !== motion.name) {
+                        motionUrlMap.set(nameWithoutExt, finalUrl);
+                    }
+                }
             } catch (e) {
-                console.warn(`Invalid motion URL for id ${motion.id}:`, motion.path);
+                console.warn(`[MotionMap] 解析路径失败: ${motion.name}`, e);
             }
         }
     });
-    console.log("Motion ID Map Initialized:", motionUrlMap);
+    console.log("Motion ID & Name Map Initialized. ", motionUrlMap);
 }
 initMotionMap(modelConfig);
 // ==========================================
@@ -934,50 +954,44 @@ async function updateIdleAnimationButton() {
 // 获取动画目录下的所有VRMA文件
 async function getAnimationFiles() {
   try {
-    // 1. 获取当前桌宠配置
-    const cfg = await fetchVRMConfig();   // { selectedMotionIds:[...], defaultMotions:[...], userMotions:[...] }
+    const cfg = await fetchVRMConfig();
+    const motionPool = [...(cfg.defaultMotions || []), ...(cfg.userMotions || [])];
 
-    // 2. 把两个数组合并成“动作池”
-    const motionPool = [...cfg.defaultMotions, ...cfg.userMotions];
-
-    // 3. 取出被选中的动作，并转成可访问的完整 URL
-    const urls = cfg.selectedMotionIds
-      .map(id => motionPool.find(m => m.id === id)) // 找到对应条目
-      .filter(Boolean)                              // 过滤不存在的 id
+    // 取出被选中的动作
+    const urls = (cfg.selectedMotionIds || [])
+      .map(id => motionPool.find(m => m.id === id))
+      .filter(Boolean)
       .map(item => {
-        // 构造绝对 URL（同 VRM 模型做法）
-        const urlObj = new URL(item.path);
-        urlObj.protocol = window.location.protocol;
-        urlObj.host     = window.location.host;
-        return urlObj.toString();
-      });
+        try {
+          // 核心修复点：传入 window.location.origin 处理相对路径
+          const urlObj = new URL(item.path, window.location.origin);
+          urlObj.protocol = window.location.protocol;
+          urlObj.host     = window.location.host;
+          return urlObj.toString();
+        } catch (e) {
+          console.error(`[AnimationFiles] 无法构造有效URL: ${item.path}`, e);
+          return null;
+        }
+      })
+      .filter(u => u !== null); // 移除无效 URL
 
-    // 4. 如果没有任何选中，给个兜底
+    // 如果没有任何选中，返回默认的兜底动画
     if (urls.length === 0) {
-      const fallback = 
-      [
-       `${window.location.protocol}//${window.location.host}/vrm/animations/greeting.vrma`,
-        `${window.location.protocol}//${window.location.host}/vrm/animations/akimbo.vrma`,
-       `${window.location.protocol}//${window.location.host}/vrm/animations/play_fingers.vrma`,
-       `${window.location.protocol}//${window.location.host}/vrm/animations/scratch_head.vrma`,
-       `${window.location.protocol}//${window.location.host}/vrm/animations/stretch.vrma`,
-       `${window.location.protocol}//${window.location.host}/vrm/animations/shoot.vrma`,
-       `${window.location.protocol}//${window.location.host}/vrm/animations/peace_sign.vrma`,
-       `${window.location.protocol}//${window.location.host}/vrm/animations/show_full_body.vrma`,
-       `${window.location.protocol}//${window.location.host}/vrm/animations/squat.vrma`,
-       `${window.location.protocol}//${window.location.host}/vrm/animations/model_pose.vrma`,
-       `${window.location.protocol}//${window.location.host}/vrm/animations/spin.vrma`,
-      ];
-      console.warn('没有选中任何动作，使用兜底动画');
+      const base = `${window.location.protocol}//${window.location.host}/vrm/animations/`;
+      const fallback = [
+        "greeting.vrma", "akimbo.vrma", "play_fingers.vrma", "scratch_head.vrma",
+        "stretch.vrma", "shoot.vrma", "peace_sign.vrma", "show_full_body.vrma",
+        "squat.vrma", "model_pose.vrma", "spin.vrma"
+      ].map(file => base + file);
+      
+      console.warn('没有选中任何有效动作，使用默认目录下的兜底动画');
       return fallback;
     }
 
-    console.log('本次要加载的 VRMA：', urls);
     return urls;
 
   } catch (err) {
     console.error('获取动画列表失败：', err);
-    // 兜底
     return [`${window.location.protocol}//${window.location.host}/vrm/animations/greeting.vrma`];
   }
 }
