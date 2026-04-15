@@ -1615,6 +1615,15 @@ ipcMain.handle('upload-to-workspace', async (event, { targetDirPath, sourceFileP
         `);
       }
     });
+    ipcMain.handle('request-stop-wechatbot', async (event) => {
+      const win = BrowserWindow.getAllWindows()[0]; // 获取主窗口
+      if (win && !win.isDestroyed()) {
+        // 通过webContents执行渲染进程方法
+        await win.webContents.executeJavaScript(`
+          window.stopWechatBotHandler && window.stopWechatBotHandler()
+        `);
+      }
+    });
     ipcMain.handle('request-stop-wecombot', async (event) => {
       const win = BrowserWindow.getAllWindows()[0]; // 获取主窗口
       if (win && !win.isDestroyed()) {
@@ -1871,6 +1880,7 @@ app.on('before-quit', async (event) => {
       await mainWindow.webContents.executeJavaScript(`
         if (window.stopQQBotHandler) window.stopQQBotHandler();
         if (window.stopFeishuBotHandler) window.stopFeishuBotHandler();
+        if (window.stopWechatBotHandler) window.stopWechatBotHandler();
         if (window.stopDingtalkBotHandler) window.stopDingtalkBotHandler();
         if (window.stopDiscordBotHandler) window.stopDiscordBotHandler();
         if (window.stopTelegramBotHandler) window.stopTelegramBotHandler();

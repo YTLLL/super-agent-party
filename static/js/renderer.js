@@ -834,6 +834,7 @@ const app = Vue.createApp({
     if (isElectron) {
       window.stopQQBotHandler = this.requestStopQQBotIfRunning;
       window.stopFeishuBotHandler = this.requestFeishuBotStopIfRunning;
+      window.stopWechatBotHandler = this.requestWechatBotStopIfRunning;
       window.stopDingtalkBotHandler = this.requestDingtalkBotStopIfRunning;
       window.stopDiscordBotHandler = this.requestDiscordBotStopIfRunning;
       window.stopTelegramBotHandler = this.requestTelegramBotStopIfRunning;
@@ -993,6 +994,7 @@ const handleRemoteInstall = (data) => {
     if (isElectron) {
       delete window.stopQQBotHandler;
       delete window.stopFeishuBotHandler;
+      delete window.stopWechatBotHandler;
       delete window.stopDingtalkBotHandler;
       delete window.stopDiscordBotHandler;
       delete window.stopTelegramBotHandler;
@@ -1461,6 +1463,22 @@ const handleRemoteInstall = (data) => {
         }));
       return [...this.defaultSeparators, ...custom];
     },
+    isWechatBotConfigValid() {
+      // 微信 SDK 原生扫码，无需类似 APP ID/Secret 的强制输入限制
+      return true; 
+    },
+    filteredWechatSeparators() {
+      const current = this.wechatBotConfig.separators || [];
+      const defaults = this.defaultSeparators ||[];
+      const custom = current
+        .filter(s => !defaults.some(d => d.value === s))
+        .map(s => ({
+          label: `(${this.formatSeparator(s)})`,
+          value: s
+        }));
+      return [...defaults, ...custom];
+    },
+
       isWeComBotConfigValid() {
         return this.weComBotConfig.bot_id && this.weComBotConfig.secret;
       },

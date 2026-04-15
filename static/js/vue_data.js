@@ -1433,6 +1433,25 @@ let vue_data = {
     isFeishuStopping: false,
     isFeishuReloading: false,
 
+    wechatBotConfig: {
+      WeChatAgent: 'super-model',
+      memoryLimit: 30,
+      separators:["。", "\n", "？", "！"],
+      reasoningVisible: true,
+      quickRestart: true,
+      enableTTS: false,
+      wakeWord: '',
+      behaviorTargetChatIds:[], 
+    },
+    isWechatBotRunning: false,
+    isWechatStarting: false,
+    isWechatStopping: false,
+    isWechatReloading: false,
+
+    showWechatQR: false,
+    wechatQRCodeBase64: null,
+    wechatStatusTimer: null, // 用来轮询状态的定时器
+
     weComBotConfig: {
       WeComAgent: 'super-model',
       memoryLimit: 30,

@@ -75,4 +75,6 @@ dependencies = [
     "elevenlabs>=2.41.0",
     "litellm>=1.83.0",
     "wecom-aibot-python-sdk>=1.0.2",
+    "wechatbot-sdk>=0.2.0",
+    "qrcode>=8.2",
 ]
