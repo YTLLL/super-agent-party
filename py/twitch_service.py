@@ -79,63 +79,106 @@ class SimpleTwitchChat:
                     self._handle_line(line)
 
     def _handle_line(self, line: str):
+        """
+        Twitch IRC 协议解析核心逻辑
+        支持：PRIVMSG(弹幕), USERNOTICE(订阅/赠礼/Raid/公告)
+        """
         if line.startswith("PING"):
             self._send("PONG " + line[4:])
             return
-        if "PRIVMSG" not in line:
-            return
 
-        # 1. 提取标签段（@ 开头，空格结束）
+        # 1. 解析标签 (Twitch Tags)
         tags = {}
         if line.startswith("@"):
             tag_str, _, line = line[1:].partition(" ")
             for kv in tag_str.split(";"):
                 if "=" in kv:
                     k, v = kv.split("=", 1)
+                    # 处理 Twitch IRC 协议中的转义字符
+                    v = v.replace("\\s", " ").replace("\\:", ";").replace("\\r", "\r").replace("\\n", "\n")
                     tags[k] = v
 
-        # 2. 用户名：优先 display-name，其次 user-id，最后 login
-        user = (
-            tags.get("display-name") or
-            tags.get("user-id") or
-            line.split("!", 1)[0]  # 最末兜底
-        ).strip()
+        # 2. 识别 IRC 命令 (PRIVMSG 或 USERNOTICE)
+        parts = line.split(" ")
+        command = ""
+        for p in parts:
+            if p in ["PRIVMSG", "USERNOTICE", "CLEARCHAT"]:
+                command = p
+                break
 
-        # 3. 频道名
-        try:
-            _, _, rest = line.partition("PRIVMSG #")
-            channel = rest.split(" ", 1)[0].lower().lstrip("#")
-        except Exception:
+        if not command:
             return
 
-        # 4. 消息内容
-        try:
-            msg = line.split(" :", maxsplit=1)[1]
-        except Exception:
-            return
+        # 3. 提取用户信息
+        user = tags.get("display-name") or tags.get("login") or "System"
+        msg_content = ""
+        danmu_type = "danmaku"
 
-        # 5. 回调
+        # 4. 分支处理指令
+        if command == "PRIVMSG":
+            # --- 普通弹幕 ---
+            danmu_type = "danmaku"
+            try:
+                # 获取 ':' 之后的所有内容作为消息体
+                msg_content = line.split(" :", maxsplit=1)[1]
+            except: 
+                msg_content = ""
+
+        elif command == "USERNOTICE":
+            # --- 复杂系统事件 (订阅、赠礼、Raid 等) ---
+            msg_id = tags.get("msg-id", "")
+            system_msg = tags.get("system-msg", "") # Twitch 官方生成的英文说明
+            
+            # 尝试提取用户在订阅/公告时附带的自定义文字
+            user_text = ""
+            try:
+                user_text = line.split(" :", maxsplit=1)[1]
+            except: 
+                pass
+
+            if msg_id in ["sub", "resub"]:
+                # 订阅或续订 -> 对应 B 站 "上舰/舰长"
+                danmu_type = "buy_guard"
+                msg_content = f"{system_msg} | Message: {user_text}" if user_text else system_msg
+                
+            elif msg_id in ["subgift", "anonsubgift", "submysterygift"]:
+                # 赠送订阅 -> 对应 B 站 "礼物"
+                danmu_type = "gift"
+                msg_content = system_msg
+                
+            elif msg_id == "raid":
+                # 突袭 (其他主播带人进场) -> 对应 B 站 "进场"
+                danmu_type = "enter_room"
+                msg_content = system_msg
+                
+            elif msg_id == "announcement":
+                # 频道公告 -> 对应普通弹幕，但在内容前加标识
+                danmu_type = "danmaku"
+                msg_content = f"[Announcement] {user_text}"
+                
+            else:
+                # 其他系统事件处理
+                danmu_type = "danmaku"
+                msg_content = system_msg if system_msg else user_text
+
+        # 5. 回调给 Service 层
         if self._callback:
+            # 这里的回调需确保能接收四个参数：channel, user, msg_content, danmu_type
             asyncio.create_task(
-                self._callback(channel, user, msg)
-                if asyncio.iscoroutinefunction(self._callback)
-                else asyncio.get_event_loop().run_in_executor(
-                    None, self._callback, channel, user, msg
-                )
+                self._callback(self.channel, user, msg_content, danmu_type)
             )
 
+        def _send(self, msg: str):
+            if self._sock:
+                self._sock.send(f"{msg}\r\n".encode())
 
-    def _send(self, msg: str):
-        if self._sock:
-            self._sock.send(f"{msg}\r\n".encode())
-
-    def _close_socket(self):
-        if self._sock:
-            try:
-                self._sock.close()
-            except:
-                pass
-            self._sock = None
+        def _close_socket(self):
+            if self._sock:
+                try:
+                    self._sock.close()
+                except:
+                    pass
+                self._sock = None
 
 
 # --------------------------------------------------

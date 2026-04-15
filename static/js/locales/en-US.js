@@ -1581,4 +1581,20 @@ Key3`,
 
         'weComBot': 'WeCom Bot',
         'wecom_bot_config': 'WeCom Bot Configuration',
+
+        'wechat_personal_bot_config': 'WeChat Personal Bot Configuration',
+        'wechat_no_config_hint': '(⚠️ No config needed, start to scan QR code)',
+        'wechat_start_tooltip': 'Start Bot (Silent connection if already logged in)',
+        'wechat_force_relogin_tooltip': 'Force clear cache and re-scan (Switch account)',
+        'wechat_security_verify': 'WeChat Bot Security Verification',
+        'wechat_scan_hint': 'Please scan the QR code with your mobile WeChat',
+        'wechat_auto_close_hint': 'This window will close automatically after confirmation',
+        'generating_qr': 'Generating QR code...',
+        'later': 'Later',
+
+        'liveFilterMode': 'Filter Mode',
+        'filterModeAll': 'All (Chat, Gifts, Entry, Likes)',
+        'filterModePaid': 'Chat + Paid (Gifts, SC, Subs)',
+        'filterModeOnlyDanmaku': 'Chat Only (Incl. SC)',
+
     }

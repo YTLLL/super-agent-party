@@ -69,7 +69,12 @@ class YouTubeDMClient:
             return None
         return rsp["items"][0]["liveStreamingDetails"].get("activeLiveChatId")
 
+
     def _poll_once(self):
+        """
+        YouTube 轮询核心逻辑
+        识别类型：textMessageEvent(弹幕), superChatEvent(SC), fanFundingEvent(会员赞助)
+        """
         rsp = self._yt.liveChatMessages().list(
             liveChatId=self._chat_id,
             part="snippet,authorDetails",
@@ -79,15 +84,50 @@ class YouTubeDMClient:
 
         for item in rsp["items"]:
             author = item["authorDetails"]["displayName"]
-            text   = item["snippet"]["displayMessage"]
+            msg_type = item["snippet"].get("type")
+            
+            # 1. 统一类型映射初始化
+            danmu_type = "danmaku"
+            content = ""
+            
+            # 2. 根据 YouTube 消息类型解析内容
+            if msg_type == "textMessageEvent":
+                # 普通弹幕
+                danmu_type = "danmaku"
+                text = item["snippet"]["displayMessage"]
+                content = f"{author}: {text}"
+                
+            elif msg_type == "superChatEvent":
+                # 醒目留言 (SC)
+                danmu_type = "super_chat"
+                details = item["snippet"].get("superChatDetails", {})
+                user_text = details.get("userComment", "")
+                amount = details.get("amountDisplayString", "Price Hidden")
+                if user_text:
+                    content = f"{author} sent a Super Chat ({amount}): {user_text}"
+                else:
+                    content = f"{author} sent a Super Chat ({amount})"
+                    
+            elif msg_type == "fanFundingEvent": 
+                # 频道会员/赞助 (YouTube 赠礼类)
+                danmu_type = "gift"
+                content = f"{author} sponsored the channel!"
+                
+            else:
+                # 兜底：其他类型（如进场占位符等）统统转为普通文本显示
+                text = item["snippet"].get("displayMessage", "")
+                content = f"{author}: {text}"
+
+            # 3. 构造统一格式并广播
             msg = {
                 'id': str(uuid.uuid4()),
                 "type": "message",
-                "content": f"{author} said: {text}",
-                "danmu_type": "danmaku",
+                "content": content,
+                "danmu_type": danmu_type,
                 "platform": "youtube"
             }
-            # 关键：把消息抛给回调
             self.on_message(msg)
 
+        # 更新下一次抓取的 Token
         self._page_token = rsp.get("nextPageToken")
+        

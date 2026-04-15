@@ -132,15 +132,14 @@ async def start_live(request: LiveConfigRequest):
         if config.twitch_enabled:
             if twitch_task is not None:
                 return ApiResponse(success=False, message="Twitch 监听已在运行")
-            if not (config.twitch_access_token and config.twitch_channel):
-                return ApiResponse(success=False, message="请填写 Twitch token 与频道")
-
-            async def _twitch_on_msg(chan, user, msg):
+            
+            # 修改此回调函数，接收四个参数
+            async def _twitch_on_msg(chan, user, msg, d_type="danmaku"):
                 await manager.broadcast({
                     'id': str(uuid.uuid4()),
                     "type": "message",
-                    "content": f"{user} said: {msg}",
-                    "danmu_type": "danmaku",
+                    "content": f"{user}: {msg}" if d_type == "danmaku" else msg,
+                    "danmu_type": d_type,
                     "platform": "twitch"
                 })
 
@@ -148,6 +147,7 @@ async def start_live(request: LiveConfigRequest):
             twitch_task = asyncio.create_task(
                 start_twitch_task(config.dict(), _twitch_on_msg)
             )
+
 
         # 等待一下确保客户端启动
         await asyncio.sleep(0.5)
