@@ -2005,18 +2005,25 @@ let vue_methods = {
         };
 
         try {
-            // --- 核心修复：根据是否为恢复模式，决定是否截断最后一条消息 ---
+            // 1. 获取基础消息范围
             const messagesToPayload = isResume 
-                ? this.messages                       // 恢复模式：发送全部消息（包含工具结果）
-                : this.messages.slice(0, -1);         // 新消息模式：去掉最后一条（即刚 push 进去的空 assistant 占位符）
+                ? this.messages 
+                : this.messages.slice(0, -1);
 
+            // 2. 转换为 API 格式
+            let finalMessages = prepareMessages(messagesToPayload);
+
+            // 3. 如果最后一个消息时助手消息，就移除
+            if (finalMessages[finalMessages.length - 1].role === 'assistant') {
+                finalMessages.pop();
+            }
+            
             const response = await fetch(`/v1/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: targetAgentId,
-                    // 使用处理后的消息列表
-                    messages: prepareMessages(messagesToPayload), 
+                    messages: finalMessages, // 使用修复后的 finalMessages
                     stream: true,
                     fileLinks: this.fileLinks,
                     asyncToolsID: this.asyncToolsID || [],
