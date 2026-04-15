@@ -1580,7 +1580,7 @@ let vue_data = {
     _curAudio: null,        // 当前 Audio 实例
     isReadingOnetext: false,
     liveConfig: {
-      onlyDanmaku: true,
+      filterMode: 'danmaku_only',
       danmakuQueueLimit: 5,
       wakeWord: '',
       bilibili_enabled: false,

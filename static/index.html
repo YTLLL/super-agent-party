@@ -14650,12 +14650,17 @@ function updateElement(el, rawMarkdown, formatFn) {
                               </div>
                             </div>
                             <div class="tool-content">
-                              <el-form-item :label="t('onlyDanmaku')" class="form-item-align" label-position="left">
-                                <el-switch 
-                                  v-model="liveConfig.onlyDanmaku" 
+                              <el-form-item :label="t('liveFilterMode') || '监听模式'" class="form-item-align" label-position="left">
+                                <el-select 
+                                  v-model="liveConfig.filterMode" 
+                                  class="full-width-input"
                                   @change="autoSaveSettings"
-                                ></el-switch>
-                              </el-form-item>   
+                                >
+                                  <el-option :label="t('filterModeAll') || '全部监听 (弹幕/礼物/进场/点赞)'" value="all"></el-option>
+                                  <el-option :label="t('filterModePaid') || '弹幕 + 付费 (礼物/SC/舰长)'" value="danmaku_paid"></el-option>
+                                  <el-option :label="t('filterModeOnlyDanmaku') || '仅弹幕 (含SC)'" value="danmaku_only"></el-option>
+                                </el-select>
+                              </el-form-item>  
                               <el-form-item :label="t('danmakuQueueLimit')" class="form-item-align" label-position="left">
                                 <el-slider
                                   v-model="liveConfig.danmakuQueueLimit"

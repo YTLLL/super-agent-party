@@ -1592,4 +1592,9 @@ Key3`,
         'generating_qr': 'Generating QR code...',
         'later': 'Later',
 
+        'liveFilterMode': 'Filter Mode',
+        'filterModeAll': 'All (Chat, Gifts, Entry, Likes)',
+        'filterModePaid': 'Chat + Paid (Gifts, SC, Subs)',
+        'filterModeOnlyDanmaku': 'Chat Only (Incl. SC)',
+
     }

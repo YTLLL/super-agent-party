@@ -9647,93 +9647,76 @@ copySubtitleOverlayEndpoint(){
 
   // 处理弹幕消息
   handleDanmuMessage(data) {
-    if (data.type === 'message') {
-      
-      // --- 【去重逻辑 1】: ID 级去重 (防止 WebSocket 重发) ---
-      if (data.id) {
-        if (this.receivedMsgIds.has(data.id)) {
-          console.log('拦截到重复ID消息，已忽略:', data.content);
-          return;
-        }
-        // 记录新 ID
-        this.receivedMsgIds.add(data.id);
-        
-        // 限制 Set 大小，防止内存溢出 (保留最近500条足够了)
-        if (this.receivedMsgIds.size > 500) {
-          const firstVal = this.receivedMsgIds.values().next().value;
-          this.receivedMsgIds.delete(firstVal);
-        }
-      }
-      // ----------------------------------------------------
+    if (data.type !== 'message') {
+      if (data.type === 'error') showNotification(data.message, 'error');
+      return;
+    }
 
+    // --- 1. ID 级去重 ---
+    if (data.id) {
+      if (this.receivedMsgIds.has(data.id)) return;
+      this.receivedMsgIds.add(data.id);
+      if (this.receivedMsgIds.size > 500) {
+        const firstVal = this.receivedMsgIds.values().next().value;
+        this.receivedMsgIds.delete(firstVal);
+      }
+    }
+
+    // --- 2. 统一定义消息属性 ---
+    const danmuType = data.danmu_type; // danmaku, super_chat, gift, buy_guard, enter_room, follow, like
+    const isDanmaku = (danmuType === "danmaku" || danmuType === "super_chat");
+    const isPaid = (danmuType === "gift" || danmuType === "buy_guard" || danmuType === "super_chat");
+    const isInteraction = (danmuType === "enter_room" || danmuType === "follow" || danmuType === "like");
+
+    // --- 3. 模式过滤判断 ---
+    let modePass = false;
+    const mode = this.liveConfig.filterMode || 'all';
+
+    if (mode === 'all') {
+      modePass = true;
+    } else if (mode === 'danmaku_paid') {
+      modePass = (isDanmaku || isPaid);
+    } else if (mode === 'danmaku_only') {
+      modePass = isDanmaku;
+    }
+
+    if (!modePass) return;
+
+    // --- 4. 唤醒词校验 (仅针对文本类消息) ---
+    const wakeStr = this.liveConfig.wakeWord || "";
+    const wakeKeywords = wakeStr.split(/[\r\n]+/).map(k => k.trim()).filter(k => k.length > 0);
+    
+    const isMatchWakeWord = (text) => {
+      if (wakeKeywords.length === 0) return true;
+      return wakeKeywords.some(keyword => text.includes(keyword));
+    };
+
+    let shouldAdd = false;
+    if (isDanmaku) {
+      // 弹幕和 SC 必须匹配唤醒词
+      if (isMatchWakeWord(data.content)) shouldAdd = true;
+    } else {
+      // 礼物、舰长、关注等互动，直接放行 (不被唤醒词拦截)
+      shouldAdd = true;
+    }
+
+    // --- 5. 入队 ---
+    if (shouldAdd) {
       const danmuItem = {
         id: data.id,
-        content: data.content, // 这里包含 "用户名: 消息内容"
-        type: data.danmu_type,
-        timestamp: new Date().toLocaleTimeString('zh-CN', {
-          timeZone: 'Asia/Shanghai',
-          hour12: false
-        })
+        content: data.content,
+        type: danmuType,
+        platform: data.platform || 'bilibili',
+        timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false })
       };
 
-      // --- 【核心修改】：唤醒词多行解析与类型过滤逻辑 ---
-      let shouldAdd = false;
-      
-      // 1. 解析唤醒词：按换行符分割 -> 去除首尾空格 -> 过滤空行
-      const wakeStr = this.liveConfig.wakeWord || "";
-      // 正则 /[\r\n]+/ 兼容 Windows 和 Linux 换行符
-      const wakeKeywords = wakeStr.split(/[\r\n]+/)
-                                  .map(k => k.trim())
-                                  .filter(k => k.length > 0);
+      // 连续重复内容防刷屏
+      if (this.danmu.length > 0 && this.danmu[0].content === danmuItem.content) return;
 
-      // 2. 定义匹配函数：如果没有设置唤醒词，默认全部通过；否则检查是否包含任意一个关键词
-      const isMatchWakeWord = (text) => {
-        if (wakeKeywords.length === 0) return true; // 未设置唤醒词，放行
-        return wakeKeywords.some(keyword => text.includes(keyword));
-      };
-      
-      // 3. 根据配置判断
-      if (this.liveConfig.onlyDanmaku) {
-        // 【模式A】: 只接收弹幕/SC，且需满足唤醒词
-        if (danmuItem.type === "danmaku" || danmuItem.type === "super_chat") {
-           if (isMatchWakeWord(data.content)) {
-             shouldAdd = true;
-           }
-        }
-      } else {
-        // 【模式B】: 接收所有类型
-        if (danmuItem.type === "danmaku" || danmuItem.type === "super_chat") {
-          // 文本类消息：需要检查唤醒词
-          if (isMatchWakeWord(data.content)) {
-            shouldAdd = true;
-          }
-        } else {
-          // 非文本类消息（礼物、进场等）：直接放行，不受唤醒词限制
-          shouldAdd = true;
-        }
+      this.danmu.unshift(danmuItem);
+      if (this.danmu.length > this.liveConfig.danmakuQueueLimit) {
+        this.danmu = this.danmu.slice(0, this.liveConfig.danmakuQueueLimit);
       }
-
-      if (shouldAdd) {
-        // --- 【去重逻辑 2】: 队列防刷屏 (防止瞬间多条相同内容占满队列) ---
-        // 检查队列头部（最新的一条），如果内容完全一致则不重复入队
-        if (this.danmu.length > 0 && this.danmu[0].content === danmuItem.content) {
-             console.log('拦截到连续相同内容弹幕，已忽略入队');
-             return;
-        }
-        // -----------------------------------------------------------
-
-        this.danmu.unshift(danmuItem);
-        
-        // 保持队列长度限制
-        if (this.danmu.length > this.liveConfig.danmakuQueueLimit) {
-          this.danmu = this.danmu.slice(0, this.liveConfig.danmakuQueueLimit);
-        }
-        
-        console.log('收到新弹幕:', danmuItem.content, '当前队列长度:', this.danmu.length);
-      }
-      
-    } else if (data.type === 'error') {
-      showNotification(data.message, 'error');
     }
   },
   toggleBriefly(index){

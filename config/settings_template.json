@@ -433,7 +433,7 @@
       {"name": "groupChatBotton", "enabled": false}
     ],
     "liveConfig": {
-      "onlyDanmaku": true,
+      "filterMode": "danmaku_only",
       "danmakuQueueLimit": 5,
       "wakeWord":"",
       "bilibili_enabled": false,

@@ -1594,4 +1594,9 @@ key3`,
         'wechat_auto_close_hint': '扫码确认后，本弹窗将在几秒内自动关闭',
         'generating_qr': '正在生成二维码...',
         'later': '稍后再说',
+
+        'liveFilterMode': '监听模式',
+        'filterModeAll': '全部监听 (弹幕/礼物/进场/点赞)',
+        'filterModePaid': '弹幕 + 付费 (礼物/SC/舰长)',
+        'filterModeOnlyDanmaku': '仅弹幕 (含SC)',
     }
