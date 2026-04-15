@@ -9085,7 +9085,7 @@ async def get_default_vrma_motions(request: Request):
 @app.get("/get_user_vrma_motions")
 async def get_user_vrma_motions(request: Request):
     try:
-        motions = scan_motion_files(UPLOAD_FILES_DIR, ALLOWED_VRMA_EXTENSIONS)
+        motions = scan_motion_files(UPLOAD_FILES_DIR)
 
         # 把磁盘路径转成 URL
         for m in motions:
