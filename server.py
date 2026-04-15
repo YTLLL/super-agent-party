@@ -2606,105 +2606,78 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
             except Exception as e:
                 print(f"后端桌面截图失败: {e}")
 
+        # ==================== 精准压缩逻辑 (User + 最终回复锚点) ====================
         max_rounds = settings.get("max_rounds", 0)
-
-        if max_rounds > 0 and request.messages:
+        if max_rounds > 0 and len(request.messages) > (max_rounds * 2 + 1):
             def get_role(msg):
                 return msg.get("role") if isinstance(msg, dict) else msg.role
             
             def has_tool_calls(msg):
-                """检查assistant消息是否包含工具调用"""
-                if get_role(msg) != "assistant":
-                    return False
-                if isinstance(msg, dict):
-                    return bool(msg.get("tool_calls"))
-                return bool(getattr(msg, "tool_calls", None))
-            
-            def get_tool_call_id(msg):
-                """获取tool消息的tool_call_id"""
-                if isinstance(msg, dict):
-                    return msg.get("tool_call_id")
-                return getattr(msg, "tool_call_id", None)
+                if get_role(msg) != "assistant": return False
+                return bool(msg.get("tool_calls")) if isinstance(msg, dict) else bool(getattr(msg, "tool_calls", None))
 
-            system_messages = []
-            chat_messages = request.messages
+            system_msgs = [m for m in request.messages if get_role(m) == "system"]
+            chat_msgs = [m for m in request.messages if get_role(m) != "system"]
 
-            # 1. 分离system消息
-            if get_role(chat_messages[0]) == "system":
-                system_messages = [chat_messages[0]]
-                chat_messages = chat_messages[1:]
-
-            # 2. 从后向前截断，确保工具调用链完整
-            retain_count = max_rounds * 2 + 1  # user-assistant 对，+1 给可能的pending user
-            
-            if len(chat_messages) > retain_count:
-                # 从 retain_count 位置开始，向前扫描确保边界合法
-                start_idx = len(chat_messages) - retain_count
+            # 只要消息量超过阈值才开始压缩
+            if len(chat_msgs) > (max_rounds * 2):
+                keep_indices = set()
                 
-                # 边界检查1: 不能以 tool 或 assistant(with tool_calls) 开始
-                # 如果 start_idx 指向的是需要前文支撑的消息，继续前移
-                while start_idx > 0:
-                    current_msg = chat_messages[start_idx]
-                    current_role = get_role(current_msg)
+                # 1. 遍历消息，识别 User 和每个 turn 的最后一个 Assistant
+                for i in range(len(chat_msgs)):
+                    role = get_role(chat_msgs[i])
                     
-                    # 情况A: 不能以 tool 开始（tool必须有前置的assistant tool_calls）
-                    if current_role == "tool":
-                        start_idx -= 1
-                        continue
+                    # 规则 A: 所有的 User 消息必须保留
+                    if role == "user":
+                        keep_indices.add(i)
+                    
+                    # 规则 B: 识别“最后一个助手回复”
+                    # 如果当前是 assistant，且下一条消息是 user，或者已经是最后一条了
+                    # 说明这是当前这个问题的最终回答（或者是中间断掉的回答）
+                    if role == "assistant":
+                        is_last_assistant_of_turn = True
+                        for j in range(i + 1, len(chat_msgs)):
+                            next_role = get_role(chat_msgs[j])
+                            if next_role == "assistant":
+                                is_last_assistant_of_turn = False
+                                break
+                            if next_role == "user":
+                                break # 后面是用户，说明当前这个就是本轮最后一条助手回复
                         
-                    # 情况B: 不能以带tool_calls的assistant开始（必须有前置user）
-                    if has_tool_calls(current_msg):
-                        start_idx -= 1
-                        continue
-                        
-                    # 情况C: 不能以普通assistant开始（必须有前置user）
-                    if current_role == "assistant":
-                        start_idx -= 1
-                        continue
-                        
-                    # 现在 start_idx 指向的是 user，检查是否完整
-                    break
-                
-                # 边界检查2: 确保工具调用链完整（tool必须有对应的assistant）
-                # 向前扫描，收集所有需要保留的tool响应
-                i = start_idx
-                while i < len(chat_messages):
-                    msg = chat_messages[i]
-                    if has_tool_calls(msg):
-                        # 这个assistant调用了工具，确保后面有对应的tool响应
-                        assistant_tool_ids = set()
-                        if isinstance(msg, dict):
-                            for tc in msg.get("tool_calls", []):
-                                assistant_tool_ids.add(tc.get("id") if isinstance(tc, dict) else tc.id)
-                        else:
-                            for tc in getattr(msg, "tool_calls", []):
-                                assistant_tool_ids.add(getattr(tc, "id", None))
-                        
-                        # 检查后续消息中是否有对应的tool响应
-                        j = i + 1
-                        found_tools = set()
-                        while j < len(chat_messages) and get_role(chat_messages[j]) == "tool":
-                            found_tools.add(get_tool_call_id(chat_messages[j]))
-                            j += 1
-                        
-                        # 如果tool响应不全，需要把start_idx前移包含完整的链
-                        # 简化处理：如果截断导致工具链断裂，保留整个链
-                        missing_tools = assistant_tool_ids - found_tools
-                        if missing_tools and i > start_idx:
-                            # 这个assistant的tool响应被截断了，需要前移start_idx
-                            # 实际上这种情况不应该发生，因为我们是从前向后截断
-                            pass
-                            
-                    i += 1
-                
-                chat_messages = chat_messages[start_idx:]
-                
-                # 最终保险：确保以user开始
-                while chat_messages and get_role(chat_messages[0]) != "user":
-                    chat_messages = chat_messages[1:]
+                        if is_last_assistant_of_turn:
+                            keep_indices.add(i)
 
-            request.messages = system_messages + chat_messages
+                # 2. 规则 C: 必须保留最近 N 条完整消息（尾部窗口保护）
+                # 确保当前正在进行的工具调用链不被破坏
+                tail_start = max(0, len(chat_msgs) - (max_rounds * 2))
+                for i in range(tail_start, len(chat_msgs)):
+                    keep_indices.add(i)
 
+                # 3. 构造初步列表并进行工具链完整性校验 (API 必须)
+                sorted_indices = sorted(list(keep_indices))
+                temp_chat = [chat_msgs[i] for i in sorted_indices]
+                
+                final_chat = []
+                for i, msg in enumerate(temp_chat):
+                    # API 限制：tool 消息前面必须紧跟带 tool_calls 的 assistant
+                    if get_role(msg) == "tool":
+                        prev = final_chat[-1] if final_chat else None
+                        if prev and has_tool_calls(prev):
+                            final_chat.append(msg)
+                    # API 限制：带 tool_calls 的 assistant 后面必须跟 tool 结果
+                    elif has_tool_calls(msg):
+                        # 如果不是最后一条，且下一条是 tool，则保留
+                        if i + 1 < len(temp_chat) and get_role(temp_chat[i+1]) == "tool":
+                            final_chat.append(msg)
+                        # 如果是最后一条，说明是正在进行的调用，必须保留
+                        elif i == len(temp_chat) - 1:
+                            final_chat.append(msg)
+                    else:
+                        final_chat.append(msg)
+
+                request.messages = system_msgs + final_chat
+                print(f"[Context Compressed] Retained all Users and Final Assistants. Total: {len(request.messages)}")
+        # =========================================================================
         images = await images_in_messages(request.messages,fastapi_base_url)
         request.messages = await message_without_images(request.messages)
         from py.load_files import get_files_content,file_tool,image_tool
@@ -3592,7 +3565,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             yield f"data: {json.dumps(chunk_dict)}\n\n"
 
                     # 在推理结束后添加完整推理内容到消息
-                    request.messages[-1]['content'] += f"\n\n可参考的推理过程：{full_reasoning}"
+                    content_append(request.messages, 'assistant', f"<think>\n{full_reasoning}\n</think>")  # 可参考的推理过程
                 # 状态跟踪变量
                 in_reasoning = False
                 reasoning_buffer = []
@@ -3917,6 +3890,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         print(response_content)
                         modified_data = '[' + response_content.arguments.replace('}{', '},{') + ']'
                         data_list = json.loads(modified_data)
+                        first_arg = data_list[0] if len(data_list) > 0 else {}
                         
                         # 【修复 1】显式发送 "call" 事件，锁定 UI 状态并同步 ID
                         # 这告诉前端：参数接收完毕，确认调用，并绑定 ID
@@ -3934,7 +3908,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         }
                         yield f"data: {json.dumps(call_confirm_chunk)}\n\n"
 
-                        modified_tool = f"{await t("sendArg")}{data_list[0]}"
+                        modified_tool = f"{await t("sendArg")}{first_arg}"
                         
                         if settings['tools']['asyncTools']['enabled']:
                             # ... 异步工具逻辑保持不变 ...
@@ -3959,7 +3933,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 execute_tool(
                                     async_tool_id,
                                     response_content.name,
-                                    data_list[0],
+                                    first_arg,
                                     settings,
                                     user_prompt
                                 )
@@ -3969,11 +3943,11 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                     "status": "pending",
                                     "result": None,
                                     "name":response_content.name,
-                                    "parameters":data_list[0]
+                                    "parameters":first_arg
                                 }
                             results = f"{response_content.name}tool has been successfully launched. It will take some time to run, and the results will be provided in the next round of conversation." # 保持原样
                         else:
-                            results = await dispatch_tool(response_content.name, data_list[0], settings)
+                            results = await dispatch_tool(response_content.name, first_arg, settings)
 
                         if results is None:
                             # 保持原样，但建议加上 ID
@@ -4003,7 +3977,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             "tool_calls": [{
                                 "id": tool_calls[0].id,
                                 "function": {
-                                    "arguments": json.dumps(data_list[0]),
+                                    "arguments": json.dumps(first_arg),
                                     "name": response_content.name,
                                 },
                                 "type": tool_calls[0].type,
@@ -4076,117 +4050,78 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             }
                         )
 
+                        # ==================== 精准压缩逻辑 (User + 最终回复锚点) ====================
                         max_rounds = settings.get("max_rounds", 0)
-
-                        if max_rounds > 0 and request.messages:
+                        if max_rounds > 0 and len(request.messages) > (max_rounds * 2 + 1):
                             def get_role(msg):
                                 return msg.get("role") if isinstance(msg, dict) else msg.role
                             
                             def has_tool_calls(msg):
-                                """检查assistant消息是否包含工具调用"""
-                                if get_role(msg) != "assistant":
-                                    return False
-                                if isinstance(msg, dict):
-                                    return bool(msg.get("tool_calls"))
-                                return bool(getattr(msg, "tool_calls", None))
-                            
-                            def get_tool_call_id(msg):
-                                """获取tool消息的tool_call_id"""
-                                if isinstance(msg, dict):
-                                    return msg.get("tool_call_id")
-                                return getattr(msg, "tool_call_id", None)
+                                if get_role(msg) != "assistant": return False
+                                return bool(msg.get("tool_calls")) if isinstance(msg, dict) else bool(getattr(msg, "tool_calls", None))
 
-                            system_messages = []
-                            chat_messages = request.messages
+                            system_msgs = [m for m in request.messages if get_role(m) == "system"]
+                            chat_msgs = [m for m in request.messages if get_role(m) != "system"]
 
-                            # 1. 分离system消息
-                            if chat_messages and get_role(chat_messages[0]) == "system":
-                                system_messages = [chat_messages[0]]
-                                chat_messages = chat_messages[1:]
-
-                            # 2. 从后向前截断，确保工具调用链完整
-                            # 注意：最后一轮是 tool 消息，需要保留完整的 (assistant->tool) 对
-                            retain_count = max_rounds * 2 + 1  # user-assistant 对，+1 给可能的 pending user
-                            
-                            if len(chat_messages) > retain_count:
-                                start_idx = len(chat_messages) - retain_count
+                            # 只要消息量超过阈值才开始压缩
+                            if len(chat_msgs) > (max_rounds * 2):
+                                keep_indices = set()
                                 
-                                # 边界检查1: 不能以 tool 或 assistant(with tool_calls) 开始
-                                while start_idx > 0:
-                                    current_msg = chat_messages[start_idx]
-                                    current_role = get_role(current_msg)
+                                # 1. 遍历消息，识别 User 和每个 turn 的最后一个 Assistant
+                                for i in range(len(chat_msgs)):
+                                    role = get_role(chat_msgs[i])
                                     
-                                    # 情况A: 不能以 tool 开始（tool必须有前置的assistant tool_calls）
-                                    if current_role == "tool":
-                                        start_idx -= 1
-                                        continue
+                                    # 规则 A: 所有的 User 消息必须保留
+                                    if role == "user":
+                                        keep_indices.add(i)
+                                    
+                                    # 规则 B: 识别“最后一个助手回复”
+                                    # 如果当前是 assistant，且下一条消息是 user，或者已经是最后一条了
+                                    # 说明这是当前这个问题的最终回答（或者是中间断掉的回答）
+                                    if role == "assistant":
+                                        is_last_assistant_of_turn = True
+                                        for j in range(i + 1, len(chat_msgs)):
+                                            next_role = get_role(chat_msgs[j])
+                                            if next_role == "assistant":
+                                                is_last_assistant_of_turn = False
+                                                break
+                                            if next_role == "user":
+                                                break # 后面是用户，说明当前这个就是本轮最后一条助手回复
                                         
-                                    # 情况B: 不能以带tool_calls的assistant开始（必须有前置user）
-                                    if has_tool_calls(current_msg):
-                                        start_idx -= 1
-                                        continue
-                                        
-                                    # 情况C: 不能以普通assistant开始（必须有前置user）
-                                    if current_role == "assistant":
-                                        start_idx -= 1
-                                        continue
-                                        
-                                    # 现在 start_idx 指向的是 user，检查是否完整
-                                    break
+                                        if is_last_assistant_of_turn:
+                                            keep_indices.add(i)
+
+                                # 2. 规则 C: 必须保留最近 N 条完整消息（尾部窗口保护）
+                                # 确保当前正在进行的工具调用链不被破坏
+                                tail_start = max(0, len(chat_msgs) - (max_rounds * 2))
+                                for i in range(tail_start, len(chat_msgs)):
+                                    keep_indices.add(i)
+
+                                # 3. 构造初步列表并进行工具链完整性校验 (API 必须)
+                                sorted_indices = sorted(list(keep_indices))
+                                temp_chat = [chat_msgs[i] for i in sorted_indices]
                                 
-                                # 边界检查2: 确保工具调用链完整
-                                # 扫描从 start_idx 开始，如果发现 assistant 有 tool_calls，
-                                # 确保后面有对应的 tool 响应（工具链可能跨越多条消息）
-                                i = start_idx
-                                while i < len(chat_messages):
-                                    msg = chat_messages[i]
-                                    if has_tool_calls(msg):
-                                        # 收集这个 assistant 调用的所有 tool_call_id
-                                        assistant_tool_ids = set()
-                                        if isinstance(msg, dict):
-                                            for tc in msg.get("tool_calls", []):
-                                                tc_id = tc.get("id") if isinstance(tc, dict) else tc.id
-                                                if tc_id:
-                                                    assistant_tool_ids.add(tc_id)
-                                        else:
-                                            for tc in getattr(msg, "tool_calls", []):
-                                                tc_id = getattr(tc, "id", None)
-                                                if tc_id:
-                                                    assistant_tool_ids.add(tc_id)
-                                        
-                                        # 检查后续的 tool 消息
-                                        j = i + 1
-                                        found_tool_ids = set()
-                                        while j < len(chat_messages) and get_role(chat_messages[j]) == "tool":
-                                            found_tool_ids.add(get_tool_call_id(chat_messages[j]))
-                                            j += 1
-                                        
-                                        # 如果工具响应不全，需要前移 start_idx
-                                        missing_tools = assistant_tool_ids - found_tool_ids
-                                        if missing_tools and i > start_idx:
-                                            # 前移 start_idx 到更早的位置，确保包含完整的工具链
-                                            start_idx = i
-                                            # 重置扫描，从新的 start_idx 重新开始
-                                            i = start_idx
-                                            continue
-                                    i += 1
-                                
-                                # 应用截断
-                                chat_messages = chat_messages[start_idx:]
-                                
-                                # 最终保险：确保第一条消息是 user 或 assistant（不能是 tool）
-                                # 因为最后一轮是 tool，但截断后的第一条不能是 tool
-                                while chat_messages and get_role(chat_messages[0]) == "tool":
-                                    # 如果第一条是 tool，向前寻找对应的 assistant
-                                    # 这里简单处理：移除第一条 tool 并继续检查
-                                    chat_messages = chat_messages[1:]
-                                
-                                # 另一种保险：如果第一条是带 tool_calls 的 assistant，也需要保留完整的链
-                                # 但上面的边界检查已经处理了这种情况
-                            
-                            # 重新组装消息
-                            request.messages = system_messages + chat_messages
-                        
+                                final_chat = []
+                                for i, msg in enumerate(temp_chat):
+                                    # API 限制：tool 消息前面必须紧跟带 tool_calls 的 assistant
+                                    if get_role(msg) == "tool":
+                                        prev = final_chat[-1] if final_chat else None
+                                        if prev and has_tool_calls(prev):
+                                            final_chat.append(msg)
+                                    # API 限制：带 tool_calls 的 assistant 后面必须跟 tool 结果
+                                    elif has_tool_calls(msg):
+                                        # 如果不是最后一条，且下一条是 tool，则保留
+                                        if i + 1 < len(temp_chat) and get_role(temp_chat[i+1]) == "tool":
+                                            final_chat.append(msg)
+                                        # 如果是最后一条，说明是正在进行的调用，必须保留
+                                        elif i == len(temp_chat) - 1:
+                                            final_chat.append(msg)
+                                    else:
+                                        final_chat.append(msg)
+
+                                request.messages = system_msgs + final_chat
+                                print(f"[Context Compressed] Retained all Users and Final Assistants. Total: {len(request.messages)}")
+                        # =========================================================================
                         reasoner_messages.append(
                             {
                                 "role": "assistant",
@@ -4320,7 +4255,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 yield f"data: {json.dumps(chunk_dict)}\n\n"
 
                         # 在推理结束后添加完整推理内容到消息
-                        request.messages[-1]['content'] += f"\n\n可参考的推理过程：{full_reasoning}"
+                        content_append(request.messages, 'usr', f"\n\n可参考的推理过程：{full_reasoning}") # 可参考的推理过程
                     
                     vision_control_enabled = settings.get('visionControlSettings', {}).get('enabled', False)
                     if vision_control_enabled and (results =='[Getting screenshot]' or settings.get('visionControlSettings', {}).get('desktopVision', False)):
@@ -4804,34 +4739,78 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
     if len(request.messages) > 2:
         DRS_STAGE = 2
 
-    max_rounds = settings.get("max_rounds", 0)
-
-    if max_rounds > 0 and request.messages:
-        # 兼容获取 role 的辅助方法（支持 dict 或 Pydantic 对象）
-        def get_role(msg):
-            return msg.get("role") if isinstance(msg, dict) else msg.role
-
-        system_messages = []
-        chat_messages = request.messages
-
-        # 1. 仅判断第一条是不是 system（中间的不管）
-        if get_role(chat_messages[0]) == "system":
-            system_messages = [chat_messages[0]]
-            chat_messages = chat_messages[1:]
-
-        retain_count = max_rounds + 1 
-
-        # 2. 截断对话历史
-        if len(chat_messages) > retain_count:
-            chat_messages = chat_messages[-retain_count:]
+        # ==================== 精准压缩逻辑 (User + 最终回复锚点) ====================
+        max_rounds = settings.get("max_rounds", 0)
+        if max_rounds > 0 and len(request.messages) > (max_rounds * 2 + 1):
+            def get_role(msg):
+                return msg.get("role") if isinstance(msg, dict) else msg.role
             
-            # 3. 终极边界处理：永远以 user 开始
-            # 只要第一条不是 user（比如是 assistant 或 tool），就一直丢弃
-            while chat_messages and get_role(chat_messages[0]) != "user":
-                chat_messages = chat_messages[1:]
+            def has_tool_calls(msg):
+                if get_role(msg) != "assistant": return False
+                return bool(msg.get("tool_calls")) if isinstance(msg, dict) else bool(getattr(msg, "tool_calls", None))
+
+            system_msgs = [m for m in request.messages if get_role(m) == "system"]
+            chat_msgs = [m for m in request.messages if get_role(m) != "system"]
+
+            # 只要消息量超过阈值才开始压缩
+            if len(chat_msgs) > (max_rounds * 2):
+                keep_indices = set()
                 
-        # 4. 重新拼合 messages
-        request.messages = system_messages + chat_messages
+                # 1. 遍历消息，识别 User 和每个 turn 的最后一个 Assistant
+                for i in range(len(chat_msgs)):
+                    role = get_role(chat_msgs[i])
+                    
+                    # 规则 A: 所有的 User 消息必须保留
+                    if role == "user":
+                        keep_indices.add(i)
+                    
+                    # 规则 B: 识别“最后一个助手回复”
+                    # 如果当前是 assistant，且下一条消息是 user，或者已经是最后一条了
+                    # 说明这是当前这个问题的最终回答（或者是中间断掉的回答）
+                    if role == "assistant":
+                        is_last_assistant_of_turn = True
+                        for j in range(i + 1, len(chat_msgs)):
+                            next_role = get_role(chat_msgs[j])
+                            if next_role == "assistant":
+                                is_last_assistant_of_turn = False
+                                break
+                            if next_role == "user":
+                                break # 后面是用户，说明当前这个就是本轮最后一条助手回复
+                        
+                        if is_last_assistant_of_turn:
+                            keep_indices.add(i)
+
+                # 2. 规则 C: 必须保留最近 N 条完整消息（尾部窗口保护）
+                # 确保当前正在进行的工具调用链不被破坏
+                tail_start = max(0, len(chat_msgs) - (max_rounds * 2))
+                for i in range(tail_start, len(chat_msgs)):
+                    keep_indices.add(i)
+
+                # 3. 构造初步列表并进行工具链完整性校验 (API 必须)
+                sorted_indices = sorted(list(keep_indices))
+                temp_chat = [chat_msgs[i] for i in sorted_indices]
+                
+                final_chat = []
+                for i, msg in enumerate(temp_chat):
+                    # API 限制：tool 消息前面必须紧跟带 tool_calls 的 assistant
+                    if get_role(msg) == "tool":
+                        prev = final_chat[-1] if final_chat else None
+                        if prev and has_tool_calls(prev):
+                            final_chat.append(msg)
+                    # API 限制：带 tool_calls 的 assistant 后面必须跟 tool 结果
+                    elif has_tool_calls(msg):
+                        # 如果不是最后一条，且下一条是 tool，则保留
+                        if i + 1 < len(temp_chat) and get_role(temp_chat[i+1]) == "tool":
+                            final_chat.append(msg)
+                        # 如果是最后一条，说明是正在进行的调用，必须保留
+                        elif i == len(temp_chat) - 1:
+                            final_chat.append(msg)
+                    else:
+                        final_chat.append(msg)
+
+                request.messages = system_msgs + final_chat
+                print(f"[Context Compressed] Retained all Users and Final Assistants. Total: {len(request.messages)}")
+        # =========================================================================
 
     from py.load_files import get_files_content,file_tool,image_tool
     from py.web_search import (
