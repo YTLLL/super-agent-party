@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('electron', {
   },
   requestStopQQBot: () => ipcRenderer.invoke('request-stop-qqbot'),
   requestStopFeishuBot : () => ipcRenderer.invoke('request-stop-feishubot'),
+  requestStopWechatBot : () => ipcRenderer.invoke('request-stop-wechatbot'),
   requestStopDingtalkBot : () => ipcRenderer.invoke('request-stop-dingtalk'),
   requestStopDiscordBot : () => ipcRenderer.invoke('request-stop-discordbot'),
   requestStopTelegramBot : () => ipcRenderer.invoke('request-stop-telegrambot'),

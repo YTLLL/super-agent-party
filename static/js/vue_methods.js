@@ -571,6 +571,7 @@ let vue_methods = {
       this.subMenu = 'a2a';
     },
     switchToSystemPrompts() {
+      this.showEditDialog = false;
       this.activeMenu = 'role';
       this.subMenu = 'memory';
       this.activeMemoryTab = 'prompts';
@@ -1366,6 +1367,7 @@ let vue_methods = {
           };
           this.qqBotConfig = data.data.qqBotConfig || this.qqBotConfig;
           this.feishuBotConfig = data.data.feishuBotConfig || this.feishuBotConfig;
+          this.wechatBotConfig = data.data.wechatBotConfig || this.wechatBotConfig;
           this.weComBotConfig = data.data.weComBotConfig || this.weComBotConfig;
           this.dingtalkBotConfig = data.data.dingtalkBotConfig || this.dingtalkBotConfig;
           this.discordBotConfig = data.data.discordBotConfig || this.discordBotConfig;
@@ -1434,6 +1436,7 @@ let vue_methods = {
           this.mainAgent = data.data.mainAgent || this.mainAgent;
           this.qqBotConfig = data.data.qqBotConfig || this.qqBotConfig;
           this.feishuBotConfig = data.data.feishuBotConfig || this.feishuBotConfig;
+          this.wechatBotConfig = data.data.wechatBotConfig || this.wechatBotConfig;
           this.weComBotConfig = data.data.weComBotConfig || this.weComBotConfig;
           this.dingtalkBotConfig = data.data.dingtalkBotConfig || this.dingtalkBotConfig;
           this.discordBotConfig = data.data.discordBotConfig || this.discordBotConfig;
@@ -3094,6 +3097,7 @@ let vue_methods = {
           mainAgent: this.mainAgent,
           qqBotConfig : this.qqBotConfig,
           feishuBotConfig: this.feishuBotConfig,
+          wechatBotConfig: this.wechatBotConfig,
           weComBotConfig: this.weComBotConfig,
           dingtalkBotConfig: this.dingtalkBotConfig,
           discordBotConfig: this.discordBotConfig,
@@ -5658,7 +5662,166 @@ handleCreateFeishuSeparator(val) {
   this.feishuBotConfig.separators.push(val);
 },
 
+async requestWechatBotStopIfRunning() {
+  try {
+    const res = await fetch(`/wechat_bot_status`)
+    const status = await res.json()
+    if (status.is_running) {
+      await this.stopWechatBot()
+    }
+  } catch (error) { console.error('检查或停止微信机器人失败:', error) }
+},
+async startWechatBot() {
+  this.isWechatStarting = true;
+  this.showWechatQR = false; // 隐藏旧的弹窗
+  this.wechatQRCodeBase64 = null; // 清空旧的二维码
+  try {
+    showNotification('正在启动微信机器人服务...', 'info');
+    const res = await fetch('/start_wechat_bot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(this.wechatBotConfig),
+    });
+    const json = await res.json();
+    if (json.success) {
+      this.isWechatBotRunning = true;
+      // 启动成功后，开启 1.5 秒一次的高频轮询，去抓后台的 Base64 图片
+      if (this.wechatStatusTimer) clearInterval(this.wechatStatusTimer);
+      this.wechatStatusTimer = setInterval(() => {
+        this.checkWechatBotStatus();
+      }, 1500);
+      
+    } else {
+      showNotification(`启动失败：${json.message}`, 'error');
+    }
+  } catch (e) {
+    showNotification('网络错误', 'error');
+  } finally {
+    this.isWechatStarting = false;
+  }
+},
 
+async stopWechatBot() {
+  this.isWechatStopping = true;
+  if (this.wechatStatusTimer) clearInterval(this.wechatStatusTimer);
+  try {
+    const res = await fetch('/stop_wechat_bot', { method: 'POST' });
+    const json = await res.json();
+    if (json.success) {
+      this.isWechatBotRunning = false;
+      showNotification('微信机器人已停止', 'success');
+    } else {
+      showNotification(`停止失败：${json.message}`, 'error');
+    }
+  } catch (e) {
+    showNotification('网络错误或服务器未响应', 'error');
+  } finally {
+    this.isWechatStopping = false;
+  }
+},
+async reloadWechatBotConfig() {
+  this.isWechatReloading = true;
+  try {
+    const res = await fetch('/reload_wechat_bot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(this.wechatBotConfig),
+    });
+    const json = await res.json();
+    if (json.success) {
+      showNotification('微信机器人已重载', 'success');
+    } else {
+      showNotification(`重载失败：${json.message}`, 'error');
+    }
+  } catch (e) {
+    showNotification('网络错误或服务器未响应', 'error');
+  } finally {
+    this.isWechatReloading = false;
+  }
+},
+async checkWechatBotStatus() {
+  try {
+    const res = await fetch('/wechat_bot_status');
+    const st = await res.json();
+    this.isWechatBotRunning = st.is_running;
+    
+    // 弹出二维码：如果后端有二维码，并且和当前界面的不一样
+    if (st.qr_base64 && this.wechatQRCodeBase64 !== st.qr_base64) {
+      this.wechatQRCodeBase64 = st.qr_base64;
+      this.showWechatQR = true; 
+    }
+
+    // --- 核心修复：触发自动秒关弹窗的逻辑 ---
+    // 条件1: 后端识别到登录成功的特征 (st.is_logged_in)
+    // 条件2: 原本正在显示二维码，但下一秒发现后端的 qr_base64 变成了 null (被系统清除了)
+    if (st.is_logged_in || (this.showWechatQR && !st.qr_base64 && this.wechatQRCodeBase64)) {
+        this.showWechatQR = false;         // 瞬间关闭弹窗
+        this.wechatQRCodeBase64 = null;    // 清空本地图片缓存
+        showNotification('✅ 微信已成功登录，机器人开始工作！', 'success');
+        
+        // 扫码成功后，取消极速轮询定时器，减轻服务器压力
+        if (this.wechatStatusTimer) {
+            clearInterval(this.wechatStatusTimer);
+            this.wechatStatusTimer = null;
+        }
+    }
+
+    // 意外停止时的清理逻辑
+    if (!st.is_running && this.wechatStatusTimer) {
+       clearInterval(this.wechatStatusTimer);
+       this.wechatStatusTimer = null;
+    }
+  } catch (e) {
+    console.error('检查微信状态失败', e);
+  }
+},
+handleCreateWechatSeparator(val) {
+  this.wechatBotConfig.separators.push(val);
+},
+
+async forceReLoginWechatBot() {
+  // 1. 如果当前正在运行，先停止它，释放被占用的凭证文件
+  if (this.isWechatBotRunning) {
+    showNotification('正在关闭当前实例并物理粉碎凭证缓存...', 'info');
+    await this.stopWechatBot();
+    
+    // 关键：强制等待 2.5 秒，给操作系统足够的时间释放文件句柄和销毁底层线程
+    await new Promise(resolve => setTimeout(resolve, 2500));
+  }
+  
+  this.isWechatStarting = true;
+  this.showWechatQR = false; 
+  this.wechatQRCodeBase64 = null; 
+  
+  try {
+    showNotification('强制获取全新二维码中，请稍候...', 'info');
+    // 在 payload 中追加强制标识，后端检测到就会先执行物理删除
+    const payload = { ...this.wechatBotConfig, force_relogin: true };
+    
+    const res = await fetch('/start_wechat_bot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    
+    if (json.success) {
+      this.isWechatBotRunning = true;
+      if (this.wechatStatusTimer) clearInterval(this.wechatStatusTimer);
+      
+      // 开启极速轮询，一旦后端生成了新二维码就会自动弹窗
+      this.wechatStatusTimer = setInterval(() => {
+        this.checkWechatBotStatus();
+      }, 1500);
+    } else {
+      showNotification(`拉取新二维码失败：${json.message}`, 'error');
+    }
+  } catch (e) {
+    showNotification('网络错误或服务器未响应', 'error');
+  } finally {
+    this.isWechatStarting = false;
+  }
+},
   // --- 企微方法 ---
 
   async requestWeComBotStopIfRunning() {
