@@ -571,6 +571,7 @@ let vue_methods = {
       this.subMenu = 'a2a';
     },
     switchToSystemPrompts() {
+      this.showEditDialog = false;
       this.activeMenu = 'role';
       this.subMenu = 'memory';
       this.activeMemoryTab = 'prompts';
