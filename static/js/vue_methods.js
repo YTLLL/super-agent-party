@@ -1854,6 +1854,11 @@ let vue_methods = {
               } catch (error) { console.error(error); }
         }
 
+        // --- 核心修复点：确保 this.fileLinks 是数组 ---
+        if (!Array.isArray(this.fileLinks)) {
+            this.fileLinks = []; 
+        }
+
         // 构造文件链接字符串
         const fileLinks_content = fileLinks.map(fileLink => `\n[文件名：${fileLink.name}\n文件链接: ${fileLink.path}]`).join('\n') || '';
         const fileLinks_list = Array.isArray(fileLinks) ? fileLinks.map(fileLink => fileLink.path).flat() : []
@@ -2017,7 +2022,7 @@ let vue_methods = {
             if (finalMessages[finalMessages.length - 1].role === 'assistant') {
                 finalMessages.pop();
             }
-            
+
             const response = await fetch(`/v1/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2053,6 +2058,11 @@ let vue_methods = {
                         const parsed = JSON.parse(jsonStr);
                         const delta = parsed.choices?.[0]?.delta;
                         if (!delta) continue;
+
+                        if (currentMsg.content === '' && !isResume) { // 只有非 Resume 或者是新内容开始时才算延迟
+                            this.stopTimer(); 
+                            currentMsg.first_token_latency = this.elapsedTime;
+                        }
 
                         // A. 思考流 (Reasoning)
                         if (delta.reasoning_content) {
