@@ -35,7 +35,7 @@
 
 ### 🚀 **一款拥有无限可能的AI桌面伴侣！**
 
-#### VRM桌宠：支持上传自定义VRM模型、动作、3D场景，打造专属桌面伴侣
+#### 桌面伴侣：支持自定义VRM模型、动作、3D场景，并支持[live2D扩展](https://github.com/heshengtao/sap-live2d)
 ![image](doc/image/img-1/vrm.jpeg)
 
 #### 任务中心：让你的AI智能体可以在后台执行任何高级任务，自动控制电脑帮你干活，支持 MCP 和 Agent Skills
