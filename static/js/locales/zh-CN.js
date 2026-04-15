@@ -1603,4 +1603,5 @@ key3`,
 
         "basicInfo": "基础信息",
         "modeOnce": "立即执行",
+        'confirmEdit': '确认修改',
     }

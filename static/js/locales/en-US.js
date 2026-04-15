@@ -1600,5 +1600,6 @@ Key3`,
 
         "basicInfo": "Basic Info",
         "modeOnce": "Execute Immediately",
+        'confirmEdit': 'Confirm Edit',
 
     }

@@ -2169,4 +2169,10 @@ main();`,
             isInfiniteLoop: true
         }
     },  
+    isEditing: false,
+    editingTaskId: null,
+    activeLogPanels: ['logs'],
+    selectedTaskHistory: [],
+    currentResultIdx: 0,
+
 };

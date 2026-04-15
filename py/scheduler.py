@@ -19,21 +19,20 @@ class AgentScheduler:
             except Exception as e:
                 print(f"❌ [调度中心] 轮询异常: {e}")
             
-            await asyncio.sleep(30) # 30秒检查一次，适合分钟级的定时
+            await asyncio.sleep(30) # 30秒检查一次
 
     async def _scan_and_trigger(self, workspace_dir):
         task_center = await get_task_center(workspace_dir)
         tasks = await task_center.list_tasks()
         now = datetime.now()
-        current_time_hm = now.strftime("%H:%M") # 用于定时触发匹配
-        current_weekday = now.isoweekday() # 1-7 (周一到周日)
-        # 注意：前端 Sunday 是 0，这里做个转换
+        current_time_hm = now.strftime("%H:%M") 
+        current_weekday = now.isoweekday() 
+        # 前端 Sunday 为 0, Monday 为 1...
         ui_weekday = 0 if current_weekday == 7 else current_weekday
 
         for task in tasks:
-            # 只有处于 PENDING (待处理) 或 COMPLETED (周期任务复用) 状态的任务才参与调度
-            # 我们不触发已经在 RUNNING 的任务
-            if task.status == TaskStatus.RUNNING:
+            # 只有 PENDING 状态才参与调度触发
+            if task.status != TaskStatus.PENDING:
                 continue
 
             t_type = task.context.get("task_type")
@@ -41,11 +40,21 @@ class AgentScheduler:
 
             # --- 1. 定时模式 (time) ---
             if t_type == "time":
-                time_val = config.get("timeValue", "")[:5] # 取 HH:mm
-                days = config.get("days", []) # [1, 2, 3...]
+                time_val = config.get("timeValue", "")[:5] # HH:mm
+                days = config.get("days", []) # 选中的星期列表 [1, 2, 3...]
                 
-                # 如果 星期匹配 且 时间匹配
-                if ui_weekday in days and current_time_hm == time_val:
+                # 匹配逻辑：
+                # 情况A: 勾选了星期 -> 必须星期匹配且时间匹配
+                # 情况B: 没勾选星期 -> 只要时间匹配就触发 (视为一次性定时)
+                should_trigger = False
+                if days:
+                    if ui_weekday in days and current_time_hm == time_val:
+                        should_trigger = True
+                else:
+                    if current_time_hm == time_val:
+                        should_trigger = True
+
+                if should_trigger:
                     # 避免在同一分钟内重复触发
                     if task.context.get("last_trigger_minute") != current_time_hm:
                         await self._execute(task, workspace_dir, {"last_trigger_minute": current_time_hm})
@@ -54,37 +63,49 @@ class AgentScheduler:
             elif t_type == "cycle":
                 next_run_str = task.context.get("next_run_at")
                 
-                # 如果还没有设置下次运行时间，则初始化它
+                # 如果没有设置下次运行时间，则初始化它
                 if not next_run_str:
                     await self._update_next_cycle_time(task, workspace_dir)
                     continue
 
-                next_run_at = datetime.fromisoformat(next_run_str)
-                if now >= next_run_at:
-                    # 检查运行次数限制
-                    is_infinite = config.get("isInfiniteLoop", True)
-                    repeat_num = config.get("repeatNumber", 1)
-                    ran_count = task.context.get("ran_count", 0)
+                try:
+                    next_run_at = datetime.fromisoformat(next_run_str)
+                    if now >= next_run_at:
+                        # 检查运行次数限制
+                        is_infinite = config.get("isInfiniteLoop", True)
+                        repeat_num = config.get("repeatNumber", 1)
+                        ran_count = task.context.get("ran_count", 0)
 
-                    if is_infinite or ran_count < repeat_num:
-                        await self._execute(task, workspace_dir, {"ran_count": ran_count + 1})
-                        # 触发后立即计算下一次时间
-                        await self._update_next_cycle_time(task, workspace_dir)
+                        if is_infinite or ran_count < repeat_num:
+                            # 触发执行
+                            await self._execute(task, workspace_dir, {"ran_count": ran_count + 1})
+                        else:
+                            # 次数已满，安全归档
+                            await task_center.update_task_progress(task.task_id, 100, status=TaskStatus.COMPLETED)
+                except:
+                    continue
 
     async def _execute(self, task, workspace_dir, extra_context):
         """执行任务并更新状态"""
         print(f"🚀 [调度中心] 触发任务: {task.title} (ID: {task.task_id})")
         task_center = await get_task_center(workspace_dir)
         
-        # 更新为运行中，并存入触发标记(比如防止重复触发的分钟数或运行次数)
+        # 准备新一轮日志
+        history = task.context.get("history", [])
+        run_count = extra_context.get("ran_count", task.context.get("ran_count", 0))
+        
+        separator = f"🚀 **Round {run_count if run_count > 0 else 1} Start!** ({datetime.now().strftime('%H:%M:%S')})\n"
+        history.append(separator)
+
+        # 立即更新为运行中，progress 必须作为第二个位置参数
         await task_center.update_task_progress(
             task.task_id, 
+            0, 
             status=TaskStatus.RUNNING, 
-            progress=0,
-            context=extra_context
+            context={**extra_context, "history": history}
         )
 
-        # 丢进后台运行
+        # 异步执行
         asyncio.create_task(
             run_subtask_in_background(
                 task_id=task.task_id,
@@ -94,22 +115,20 @@ class AgentScheduler:
         )
 
     async def _update_next_cycle_time(self, task, workspace_dir):
-        """计算周期任务的下一次执行时间"""
+        """初始化周期任务的下一次执行时间"""
         config = task.context.get("trigger_config", {})
-        cycle_str = config.get("cycleValue", "01:00:00") # HH:mm:ss
+        cycle_str = config.get("cycleValue", "01:00:00")
         
         try:
             h, m, s = map(int, cycle_str.split(':'))
             delta = timedelta(hours=h, minutes=m, seconds=s)
-            # 至少间隔 1 分钟，防止死循环
-            if delta.total_seconds() < 60:
-                delta = timedelta(minutes=1)
-            
             next_run = datetime.now() + delta
+            
             task_center = await get_task_center(workspace_dir)
             await task_center.update_task_progress(
                 task.task_id,
-                progress=task.progress,
+                0,
+                status=TaskStatus.PENDING,
                 context={"next_run_at": next_run.isoformat()}
             )
         except:

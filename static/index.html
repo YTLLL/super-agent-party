@@ -1934,7 +1934,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 <!-- 1. 任务中心视图 -->
                 <div v-if="activeSideView === 'tasks'" class="task-center-container">
                     
-                    <!-- A. 详情视图 (点击卡片后显示) -->
+                    <!-- A. 详情视图 (点击卡片后显示) - 保持你最初的布局 -->
                     <div v-if="viewingTaskDetail" class="task-detail-view" style="height: 100%; display: flex; flex-direction: column;">
                         <div class="task-center-header" style="display: flex; align-items: center; padding: 10px; border-bottom: 1px solid var(--el-border-color-lighter);">
                             <el-button link @click="closeTaskDetail">
@@ -1945,12 +1945,13 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </div>
                         
                         <div class="task-detail-content" style="padding: 15px; overflow-y: auto; flex: 1;">
-                            <!-- 详情页顶部的任务摘要卡片 -->
+                            <!-- 详情页顶部的任务摘要卡片 - 严格保持你的 dashed 风格 -->
                             <div class="task-info-summary" style="padding: 0; margin-bottom: 15px;">
                                 <el-card shadow="never" :body-style="{ padding: '12px' }" style="border-style: dashed; background: var(--el-bg-color-page);">
                                     <!-- 头部：标题和状态 -->
                                     <div class="task-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                         <span style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; color: var(--el-text-color-primary);">
+                                            <i :class="getModeIcon(viewingTaskDetail.context?.task_type)" style="margin-right: 6px; font-size: 12px; color: var(--el-color-primary);"></i>
                                             {{ viewingTaskDetail.title }}
                                         </span>
                                         <el-tag size="small" :type="getTaskStatusType(viewingTaskDetail.status)">
@@ -1958,7 +1959,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                         </el-tag>
                                     </div>
 
-                                    <!-- 描述：保持多行省略 -->
+                                    <!-- 描述 -->
                                     <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px; line-height: 1.4;">
                                         {{ viewingTaskDetail.description }}
                                     </div>
@@ -1968,12 +1969,17 @@ function updateElement(el, rawMarkdown, formatFn) {
                                         <el-progress :percentage="viewingTaskDetail.progress" :stroke-width="4" :show-text="false" status="success"></el-progress>
                                     </div>
 
-                                    <!-- 底部信息：时间 -->
+                                    <!-- 底部信息：时间 + 产出入口（新增） -->
                                     <div class="task-card-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11px;">
                                         <span style="color: var(--el-text-color-placeholder);">
                                             <i class="fa-regular fa-clock"></i> {{ formatTaskTime(viewingTaskDetail.created_at) }}
                                         </span>
-                                        <span style="color: var(--el-text-color-placeholder);">ID: {{ viewingTaskDetail.task_id }}</span>
+                                        <!-- 只有有产出时才显示 -->
+                                        <div v-if="viewingTaskDetail.result">
+                                            <el-button type="success" @click="openTaskResult(viewingTaskDetail)">
+                                                <i class="fa-solid fa-square-poll-vertical"></i> {{ t('viewFinalResult') || '查看最终产出' }}
+                                            </el-button>
+                                        </div>
                                     </div>
                                 </el-card>
                             </div>
@@ -2005,16 +2011,10 @@ function updateElement(el, rawMarkdown, formatFn) {
                                     </el-timeline-item>
                                 </el-timeline>
                             </div>
-
-                            <div v-if="viewingTaskDetail.result" style="margin-top: 20px; padding-bottom: 30px;">
-                                <el-button type="primary" style="width: 100%" @click="openTaskResult(viewingTaskDetail)">
-                                    <i class="fa-solid fa-square-poll-vertical"></i> {{ t('viewFinalResult') || '查看最终产出' }}
-                                </el-button>
-                            </div>
                         </div>
                     </div>
 
-                    <!-- B. 列表视图 (默认显示) -->
+                    <!-- B. 列表视图 (默认显示) - 保持你最初的卡片列表 -->
                     <div v-else class="task-list-view" style="height: 100%; display: flex; flex-direction: column;">
                         <div class="task-center-header" style="display: flex; align-items: center; padding: 10px; border-bottom: 1px solid var(--el-border-color-lighter);">
                             <el-button link @click="closeTaskCenter">
@@ -2026,10 +2026,10 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                         <div class="task-content-wrapper" style="flex: 1; overflow-y: auto;">
                             <!-- 状态 A: 未配置工作区 -->
-                            <div v-if="!hasWorkspacePath" class="task-empty-state" style="padding: 40px 20px; text-align: center;">
+                            <div v-if="!hasWorkspacePath" class="task-empty-state" style="padding: 60px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
                                 <el-empty :description="t('noWorkspaceConfigured')">
                                     <template #image>
-                                        <i class="fa-solid fa-folder-minus" style="font-size: 48px; color: var(--el-text-color-secondary);"></i>
+                                        <i class="fa-solid fa-handshake-angle" style="font-size: 48px; color: var(--el-text-color-secondary);"></i>
                                     </template>
                                     <p style="color: var(--el-text-color-secondary); font-size: 14px;">{{ t('taskCenterNeedsCLI') }}</p>
                                     <el-button type="primary" @click="jumpToCLIConfig">
@@ -2049,15 +2049,18 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                                 <el-empty v-if="taskList.length === 0" :description="t('noTasks')">
                                     <p style="color: var(--el-text-color-secondary); font-size: 14px;">{{ t('noTasksNotice') }}</p>
-                                    <el-button type="primary" @click="jumpToCLIConfig">
-                                        {{ t('goToCLIConfig') }}
+                                    <el-button type="primary" @click="showCreateTaskDialog = true">
+                                        <i class="fa-solid fa-plus"></i> {{ t('createNewTask') }}
                                     </el-button>
                                 </el-empty>
 
                                 <div v-for="task in taskList" :key="task.task_id" class="task-card-item" style="margin-bottom: 12px; cursor: pointer;" @click="openTaskDetailView(task)">
                                     <el-card shadow="hover" :body-style="{ padding: '12px' }">
                                         <div class="task-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                            <span style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">{{ task.title }}</span>
+                                            <span style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">
+                                                <i :class="getModeIcon(task.context?.task_type)" style="margin-right: 4px; font-size: 12px;"></i>
+                                                {{ task.title }}
+                                            </span>
                                             <el-tag size="small" :type="getTaskStatusType(task.status)">{{ task.status }}</el-tag>
                                         </div>
 
@@ -2070,6 +2073,10 @@ function updateElement(el, rawMarkdown, formatFn) {
                                         <div class="task-card-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px;">
                                             <span style="color: var(--el-text-color-placeholder);"><i class="fa-regular fa-clock"></i> {{ formatTaskTime(task.created_at) }}</span>
                                             <div class="task-actions" @click.stop>
+                                                <el-button type="info" link size="small" @click.stop="openEditTaskDialog(task)">
+                                                    <i class="fa-solid fa-pen-to-square"></i>
+                                                </el-button>
+
                                                 <el-button v-if="['pending', 'running'].includes(task.status)" type="warning" link size="small" @click.stop="handleCancelTask(task.task_id)">
                                                     <i class="fa-solid fa-stop"></i>
                                                 </el-button>
@@ -2283,124 +2290,114 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
 
-            <!-- 任务结果 Dialog -->
+            <!-- 任务结果 Dialog：优化为支持历史切换 -->
             <el-dialog append-to-body
               v-model="showTaskResultDialog"
               :title="selectedTaskTitle"
-              width="80%"
-              class="task-result-dialog"
-              append-to-body
+              width="85%"
+              top="5vh"
               destroy-on-close
             >
-              <div class="task-result-content markdown-body">
-                <div v-html="formatMessage(selectedTaskResult)"></div>
+              <div style="display: flex; height: 70vh; border: 1px solid var(--el-border-color-lighter); border-radius: 4px; overflow: hidden; margin: -10px 0;">
+                <!-- 左侧：执行批次 -->
+                <div v-if="selectedTaskHistory?.length > 1" style="width: 200px; background: var(--el-bg-color-page); border-right: 1px solid var(--el-border-color-lighter); display: flex; flex-direction: column;">
+                    <div style="padding: 10px; font-weight: bold; font-size: 13px; border-bottom: 1px solid var(--el-border-color-lighter);">{{ t('executionHistory') || '执行记录' }}</div>
+                    <el-scrollbar style="flex: 1;">
+                        <div style="padding: 8px;">
+                            <div v-for="(item, idx) in selectedTaskHistory" 
+                                :key="idx"
+                                @click="currentResultIdx = idx"
+                                style="padding: 10px; border-radius: 4px; cursor: pointer; margin-bottom: 5px; font-size: 12px; border: 1px solid transparent;"
+                                :style="currentResultIdx === idx ? 'background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-5); color: var(--el-color-primary);' : ''"
+                            >
+                                <div style="font-weight: bold;">RUN #{{ selectedTaskHistory.length - idx }}</div>
+                                <div style="font-size: 10px; opacity: 0.7;">{{ formatTaskTime(item.time) }}</div>
+                            </div>
+                        </div>
+                    </el-scrollbar>
+                </div>
+
+                <!-- 右侧：内容 -->
+                <div style="flex: 1; display: flex; flex-direction: column; background: #fff;">
+                    <el-scrollbar style="flex: 1;">
+                        <div class="task-result-content markdown-body" style="padding: 20px;">
+                            <div v-html="formatMessage(selectedTaskHistory[currentResultIdx]?.result || selectedTaskResult)"></div>
+                        </div>
+                    </el-scrollbar>
+                </div>
               </div>
               <template #footer>
                 <el-button @click="showTaskResultDialog = false">{{ t('close') }}</el-button>
               </template>
             </el-dialog>
 
-            <!-- 创建任务 Dialog -->
+            <!-- 3. 创建任务 Dialog (复用自主行为样式) -->
+
             <el-dialog append-to-body
               v-model="showCreateTaskDialog"
-              :title="t('createNewTask')"
+              :title="isEditing ? t('editTask') || '编辑任务' : t('createNewTask')"
               width="80%"
               class="mcp-dialog"
               destroy-on-close
             >
-              <div class="task-dialog-content">
+              <div class="behavior-dialog-content">
                 <el-form :model="newTaskForm" label-position="top">
-                  
-                  <!-- 基础信息 -->
-                  <h2>{{ t('basicInfo') || '基础信息' }}</h2>
+                  <h2>{{ t('basicInfo') }}</h2>
                   <el-form-item :label="t('taskTitle')">
-                    <el-input v-model="newTaskForm.title" :placeholder="t('taskTitlePlaceholder')"></el-input>
+                    <el-input v-model="newTaskForm.title"></el-input>
                   </el-form-item>
                   <el-form-item :label="t('taskDescription')">
-                    <el-input 
-                      v-model="newTaskForm.description" 
-                      type="textarea" 
-                      :rows="4"
-                      :placeholder="t('taskDescPlaceholder')"
-                    ></el-input>
+                    <el-input type="textarea" v-model="newTaskForm.description" :rows="3"></el-input>
                   </el-form-item>
 
                   <el-divider></el-divider>
 
-                  <!-- 触发条件配置 (完全复用自主行为逻辑) -->
                   <h2>{{ t('triggerSettings') }}</h2>
-                  
                   <el-form-item :label="t('triggerType')">
                     <el-select v-model="newTaskForm.task_type" class="full-width-input">
-                      <!-- 这里复用 timeName, cycleName 等文本 -->
-                      <el-option :label="t('modeOnce') || '立即执行'" value="once"></el-option>
+                      <el-option :label="t('modeOnce')" value="once"></el-option>
                       <el-option :label="t('timeName')" value="time"></el-option>
                       <el-option :label="t('cycleName')" value="cycle"></el-option>
                     </el-select>
                   </el-form-item>
 
-                  <!-- A. 定时触发详情 (Time) -->
+                  <!-- 时间模式配置 -->
                   <div v-if="newTaskForm.task_type === 'time'" class="sub-config-box">
                     <el-form-item :label="t('time')">
-                      <el-time-picker
-                        v-model="newTaskForm.trigger_config.timeValue"
-                        value-format="HH:mm:ss"
-                        format="HH:mm:ss"
-                        :placeholder="t('selectTime')"
-                        style="width: 100%"
-                      />
+                      <el-time-picker v-model="newTaskForm.trigger_config.timeValue" value-format="HH:mm:ss" style="width: 100%"></el-time-picker>
                     </el-form-item>
                     <el-form-item :label="t('repeatDays')">
                       <el-select v-model="newTaskForm.trigger_config.days" multiple style="width: 100%">
-                        <el-option :label="t('monday')"    :value="1"></el-option>
-                        <el-option :label="t('tuesday')"   :value="2"></el-option>
-                        <el-option :label="t('wednesday')" :value="3"></el-option>
-                        <el-option :label="t('thursday')"  :value="4"></el-option>
-                        <el-option :label="t('friday')"    :value="5"></el-option>
-                        <el-option :label="t('saturday')"  :value="6"></el-option>
-                        <el-option :label="t('sunday')"    :value="0"></el-option>
+                        <el-option v-for="(label, val) in {1:t('monday'), 2:t('tuesday'), 3:t('wednesday'), 4:t('thursday'), 5:t('friday'), 6:t('saturday'), 0:t('sunday')}" 
+                                  :key="val" :label="label" :value="parseInt(val)"></el-option>
                       </el-select>
                     </el-form-item>
                   </div>
 
-                  <!-- B. 周期触发详情 (Cycle) -->
+                  <!-- 周期模式配置 -->
                   <div v-if="newTaskForm.task_type === 'cycle'" class="sub-config-box">
-                    <el-form-item :label="t('cycleValue') + (t('minLimit1min') || '')">
-                      <el-time-picker
-                        v-model="newTaskForm.trigger_config.cycleValue"
-                        value-format="HH:mm:ss"
-                        format="HH:mm:ss"
-                        :placeholder="t('selectTime')"
-                        style="width: 100%"
-                        :clearable="false" 
-                      />
+                    <el-form-item :label="t('cycleValue')">
+                      <el-time-picker v-model="newTaskForm.trigger_config.cycleValue" value-format="HH:mm:ss" style="width: 100%"></el-time-picker>
                     </el-form-item>
                     <el-form-item :label="t('repeatNumber')">
-                      <el-slider
-                        v-model="newTaskForm.trigger_config.repeatNumber"
-                        :min="1"
-                        :max="100"
-                        :step="1"
-                        show-input>
-                      </el-slider>
+                      <el-slider v-model="newTaskForm.trigger_config.repeatNumber" :min="1" :max="100" show-input></el-slider>
                     </el-form-item>
                     <el-form-item :label="t('isInfiniteLoop')">
                       <el-switch v-model="newTaskForm.trigger_config.isInfiniteLoop"></el-switch>
                     </el-form-item>
                   </div>
-
                 </el-form>
               </div>
-
               <template #footer>
                 <span class="dialog-footer">
                   <el-button @click="showCreateTaskDialog = false">{{ t('cancel') }}</el-button>
-                  <el-button type="primary" :loading="isCreatingTask" @click="submitCreateTask">
-                    {{ newTaskForm.task_type === 'once' ? (t('createAndRun') || '立即开始') : t('confirmSave') }}
+                  <el-button type="primary" :loading="isCreatingTask" @click="submitTaskForm">
+                    {{ isEditing ? (t('confirmEdit') || '保存并重新运行') : (newTaskForm.task_type === 'once' ? t('createAndRun') : t('confirmSave')) }}
                   </el-button>
                 </span>
               </template>
             </el-dialog>
+
           </div>
           <!-- 群聊设置弹窗 -->
           <el-dialog append-to-body
