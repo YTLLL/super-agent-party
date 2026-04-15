@@ -36,7 +36,7 @@
 
 ### 🚀 **An AI desktop companion with endless possibilities!**  
 
-#### VRM Desktop Pet: Supports uploading custom VRM models, actions, and 3D scenes to create a personalized desktop companion.
+#### Desktop Companion: Supports custom VRM models, actions, 3D scenes, and is compatible with [live2D extensions](https://github.com/heshengtao/sap-live2d)
 ![image](doc/image/img-2/vrm.jpeg)
 
 #### Task Center: Enable your AI agents to perform any advanced tasks in the background, automatically control your computer to get work done, supporting MCP and Agent Skills.
