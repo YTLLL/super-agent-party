@@ -1134,7 +1134,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   </div>
 
                               </template>
-                              <div v-if="isTyping && index === messages.length - 1 && message.displayBlocks.length === 0"><i class="fa-solid fa-spinner fa-spin"></i></div>
+                              <div v-if="isTyping && index === messages.length - 1 && (message.displayBlocks?.length || 0) === 0"><i class="fa-solid fa-spinner fa-spin"></i></div>
                           </div>
 
                           <!-- === 旧架构兼容：让以前从本地存储读取的历史对话依然能显示 === -->
@@ -2689,13 +2689,13 @@ function updateElement(el, rawMarkdown, formatFn) {
                 <el-tooltip 
                   :content="t('keepLastWeek')" 
                   placement="top"
-                  :disabled="conversations.length === 0">
+                  :disabled="!conversations || conversations.length === 0">
                   <el-button 
                     type="info"
                     circle 
                     size="small"
                     @click="keepLastWeek"
-                    :disabled="conversations.length === 0">
+                    :disabled="!conversations || conversations.length === 0">
                     <i class="fa-solid fa-calendar-week"></i>
                   </el-button>
                 </el-tooltip>
@@ -2703,13 +2703,13 @@ function updateElement(el, rawMarkdown, formatFn) {
                 <el-tooltip 
                   :content="t('clearAllHistory')" 
                   placement="top"
-                  :disabled="conversations.length === 0">
+                  :disabled="!conversations || conversations.length === 0">
                   <el-button 
                     type="danger"
                     circle 
                     size="small"
                     @click="confirmClearAll"
-                    :disabled="conversations.length === 0">
+                    :disabled="!conversations || conversations.length === 0">
                     <i class="fa-solid fa-trash-can"></i>
                   </el-button>
                 </el-tooltip>
