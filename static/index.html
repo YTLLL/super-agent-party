@@ -2305,26 +2305,99 @@ function updateElement(el, rawMarkdown, formatFn) {
               v-model="showCreateTaskDialog"
               :title="t('createNewTask')"
               width="80%"
+              class="mcp-dialog"
               destroy-on-close
-              append-to-body
             >
-              <el-form :model="newTaskForm" label-position="top">
-                <el-form-item :label="t('taskTitle')">
-                  <el-input v-model="newTaskForm.title" :placeholder="t('taskTitlePlaceholder')"></el-input>
-                </el-form-item>
-                <el-form-item :label="t('taskDescription')">
-                  <el-input 
-                    v-model="newTaskForm.description" 
-                    type="textarea" 
-                    :rows="6"
-                    :placeholder="t('taskDescPlaceholder')"
-                  ></el-input>
-                </el-form-item>
-              </el-form>
+              <div class="task-dialog-content">
+                <el-form :model="newTaskForm" label-position="top">
+                  
+                  <!-- 基础信息 -->
+                  <h2>{{ t('basicInfo') || '基础信息' }}</h2>
+                  <el-form-item :label="t('taskTitle')">
+                    <el-input v-model="newTaskForm.title" :placeholder="t('taskTitlePlaceholder')"></el-input>
+                  </el-form-item>
+                  <el-form-item :label="t('taskDescription')">
+                    <el-input 
+                      v-model="newTaskForm.description" 
+                      type="textarea" 
+                      :rows="4"
+                      :placeholder="t('taskDescPlaceholder')"
+                    ></el-input>
+                  </el-form-item>
+
+                  <el-divider></el-divider>
+
+                  <!-- 触发条件配置 (完全复用自主行为逻辑) -->
+                  <h2>{{ t('triggerSettings') }}</h2>
+                  
+                  <el-form-item :label="t('triggerType')">
+                    <el-select v-model="newTaskForm.task_type" class="full-width-input">
+                      <!-- 这里复用 timeName, cycleName 等文本 -->
+                      <el-option :label="t('modeOnce') || '立即执行'" value="once"></el-option>
+                      <el-option :label="t('timeName')" value="time"></el-option>
+                      <el-option :label="t('cycleName')" value="cycle"></el-option>
+                    </el-select>
+                  </el-form-item>
+
+                  <!-- A. 定时触发详情 (Time) -->
+                  <div v-if="newTaskForm.task_type === 'time'" class="sub-config-box">
+                    <el-form-item :label="t('time')">
+                      <el-time-picker
+                        v-model="newTaskForm.trigger_config.timeValue"
+                        value-format="HH:mm:ss"
+                        format="HH:mm:ss"
+                        :placeholder="t('selectTime')"
+                        style="width: 100%"
+                      />
+                    </el-form-item>
+                    <el-form-item :label="t('repeatDays')">
+                      <el-select v-model="newTaskForm.trigger_config.days" multiple style="width: 100%">
+                        <el-option :label="t('monday')"    :value="1"></el-option>
+                        <el-option :label="t('tuesday')"   :value="2"></el-option>
+                        <el-option :label="t('wednesday')" :value="3"></el-option>
+                        <el-option :label="t('thursday')"  :value="4"></el-option>
+                        <el-option :label="t('friday')"    :value="5"></el-option>
+                        <el-option :label="t('saturday')"  :value="6"></el-option>
+                        <el-option :label="t('sunday')"    :value="0"></el-option>
+                      </el-select>
+                    </el-form-item>
+                  </div>
+
+                  <!-- B. 周期触发详情 (Cycle) -->
+                  <div v-if="newTaskForm.task_type === 'cycle'" class="sub-config-box">
+                    <el-form-item :label="t('cycleValue') + (t('minLimit1min') || '')">
+                      <el-time-picker
+                        v-model="newTaskForm.trigger_config.cycleValue"
+                        value-format="HH:mm:ss"
+                        format="HH:mm:ss"
+                        :placeholder="t('selectTime')"
+                        style="width: 100%"
+                        :clearable="false" 
+                      />
+                    </el-form-item>
+                    <el-form-item :label="t('repeatNumber')">
+                      <el-slider
+                        v-model="newTaskForm.trigger_config.repeatNumber"
+                        :min="1"
+                        :max="100"
+                        :step="1"
+                        show-input>
+                      </el-slider>
+                    </el-form-item>
+                    <el-form-item :label="t('isInfiniteLoop')">
+                      <el-switch v-model="newTaskForm.trigger_config.isInfiniteLoop"></el-switch>
+                    </el-form-item>
+                  </div>
+
+                </el-form>
+              </div>
+
               <template #footer>
                 <span class="dialog-footer">
                   <el-button @click="showCreateTaskDialog = false">{{ t('cancel') }}</el-button>
-                  <el-button type="primary" :loading="isCreatingTask" @click="submitCreateTask">{{ t('createAndRun') }}</el-button>
+                  <el-button type="primary" :loading="isCreatingTask" @click="submitCreateTask">
+                    {{ newTaskForm.task_type === 'once' ? (t('createAndRun') || '立即开始') : t('confirmSave') }}
+                  </el-button>
                 </span>
               </template>
             </el-dialog>
@@ -16117,11 +16190,7 @@ function updateElement(el, rawMarkdown, formatFn) {
             <div class="chat-area" style="min-width: 450px; flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100%; width: 100%; background: transparent;">
                 
                 <!-- 消息列表 (flex: 1) -->
-                <div class="messages-container" 
-                  ref="browserMessagesContainer" 
-                  v-if="!isCapsuleMode" 
-                  @click.capture="handleMessageLinkClick"
-                  style="background-color: transparent !important; box-shadow: none !important; border: none !important;">
+              <div class="messages-container" ref="messagesContainer" v-if="!isCapsuleMode" @click.capture="handleMessageLinkClick">
                 <!-- 添加 is-group-mode 类 -->
                 <div v-for="(message, index) in messages" :key="index" class="message" :class="[message.role, { 'is-group-mode': isGroupMode }]">
                   
@@ -16212,10 +16281,76 @@ function updateElement(el, rawMarkdown, formatFn) {
                               </div>
                           </div>
                       </div>
+
                       
                       <!-- Assistant -->
                       <div v-else-if="message.role === 'assistant'" class="markdown-body">
                           <div v-if="message.briefly" v-html="formatMessage(message.pure_content??message.content, index)"></div>
+                          
+                          <!-- === 新架构：基于结构化显示块 (Display Blocks) 的渲染 === -->
+                          <div v-else-if="message.displayBlocks && message.displayBlocks.length > 0" class="message-blocks-container">
+                              <template v-for="(block, bIndex) in message.displayBlocks" :key="'blk-'+bIndex">
+                                  
+                                  <!-- 1. 深度思考块 (Reasoning) -->
+                                  <div v-if="block.type === 'reasoning'" class="highlight-block-reasoning" style="display: block; width: 100%;">
+                                      <div class="thinking-header" style="opacity: 0.7; font-size: 0.9em; margin-bottom: 8px;">
+                                          <i class="fa-solid fa-lightbulb"></i> {{ t('thinking') }}
+                                      </div>
+                                      <!-- 使用指令将 Markdown 渲染 -->
+                                      <div v-morph:format="block.content"></div>
+                                  </div>
+
+                                  <!-- 文本块 -->
+                                  <div v-else-if="block.type === 'text'" class="a2ui-text-wrapper">
+                                      <template v-for="(segment, sIdx) in splitMessageContent(block.content)" :key="sIdx">
+                                          <!-- 这里的 v-morph:format="segment.content" 会随着 block.content 的变化而实时重新渲染 Markdown -->
+                                          <div v-if="segment.type === 'text'" 
+                                              v-morph:format="segment.content" 
+                                              style="display: inline-block; width: 100%;">
+                                          </div>
+                                          <a2-u-i-renderer v-else-if="segment.type === 'ui'" :config="segment.content" @action="handleA2UIAction"></a2-u-i-renderer>
+                                      </template>
+                                  </div>
+
+
+
+                                  <!-- 3. 工具调用参数块 (Tool Call) -->
+                                  <div v-else-if="block.type === 'tool_call'" class="highlight-block" :id="'tool-call-'+block.id">
+                                      <div style="font-weight: bold; margin-bottom: 5px;">{{ t('call') }} {{ block.name }} {{ t('tool') }}</div>
+                                      <!-- Vue 的 {{}} 绑定自带 HTML 转义，不再需要手动 escapeHtml -->
+                                      <pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">{{ block.args }}</pre>
+                                  </div>
+
+                                  <!-- 工具结果块也支持流式渲染 -->
+                                  <div v-else-if="block.type === 'tool_result'" class="highlight-block">
+                                      <div style="font-weight: bold; margin-bottom: 5px;">{{ block.name }}</div>
+                                      <!-- 注意：如果工具返回的是 Markdown 结果，可以使用 v-morph；如果是代码/日志，直接用 {{}} 即可 -->
+                                      <pre style="margin:0;white-space:pre-wrap;word-break:break-all;background:var(--el-bg-color-page);border-radius:8px;padding:8px;">{{ block.content }}</pre>
+                                  </div>
+
+                                  <!-- 5. 权限审批卡片 (Approval) -->
+                                  <div v-else-if="block.type === 'approval'" class="approval-card" :id="'approval-'+block.id">
+                                      <div class="approval-header">{{ t('permissionRequest') }} ({{ block.data.permission_mode }})</div>
+                                      <div class="approval-body">{{ t('AIwantsToExecute') }}: <b>{{ block.data.tool_name }}</b></div>
+                                      <div class="approval-params"><pre style="background:transparent;padding:0;margin:0;white-space:pre-wrap;">{{ JSON.stringify(block.data.tool_params, null, 2) }}</pre></div>
+                                      <div class="approval-actions">
+                                          <button @click="processToolApproval(block.id, 'once')" class="btn-allow-once">{{ t('AllowOnce') }}</button>
+                                          <button @click="processToolApproval(block.id, 'always')" class="btn-allow-always">{{ t('AllowAlways') }}</button>
+                                          <button @click="processToolApproval(block.id, 'deny')" class="btn-deny">{{ t('Deny') }}</button>
+                                      </div>
+                                  </div>
+
+                                  <!-- 6. 工具错误块 (Error) -->
+                                  <div v-else-if="block.type === 'error'" class="highlight-block-error" :id="'tool-error-'+block.id">
+                                      <div style="font-weight: bold; margin-bottom: 5px;">{{ block.name }}</div>
+                                      <pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">{{ block.content }}</pre>
+                                  </div>
+
+                              </template>
+                              <div v-if="isTyping && index === messages.length - 1 && (message.displayBlocks?.length || 0) === 0"><i class="fa-solid fa-spinner fa-spin"></i></div>
+                          </div>
+
+                          <!-- === 旧架构兼容：让以前从本地存储读取的历史对话依然能显示 === -->
                           <div v-else>
                               <template v-for="(segment, segIndex) in splitMessageContent(message.content)" :key="segIndex">
                                   <div v-if="segment.type === 'text'" class="stream-content" :class="{ 'streaming': isTyping && index === messages.length - 1 && segIndex === splitMessageContent(message.content).length - 1 }" v-morph:format="segment.content" style="display: inline-block; width: 100%;"></div>
@@ -16261,6 +16396,9 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <el-tooltip v-if="message.role === 'system'&&index == 0" :content="t('save')" placement="bottom">
                         <el-button class="Gen-btn" @click="saveSystemPrompt(index)" :disabled="isQuickGenerating" circle size="small"><i class="fa-solid fa-floppy-disk"></i></el-button>
                       </el-tooltip>
+                      <span class="msg-status" v-if="message.role === 'assistant' && !isMobile">
+                          {{ t('total_tokens')+': '+ (message?.total_tokens ?? 0) +',    '+ t('first_token_latency')+': '+(message?.first_token_latency ?? 0) +'ms'}}
+                      </span>
                     </div>
 
                   </div>

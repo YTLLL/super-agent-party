@@ -385,7 +385,7 @@ ChromeMCP_client = None
 sql_client = None
 mcp_client_list = {}
 locales = {}
-
+scheduler_task = None
 global_http_client = None  # 用于共享底层的 TCP 连接池
 openai_tts_clients_cache = {}  # 缓存 OpenAI TTS Client
 tetos_speakers_cache = {}      # 缓存 Tetos Speaker 对象
@@ -679,9 +679,16 @@ async def lifespan(app: FastAPI):
     )
     
     # 2. 解包结果
-    global settings, client, reasoner_client, fast_client, mcp_client_list, local_timezone, logger, locales, global_http_client
+    global settings, client, reasoner_client, fast_client, mcp_client_list, local_timezone, logger, locales, global_http_client,scheduler_task
     _, _, locales, settings, local_timezone = results
     
+
+    from py.scheduler import AgentScheduler
+    # 传入全局 settings 对象的引用
+    # 因为 python 字典是引用传递，后续 UI 修改了 settings，这里拿到的也是最新的
+    scheduler = AgentScheduler(settings)
+    scheduler_task = asyncio.create_task(scheduler.start_loop())
+
     # --- [日志系统初始化] ---
     timestamp = time.time()
     log_path = os.path.join(LOG_DIR, f"backend_{timestamp}.log")
@@ -822,6 +829,9 @@ async def lifespan(app: FastAPI):
 
     # --- [关闭逻辑] ---
     print("System shutting down, cleaning up...")
+
+    if scheduler_task:
+        scheduler_task.cancel()
     ext_ids = list(node_mgr.exts.keys())
     for ext_id in ext_ids:
         try: await node_mgr.stop(ext_id)
@@ -6533,6 +6543,8 @@ class TaskCreateRequest(BaseModel):
     title: str
     description: str
     agent_type: str = "default"
+    task_type: str = "once"  # once, time, cycle
+    trigger_config: Optional[Dict[str, Any]] = None
 
 @app.get("/v1/tasks/list")
 async def list_tasks_endpoint():
@@ -6552,26 +6564,34 @@ async def list_tasks_endpoint():
 
 @app.post("/v1/tasks/create")
 async def create_task_endpoint(req: TaskCreateRequest):
-    """手动创建任务"""
+    """手动创建任务：支持单次、定时、周期模式"""
     current_settings = await load_settings()
     workspace_dir = current_settings.get("CLISettings", {}).get("cc_path")
     
     if not workspace_dir:
-        raise HTTPException(status_code=400, detail="工作区路径未配置，请先在工具箱-CLI中设置")
+        raise HTTPException(status_code=400, detail="工作区路径未配置")
 
     try:
-        # 1. 获取任务中心
         task_center = await get_task_center(workspace_dir)
         
-        # 2. 创建任务记录
+        # 构造初始上下文
+        context = {
+            "task_type": req.task_type,
+            "trigger_config": req.trigger_config or {},
+            "history": [],
+            "ran_count": 0
+        }
+        
+        # 1. 创建任务记录
         task = await task_center.create_task(
             title=req.title,
             description=req.description,
             agent_type=req.agent_type,
-            parent_task_id="MANUAL_USER" # 标记为用户手动创建
+            parent_task_id="MANUAL_USER",
+            context=context
         )
         
-        # 3. 读取共识文件（可选）
+        # 2. 读取共识（可选）
         consensus_content = None
         consensus_file = Path(workspace_dir) / ".agent" / "consensus.md"
         if consensus_file.exists():
@@ -6579,17 +6599,23 @@ async def create_task_endpoint(req: TaskCreateRequest):
             async with aiofiles.open(consensus_file, 'r', encoding='utf-8') as f:
                 consensus_content = await f.read()
 
-        # 4. 后台启动执行
-        asyncio.create_task(
-            run_subtask_in_background(
-                task_id=task.task_id,
-                workspace_dir=workspace_dir,
-                settings=current_settings,
-                consensus_content=consensus_content
+        # 3. 执行逻辑分发
+        if req.task_type == "once":
+            # 立即执行模式：直接丢进后台
+            asyncio.create_task(
+                run_subtask_in_background(
+                    task_id=task.task_id,
+                    workspace_dir=workspace_dir,
+                    settings=current_settings,
+                    consensus_content=consensus_content
+                )
             )
-        )
-        
-        return {"success": True, "task": task.model_dump()}
+            msg = "任务已启动"
+        else:
+            # 定时或周期模式：由 scheduler.py 负责，此处仅保存
+            msg = f"计划任务已创建 (模式: {req.task_type})"
+            
+        return {"success": True, "message": msg, "task": task.model_dump()}
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 

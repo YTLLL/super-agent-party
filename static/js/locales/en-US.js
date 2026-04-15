@@ -1598,4 +1598,7 @@ Key3`,
         'filterModePaid': 'Chat + Paid (Gifts, SC, Subs)',
         'filterModeOnlyDanmaku': 'Chat Only (Incl. SC)',
 
+        "basicInfo": "Basic Info",
+        "modeOnce": "Execute Immediately",
+
     }

@@ -15523,24 +15523,35 @@ async handleRefreshSkills() {
             const res = await fetch(`/v1/tasks/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.newTaskForm)
+                body: JSON.stringify({
+                    title: this.newTaskForm.title,
+                    description: this.newTaskForm.description,
+                    agent_type: this.newTaskForm.agent_type,
+                    task_type: this.newTaskForm.task_type,
+                    trigger_config: this.newTaskForm.trigger_config // 发送完整配置
+                })
             });
             const data = await res.json();
             
             if (data.success) {
-                showNotification(this.t('success'))
+                showNotification(this.t('success'));
                 this.showCreateTaskDialog = false;
-                this.newTaskForm = { title: '', description: '', agent_type: 'default' };
+                // 重置表单
+                this.newTaskForm = { 
+                    title: '', description: '', task_type: 'once', agent_type: 'default',
+                    trigger_config: { timeValue: '09:00:00', days: [1,2,3,4,5], cycleValue: '01:00:00', repeatNumber: 1, isInfiniteLoop: true }
+                };
                 this.fetchTasks();
             } else {
                 showNotification(data.error, 'error');
             }
         } catch (e) {
-            showNotification(this.t('networkError') || '网络错误', 'error')
+            showNotification(this.t('networkError'), 'error');
         } finally {
             this.isCreatingTask = false;
         }
     },
+
 
     // 取消任务
     async handleCancelTask(taskId) {

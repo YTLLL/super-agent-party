@@ -2155,4 +2155,18 @@ main();`,
     showOmniAgentDialog: false,
     favoriteExtensionIds: JSON.parse(localStorage.getItem('favorite_extensions')) || [],
     isStartingASR: false,
+
+    newTaskForm: {
+        title: '',
+        description: '',
+        task_type: 'once',
+        agent_type: 'default',
+        trigger_config: {
+            timeValue: '09:00:00',
+            days: [1, 2, 3, 4, 5],
+            cycleValue: '01:00:00',
+            repeatNumber: 1,
+            isInfiniteLoop: true
+        }
+    },  
 };

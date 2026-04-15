@@ -1600,4 +1600,7 @@ key3`,
         'filterModeAll': '全部监听 (弹幕/礼物/进场/点赞)',
         'filterModePaid': '弹幕 + 付费 (礼物/SC/舰长)',
         'filterModeOnlyDanmaku': '仅弹幕 (含SC)',
+
+        "basicInfo": "基础信息",
+        "modeOnce": "立即执行",
     }
