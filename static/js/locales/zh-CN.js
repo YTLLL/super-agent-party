@@ -1583,4 +1583,15 @@ key3`,
 
         'weComBot': '企业微信机器人',
         'wecom_bot_config': '企业微信机器人配置',
+
+
+        'wechat_personal_bot_config': '微信个人号机器人配置',
+        'wechat_no_config_hint': '(⚠️ 无需配置，直接启动扫码登录)',
+        'wechat_start_tooltip': '启动机器人 (若已登录将无感连接)',
+        'wechat_force_relogin_tooltip': '强制清除缓存并重新扫码登录 (换号)',
+        'wechat_security_verify': '微信机器人安全验证',
+        'wechat_scan_hint': '请使用手机微信扫描下方二维码登录',
+        'wechat_auto_close_hint': '扫码确认后，本弹窗将在几秒内自动关闭',
+        'generating_qr': '正在生成二维码...',
+        'later': '稍后再说',
     }

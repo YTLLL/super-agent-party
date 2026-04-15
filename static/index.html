@@ -12184,23 +12184,23 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </el-tab-pane>
 
                       <!-- 微信 机器人子标签 -->
-                      <el-tab-pane label="微信机器人" name="wechat">
+                      <el-tab-pane :label="t('wechatBot')" name="wechat">
                         <el-form class="settings-form" :model="wechatBotConfig" label-position="top">
                           <div class="tool-item">
                             <!-- 微信机器人配置头部 -->
                             <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
                               <span>
                                 <el-icon><i class="fa-brands fa-weixin"></i></el-icon>
-                                微信个人号机器人配置
+                                {{ t('wechat_personal_bot_config') }}
                                 <span style="font-size: 12px; color: #909399; margin-left: 10px;">
-                                  (⚠️ 无需配置，直接启动扫码登录)
+                                  {{ t('wechat_no_config_hint') }}
                                 </span>
                               </span>
 
                               <!-- 按钮组 -->
                               <div>
-                                <!-- 启动按钮 (复用上次记录无感启动) -->
-                                <el-tooltip content="启动机器人 (若已登录将无感连接)" placement="top">
+                                <!-- 启动按钮 -->
+                                <el-tooltip :content="t('wechat_start_tooltip')" placement="top">
                                   <el-button
                                     type="primary"
                                     @click="startWechatBot"
@@ -12216,8 +12216,8 @@ function updateElement(el, rawMarkdown, formatFn) {
                                   </el-button>
                                 </el-tooltip>
 
-                                <!-- 新增：强制换号/重新扫码按钮 -->
-                                <el-tooltip content="强制清除缓存并重新扫码登录 (换号)" placement="top">
+                                <!-- 强制换号按钮 -->
+                                <el-tooltip :content="t('wechat_force_relogin_tooltip')" placement="top">
                                   <el-button
                                     type="warning"
                                     @click="forceReLoginWechatBot"
@@ -12263,7 +12263,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                               </div>
                             </div>
 
-                            <!-- 表单内容 -->
+                            <!-- 表单内容 (大部分已是国际化变量) -->
                             <div class="tool-content">
                               <!-- 主智能体 -->
                               <el-form-item :label="t('mainAgent')" required>
@@ -12377,9 +12377,10 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </div>
                         </el-form>
 
-                        <el-dialog v-model="showWechatQR" title="微信机器人安全验证" width="400px" center>
+                        <!-- 扫码弹窗国际化 -->
+                        <el-dialog v-model="showWechatQR" :title="t('wechat_security_verify')" width="400px" center>
                           <div style="text-align: center;">
-                            <p style="margin-bottom: 20px; font-weight: bold;">请使用手机微信扫描下方二维码登录</p>
+                            <p style="margin-bottom: 20px; font-weight: bold;">{{ t('wechat_scan_hint') }}</p>
                             <el-image 
                               v-if="wechatQRCodeBase64" 
                               :src="wechatQRCodeBase64" 
@@ -12387,17 +12388,16 @@ function updateElement(el, rawMarkdown, formatFn) {
                             </el-image>
                             <div v-else style="padding: 50px 0;">
                               <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
-                              <p>正在生成二维码...</p>
+                              <p>{{ t('generating_qr') }}</p>
                             </div>
-                            <p style="color: #909399; font-size: 13px; margin-top: 15px;">扫码确认后，本弹窗将在几秒内自动关闭</p>
+                            <p style="color: #909399; font-size: 13px; margin-top: 15px;">{{ t('wechat_auto_close_hint') }}</p>
                           </div>
                           <template #footer>
                             <span class="dialog-footer">
-                              <el-button @click="showWechatQR = false">稍后再说</el-button>
+                              <el-button @click="showWechatQR = false">{{ t('later') }}</el-button>
                             </span>
                           </template>
                         </el-dialog>
-
                       </el-tab-pane>
 
                       <!-- 飞书机器人子标签 -->
