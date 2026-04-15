@@ -3592,7 +3592,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             yield f"data: {json.dumps(chunk_dict)}\n\n"
 
                     # 在推理结束后添加完整推理内容到消息
-                    content_append(request.messages, 'assistant', f"<think>\n{full_reasoning}\n</think>")  # 可参考的推理过程
+                    request.messages[-1]['content'] += f"\n\n可参考的推理过程：{full_reasoning}"
                 # 状态跟踪变量
                 in_reasoning = False
                 reasoning_buffer = []
@@ -4320,7 +4320,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 yield f"data: {json.dumps(chunk_dict)}\n\n"
 
                         # 在推理结束后添加完整推理内容到消息
-                        content_append(request.messages, 'assistant', f"<think>\n{full_reasoning}\n</think>") # 可参考的推理过程
+                        request.messages[-1]['content'] += f"\n\n可参考的推理过程：{full_reasoning}"
                     
                     vision_control_enabled = settings.get('visionControlSettings', {}).get('enabled', False)
                     if vision_control_enabled and (results =='[Getting screenshot]' or settings.get('visionControlSettings', {}).get('desktopVision', False)):
