@@ -1587,17 +1587,24 @@ const handleRemoteInstall = (data) => {
       return [...this.conversations].sort((a, b) => b.timestamp - a.timestamp);
     },
     filteredConversations() {
-        const keyword = this.searchKeyword.toLowerCase()
+        const keyword = (this.searchKeyword || '').toLowerCase();
+        // 1. 确保 conversations 存在且是数组
+        if (!Array.isArray(this.conversations)) return [];
+
         return [...this.conversations]
             .filter(conv => {
-                // 匹配标题或消息内容
-                const titleMatch = (conv.title || this.t('untitled')).toLowerCase().includes(keyword)
-                const contentMatch = conv.messages?.some(msg => 
-                    msg.content.toLowerCase().includes(keyword)
-                )
-                return titleMatch || contentMatch
+                if (!conv) return false;
+                // 2. 安全检查 title
+                const titleMatch = (conv.title || '').toLowerCase().includes(keyword);
+                
+                // 3. 【核心修复】安全检查 messages 数组及其内容
+                const contentMatch = (conv.messages || []).some(msg => 
+                    msg && msg.content && String(msg.content).toLowerCase().includes(keyword)
+                );
+                
+                return titleMatch || contentMatch;
             })
-            .sort((a, b) => b.timestamp - a.timestamp)
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     },
     iconClass() {
       return this.isExpanded ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
