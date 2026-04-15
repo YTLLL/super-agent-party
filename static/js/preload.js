@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('electron', {
   requestStopDiscordBot : () => ipcRenderer.invoke('request-stop-discordbot'),
   requestStopTelegramBot : () => ipcRenderer.invoke('request-stop-telegrambot'),
   requestStopSlackBot : () => ipcRenderer.invoke('request-stop-slackbot'), 
+  requestStopWeComBot : () => ipcRenderer.invoke('request-stop-wecombot'),
 });
 
 // 暴露安全接口

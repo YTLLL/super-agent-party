@@ -1615,6 +1615,15 @@ ipcMain.handle('upload-to-workspace', async (event, { targetDirPath, sourceFileP
         `);
       }
     });
+    ipcMain.handle('request-stop-wecombot', async (event) => {
+      const win = BrowserWindow.getAllWindows()[0]; // 获取主窗口
+      if (win && !win.isDestroyed()) {
+        // 通过webContents执行渲染进程方法
+        await win.webContents.executeJavaScript(`
+          window.stopWeComBotHandler && window.stopWeComBotHandler()
+        `);
+      }
+    });
     ipcMain.handle('request-stop-dingtalk', async (event) => {
       const win = BrowserWindow.getAllWindows()[0];
       if (win && !win.isDestroyed()) {
@@ -1866,6 +1875,7 @@ app.on('before-quit', async (event) => {
         if (window.stopDiscordBotHandler) window.stopDiscordBotHandler();
         if (window.stopTelegramBotHandler) window.stopTelegramBotHandler();
         if (window.stopSlackBotHandler) window.stopSlackBotHandler();
+        if (window.stopWeComBotHandler) window.stopWeComBotHandler();
       `);
       // 给前端一点时间清理
       await new Promise(resolve => setTimeout(resolve, 500));
