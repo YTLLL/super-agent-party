@@ -12414,7 +12414,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-form>
 
                         <!-- 扫码弹窗国际化 -->
-                        <el-dialog v-model="showWechatQR" :title="t('wechat_security_verify')" width="400px" center>
+                        <el-dialog append-to-body v-model="showWechatQR" :title="t('wechat_security_verify')" width="400px" center>
                           <div style="text-align: center;">
                             <p style="margin-bottom: 20px; font-weight: bold;">{{ t('wechat_scan_hint') }}</p>
                             <el-image 
