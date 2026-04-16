@@ -2382,7 +2382,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <el-form-item :label="t('repeatNumber')">
                       <el-slider v-model="newTaskForm.trigger_config.repeatNumber" :min="1" :max="100" show-input></el-slider>
                     </el-form-item>
-                    <el-form-item :label="t('isInfiniteLoop')">
+                    <el-form-item :label="t('isInfiniteLoop')" label-position="left">
                       <el-switch v-model="newTaskForm.trigger_config.isInfiniteLoop"></el-switch>
                     </el-form-item>
                   </div>
@@ -5074,7 +5074,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                             show-input>
                           </el-slider>
                         </el-form-item>
-                        <el-form-item :label="t('isInfiniteLoop')">
+                        <el-form-item :label="t('isInfiniteLoop')" label-position="left">
                           <el-switch v-model="tempBehavior.trigger.cycle.isInfiniteLoop"></el-switch>
                         </el-form-item>
                       </div>
