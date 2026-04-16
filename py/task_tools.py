@@ -1,6 +1,5 @@
-"""主智能体使用的任务管理工具"""
 import asyncio
-from typing import Optional
+from typing import Optional, List
 from py.task_center import get_task_center, TaskStatus
 from py.sub_agent import run_subtask_in_background
 
@@ -10,103 +9,57 @@ create_subtask_tool = {
     "type": "function",
     "function": {
         "name": "create_subtask",
-        "description": """创建一个子任务并在后台异步执行。支持单次、定时触发和周期性重复。
-
-⚠️ 使用场景：
-- once (立即执行): 处理当前需要立即开始的长耗时任务。
-- time (定时执行): 在特定的时间点执行，支持按周重复（如：每周一 09:00 执行）。
-- cycle (周期执行): 每隔固定时长执行一次（如：每隔 2 小时执行一次）。
-
-✅ 特点：
-- 异步执行，自动保存进度。
-- 周期性任务会自动根据执行结果存档，并计算下一次运行时间。""",
+        "description": "创建一个子任务并在后台异步执行。支持多渠道发布结果。",
         "parameters": {
             "type": "object",
             "properties": {
-                "title": {
-                    "type": "string",
-                    "description": "子任务的简短标题"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "详细的任务目标、背景信息和完成标准。"
-                },
+                "title": {"type": "string", "description": "子任务标题"},
+                "description": {"type": "string", "description": "任务详细目标"},
                 "task_type": {
                     "type": "string",
-                    "description": "任务类型",
                     "enum": ["once", "time", "cycle"],
                     "default": "once"
                 },
+                "platforms": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": ["wechat", "feishu", "dingtalk", "telegram", "discord", "slack", "wecom"]
+                    },
+                    "description": "执行结果推送渠道，默认为空，不推送",
+                    "default": []
+                },
                 "trigger_config": {
                     "type": "object",
-                    "description": "调度配置（仅在 task_type 为 time 或 cycle 时需要）",
                     "properties": {
-                        "timeValue": {
-                            "type": "string",
-                            "description": "定时时间，格式 HH:mm:ss (用于 time 模式)"
-                        },
-                        "days": {
-                            "type": "array",
-                            "items": {"type": "integer"},
-                            "description": "重复周期（星期）：0代表周日，1-6代表周一至周六 (用于 time 模式)"
-                        },
-                        "cycleValue": {
-                            "type": "string",
-                            "description": "执行间隔，格式 HH:mm:ss (用于 cycle 模式)"
-                        },
-                        "repeatNumber": {
-                            "type": "integer",
-                            "description": "总执行次数",
-                            "default": 1
-                        },
-                        "isInfiniteLoop": {
-                            "type": "boolean",
-                            "description": "是否无限循环 (用于 cycle 模式)",
-                            "default": True
-                        }
+                        "timeValue": {"type": "string"},
+                        "days": {"type": "array", "items": {"type": "integer"}},
+                        "cycleValue": {"type": "string"},
+                        "repeatNumber": {"type": "integer", "default": 1},
+                        "isInfiniteLoop": {"type": "boolean", "default": True}
                     }
                 },
-                "agent_type": {
-                    "type": "string",
-                    "description": "使用的智能体类型",
-                    "default": "default"
-                }
+                "agent_type": {"type": "string", "default": "default"}
             },
             "required": ["title", "description", "task_type"]
         }
     }
 }
 
+# (query_tasks_tool, cancel_subtask_tool, finish_task_tool 保持不变...)
 query_tasks_tool = {
     "type": "function",
     "function": {
         "name": "query_task_progress",
-        "description": "查询任务进度与结果。支持单次任务、定时任务和周期任务的状态追踪。可以查看任务的执行历史和多次运行的具体产出。",
+        "description": "查询任务进度与结果。",
         "parameters": {
             "type": "object",
             "properties": {
-                "task_id": { 
-                    "type": "string",
-                    "description": "可选：指定任务ID进行精确查询。"
-                },
-                "parent_task_id": {
-                    "type": "string",
-                    "description": "可选：查询指定父任务下的所有子任务。"
-                },
-                "status": {
-                    "type": "string",
-                    "description": "可选：过滤特定状态",
-                    "enum": ["pending", "running", "completed", "failed", "cancelled"]
-                },
-                "verbose": {
-                    "type": "boolean",
-                    "description": "为 true 时显示详细的执行记录和结果内容。",
-                    "default": False
-                },
-                "history_index": {
-                    "type": "integer",
-                    "description": "可选：对于周期/重复任务，指定要查看的运行记录索引（0为第一次，-1为最近一次）。默认为 -1。"
-                }
+                "task_id": {"type": "string"},
+                "parent_task_id": {"type": "string"},
+                "status": {"type": "string", "enum": ["pending", "running", "completed", "failed", "cancelled"]},
+                "verbose": {"type": "boolean", "default": False},
+                "history_index": {"type": "integer", "default": -1}
             }
         }
     }
@@ -116,46 +69,27 @@ cancel_subtask_tool = {
     "type": "function",
     "function": {
         "name": "cancel_subtask",
-        "description": "取消一个正在执行或待执行的子任务。",
+        "description": "取消任务",
         "parameters": {
             "type": "object",
             "properties": {
-                "task_id": {
-                    "type": "string",
-                    "description": "要取消的任务ID"
-                }
+                "task_id": {"type": "string"}
             },
             "required": ["task_id"]
         }
     }
 }
 
-# ⭐ 新增：finish_task_tool
-# 注意：此工具应当只提供给子智能体 (SubAgent) 使用
 finish_task_tool = {
     "type": "function",
     "function": {
         "name": "finish_task",
-        "description": """✅ 任务完成确认工具。
-当所有任务目标都已达成时，【必须】调用此工具来正式结束任务。
-
-⚠️ 关键规则：
-1. 只有调用此工具，任务状态才会真正变为 COMPLETED。
-2. 调用后，请将最终的交付物（代码、报告、结论）放入 result 参数中。
-3. 调用此工具后，当前对话流程将立即终止，不要再回复任何额外内容。
-
-❌ 不要仅在对话中说 "我完成了"，必须调用此工具！""",
+        "description": "任务完成确认工具。",
         "parameters": {
             "type": "object",
             "properties": {
-                "task_id": {
-                    "type": "string",
-                    "description": "当前任务的ID"
-                },
-                "result": {
-                    "type": "string",
-                    "description": "最终的任务产出报告。这将作为任务的正式结果展示给父智能体或用户。请确保内容完整、格式清晰（支持Markdown）。"
-                }
+                "task_id": {"type": "string"},
+                "result": {"type": "string"}
             },
             "required": ["task_id", "result"]
         }
@@ -168,6 +102,7 @@ async def create_subtask(
     title: str,
     description: str,
     task_type: str = "once",
+    platforms: List[str] = [], # 新增参数
     trigger_config: dict = None,
     agent_type: str = "default",
     workspace_dir: str = None,
@@ -175,13 +110,8 @@ async def create_subtask(
     parent_task_id: Optional[str] = None,
     consensus_content: Optional[str] = None
 ) -> str:
-    """创建并根据类型分发子任务"""
     try:
-        from py.task_center import get_task_center, TaskStatus
         task_center = await get_task_center(workspace_dir)
-        
-        # 构造初始化 context
-        # 必须严格对齐 scheduler.py 和 sub_agent.py 需要的字段
         context = {
             "task_type": task_type,
             "trigger_config": trigger_config or {},
@@ -190,18 +120,16 @@ async def create_subtask(
             "ran_count": 0
         }
         
-        # 1. 创建任务记录
         task = await task_center.create_task(
             title=title,
             description=description,
             parent_task_id=parent_task_id,
             agent_type=agent_type,
-            context=context
+            context=context,
+            platforms=platforms # 传入平台列表
         )
         
-        # 2. 判断执行逻辑
         if task_type == "once":
-            # 立即执行模式：直接丢进后台运行
             asyncio.create_task(
                 run_subtask_in_background(
                     task_id=task.task_id,
@@ -212,7 +140,6 @@ async def create_subtask(
             )
             mode_msg = "已立即开始执行。"
         else:
-            # 定时或周期模式：仅保存，由 AgentScheduler 扫描触发
             mode_msg = f"已进入计划清单，等待调度触发 (模式: {task_type})。"
             
     except Exception as e:
@@ -222,8 +149,8 @@ async def create_subtask(
             f"任务ID: {task.task_id}\n"
             f"标题: {task.title}\n"
             f"类型: {task_type}\n"
-            f"状态: {mode_msg}\n"
-            f"提示：客户端UI会自动显示当前进度和历史产出，非必要请勿频繁查询。")
+            f"渠道: {', '.join(platforms)}\n"
+            f"状态: {mode_msg}")
 
 async def query_task_progress(
     workspace_dir: str,

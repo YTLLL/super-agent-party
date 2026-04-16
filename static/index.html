@@ -2042,14 +2042,14 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <div v-else class="task-list-wrapper" style="padding: 15px;">
                                 <div class="task-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                     <span style="font-weight: bold; font-size: 14px;">{{ t('taskList') }} ({{ taskList.length }})</span>
-                                    <el-button type="primary" size="small" circle @click="showCreateTaskDialog = true">
+                                    <el-button type="primary" size="small" circle @click="openCreateTaskDialog">
                                         <i class="fa-solid fa-plus"></i>
                                     </el-button>
                                 </div>
 
                                 <el-empty v-if="taskList.length === 0" :description="t('noTasks')">
                                     <p style="color: var(--el-text-color-secondary); font-size: 14px;">{{ t('noTasksNotice') }}</p>
-                                    <el-button type="primary" @click="showCreateTaskDialog = true">
+                                    <el-button type="primary" @click="openCreateTaskDialog">
                                         <i class="fa-solid fa-plus"></i> {{ t('createNewTask') }}
                                     </el-button>
                                 </el-empty>
@@ -2331,8 +2331,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               </template>
             </el-dialog>
 
-            <!-- 3. 创建任务 Dialog (复用自主行为样式) -->
-
+            <!-- 任务配置 Dialog -->
             <el-dialog append-to-body
               v-model="showCreateTaskDialog"
               :title="isEditing ? t('editTask') || '编辑任务' : t('createNewTask')"
@@ -2349,6 +2348,36 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <el-form-item :label="t('taskDescription')">
                     <el-input type="textarea" v-model="newTaskForm.description" :rows="3"></el-input>
                   </el-form-item>
+
+                  <el-divider></el-divider>
+
+                  <!-- 推送平台选择：仅显示第三方机器人，网页对话由后台强制静默推送 -->
+                  <h2>{{ t('behaviorPlatform') }}</h2>
+                  <el-form-item>
+                    <el-select 
+                      v-model="newTaskForm.platforms" 
+                      multiple 
+                      class="full-width-input"
+                      :placeholder="t('selectPlatform')"
+                    >
+                      <!-- 这里不放 chat 选项，JS 逻辑会自动处理它 -->
+                      <el-option :label="t('wechatBot')" value="wechat"></el-option>
+                      <el-option :label="t('feishuBot')" value="feishu"></el-option>
+                      <el-option :label="t('dingtalkBot')" value="dingtalk"></el-option>
+                      <el-option :label="t('telegramBot')" value="telegram"></el-option>
+                      <el-option :label="t('discordBot')" value="discord"></el-option>
+                      <el-option :label="t('slackBot')" value="slack"></el-option>
+                      <el-option :label="t('weComBot')" value="wecom"></el-option>
+                    </el-select>
+                  </el-form-item>
+
+                  <el-alert type="info" :closable="false" class="mb-2">
+                    <template #default>
+                      <div class="alert-content">
+                        {{ t('PlatformNote') }}
+                      </div>
+                    </template>
+                  </el-alert>
 
                   <el-divider></el-divider>
 
@@ -5154,7 +5183,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <el-select 
                             v-model="tempBehavior.platforms" 
                             multiple 
-                            collapse-tags
                             class="full-width-input"
                           >
                             <el-option :label="t('chatInterface')" value="chat"></el-option>
@@ -5168,6 +5196,14 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </el-select>
                         </el-form-item>
                       </div>
+
+                      <el-alert type="info" :closable="false" class="mb-2">
+                        <template #default>
+                          <div class="alert-content">
+                            {{ t('PlatformNote') }}
+                          </div>
+                        </template>
+                      </el-alert>
 
                     </el-form>
                   </div>

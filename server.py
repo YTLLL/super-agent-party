@@ -6533,6 +6533,7 @@ class TaskCreateRequest(BaseModel):
     description: str
     agent_type: str = "default"
     task_type: str = "once"  # once, time, cycle
+    platforms: List[str] = []
     trigger_config: Optional[Dict[str, Any]] = None
 
 @app.get("/v1/tasks/list")
@@ -6566,18 +6567,19 @@ async def create_task_endpoint(req: TaskCreateRequest):
         # 构造初始上下文
         context = {
             "task_type": req.task_type,
-            "trigger_config": req.trigger_config or {},
+            "trigger_config": getattr(req, "trigger_config", {}), # 防止取不到报错
             "history": [],
             "ran_count": 0
         }
         
-        # 1. 创建任务记录
+        # 1. 创建任务记录 (⭐ 关键修复：把 req.platforms 传进去)
         task = await task_center.create_task(
             title=req.title,
             description=req.description,
             agent_type=req.agent_type,
             parent_task_id="MANUAL_USER",
-            context=context
+            context=context,
+            platforms=req.platforms  # 👈👈👈 必须加这一行！
         )
         
         # 2. 读取共识（可选）
@@ -6607,7 +6609,7 @@ async def create_task_endpoint(req: TaskCreateRequest):
         return {"success": True, "message": msg, "task": task.model_dump()}
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
-
+    
 @app.post("/v1/tasks/cancel/{task_id}")
 async def cancel_task_endpoint(task_id: str):
     """取消任务"""

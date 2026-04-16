@@ -84,15 +84,15 @@ auto_behavior_tool = {
                 },
                 "platforms": {
                     "type": "array",
-                    "description": "要推送的渠道列表。chat:网页对话, wechat:微信, feishu:飞书, dingtalk:钉钉, telegram, discord, slack, wecom:企微, all:所有平台",
+                    "description": "要推送的渠道列表。chat:网页对话, wechat:微信, feishu:飞书, dingtalk:钉钉, telegram, discord, slack, wecom:企微",
                     "items": {
                         "type": "string",
-                        "enum": ["chat", "wechat", "feishu", "dingtalk", "telegram", "discord", "slack", "wecom", "all"]
+                        "enum": ["chat", "wechat", "feishu", "dingtalk", "telegram", "discord", "slack", "wecom"]
                     },
                     "default": ["chat"],
                 }
             },
-            "required": ["prompt", "behaviorType", "time"],
+            "required": ["prompt", "behaviorType"],
         },
     },
 }

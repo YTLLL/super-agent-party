@@ -1,10 +1,22 @@
 import asyncio
 import json
 import httpx
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from py.task_center import get_task_center, TaskStatus
 from py.get_setting import load_settings, get_port
+# 关键导入：必须包含所有相关的 Pydantic 模型
+from py.behavior_engine import (
+    global_behavior_engine, 
+    BehaviorItem, 
+    BehaviorAction, 
+    BehaviorTrigger, 
+    BehaviorTriggerTime,
+    BehaviorTriggerNoInput,
+    BehaviorTriggerCycle
+)
+from py.ws_manager import ws_manager
 
 class SubAgentExecutor:
     """子智能体执行器 - 完美处理周期与定时任务结束逻辑"""
@@ -80,7 +92,7 @@ class SubAgentExecutor:
             return {"success": False, "error": str(e)}
 
     async def _finalize_task_record(self, task_id, task_center, result, history, iteration):
-        """核心逻辑：决定任务是进入 COMPLETED 还是回到 PENDING"""
+        """核心逻辑：决定任务是进入 COMPLETED 还是回到 PENDING，并推送结果"""
         task = await task_center.get_task(task_id)
         t_type = task.context.get("task_type", "once")
         config = task.context.get("trigger_config", {})
@@ -106,8 +118,6 @@ class SubAgentExecutor:
         if t_type == "cycle":
             is_infinite = config.get("isInfiniteLoop", True)
             repeat_num = config.get("repeatNumber", 1)
-            
-            # 如果是无限循环，或者次数还没跑够
             if is_infinite or ran_count < repeat_num:
                 try:
                     h, m, s = map(int, config.get("cycleValue", "01:00:00").split(':'))
@@ -116,21 +126,13 @@ class SubAgentExecutor:
                     final_progress = 0
                     next_run_at = next_run.isoformat()
                 except: pass
-            else:
-                print(f"✅ 周期任务 {task_id} 次数已满，结束任务。")
-
         elif t_type == "time":
             days = config.get("days", [])
-            # 如果配置了具体的星期，说明是重复执行的定时任务
             if days and len(days) > 0:
                 final_status = TaskStatus.PENDING
                 final_progress = 0
-            else:
-                # 没选星期，说明是一次性定时任务
-                final_status = TaskStatus.COMPLETED
-                print(f"✅ 定时任务 {task_id} 为单次触发，结束任务。")
 
-        # 4. 更新
+        # 4. 更新数据库
         new_ctx = {
             "history": trimmed_history,
             "results_history": results_history,
@@ -147,6 +149,65 @@ class SubAgentExecutor:
             result=result, 
             context=new_ctx
         )
+
+        # 5. 多渠道推送逻辑 (修复核心点)
+        target_platforms = task.platforms if task.platforms else ["chat"]
+        
+        # A. 始终推送到网页端 (WebSocket)
+        print(f"[TaskExecutor] 正在广播任务完成信号到网页端: {task.title}")
+        await ws_manager.broadcast({
+            "type": "task_notification",
+            "data": {
+                "title": f"任务已完成: {task.title}",
+                "message": result[:150] + ("..." if len(result) > 150 else ""),
+                "task_id": task_id
+            }
+        })
+
+        # B. 推送到外部平台 (Wechat, Feishu, etc.)
+        for platform in target_platforms:
+            if platform == "chat": continue # 网页端已处理
+            
+            handler = global_behavior_engine.handlers.get(platform)
+            if not handler:
+                print(f"[TaskExecutor] 平台 {platform} 尚未注册 handler，跳过推送")
+                continue
+                
+            targets = global_behavior_engine.platform_targets.get(platform, [])
+            if not targets:
+                print(f"[TaskExecutor] 平台 {platform} 未配置目标 ChatID，无法推送结果")
+                continue
+
+            try:
+                # 严格构造 Pydantic 模型，防止校验失败
+                trigger_obj = BehaviorTrigger(
+                    type="time",
+                    time=BehaviorTriggerTime(timeValue="00:00:00", days=[]),
+                    noInput=BehaviorTriggerNoInput(latency=30),
+                    cycle=BehaviorTriggerCycle(cycleValue="00:00:30", repeatNumber=1, isInfiniteLoop=False)
+                )
+                
+                action_obj = BehaviorAction(
+                    type="prompt",
+                    prompt=f"【自主任务汇报】\n任务名称：{task.title}\n任务ID：{task.task_id}\n\n执行结果：\n{result}\n\n请你作为助手，对上述任务结果进行简要总结并回复给用户。",
+                )
+                
+                fake_behavior = BehaviorItem(
+                    enabled=True,
+                    trigger=trigger_obj,
+                    action=action_obj,
+                    platform=platform,
+                    platforms=[platform]
+                )
+
+                for chat_id in set(targets):
+                    if chat_id:
+                        print(f"[TaskExecutor] 正在触发平台动作 -> {platform}:{chat_id}")
+                        asyncio.create_task(handler(chat_id, fake_behavior))
+                        
+            except Exception as e:
+                print(f"[TaskExecutor] 构造推送行为失败: {e}")
+
         return {"success": True, "task_id": task_id, "result": result}
 
     async def _call_llm_stream_only(self, http_client, messages, model, task_id, task_center, base_progress, display_history) -> str:
@@ -194,7 +255,7 @@ class SubAgentExecutor:
         except: return False
 
     async def _extract_final_result(self, task, conversation_history, http_client):
-        msgs = [{"role": "system", "content": "请从对话中提取出任务的最终执行产出（报告、代码、结论）。"}, {"role": "user", "content": f"历史:{str(conversation_history)[-4000:]}"}]
+        msgs = [{"role": "system", "content": "请从对话中提取出任务的最终执行产出。"}, {"role": "user", "content": f"历史:{str(conversation_history)[-4000:]}"}]
         try:
             resp = await http_client.post(self.simple_chat_endpoint, json={"messages": msgs, "model": "super-model"})
             return {"full": resp.json()["choices"][0]["message"]["content"].strip()}

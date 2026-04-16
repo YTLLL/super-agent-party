@@ -1546,6 +1546,11 @@ let vue_methods = {
           }
           if (this.activeMenu === 'home') this.startDriverGuide();
         } 
+          // 在 initWebSocket() 的 onmessage 逻辑中添加
+          else if (data.type === 'task_notification') {
+              // 调用前端的弹窗提醒
+              showNotification(`${data.data.title}\n${this.t('intask')}`, 'success');
+          }
         else if (data.type === 'settings_saved') {
           if (!data.success) {
             showNotification(this.t('settings_save_failed'), 'error');
@@ -15572,6 +15577,7 @@ async handleRefreshSkills() {
 
         this.isCreatingTask = true;
         try {
+            console.log(this.newTaskForm); // 打印表单数据
             const res = await fetch(`/v1/tasks/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -15580,6 +15586,7 @@ async handleRefreshSkills() {
                     description: this.newTaskForm.description,
                     agent_type: this.newTaskForm.agent_type,
                     task_type: this.newTaskForm.task_type,
+                    platforms: this.newTaskForm.platforms,
                     trigger_config: this.newTaskForm.trigger_config // 发送完整配置
                 })
             });
@@ -15692,20 +15699,52 @@ openTaskResult(task) {
     },
 
 
-        // 1. 打开编辑对话框
+    // 重置表单到初始状态
+    resetTaskForm() {
+        this.newTaskForm = {
+            title: '',
+            description: '',
+            task_type: 'once',
+            platforms: [],
+            agent_type: 'default',
+            trigger_config: {
+                timeValue: '09:00:00',
+                days: [1, 2, 3, 4, 5],
+                cycleValue: '01:00:00',
+                repeatNumber: 1,
+                isInfiniteLoop: true
+            }
+        };
+        this.isEditing = false;
+        this.editingTaskId = null;
+    },
+
+    // 打开新建窗口
+    openCreateTaskDialog() {
+        this.resetTaskForm(); // 确保每次新建前都干净
+        this.showCreateTaskDialog = true;
+    },
+
     openEditTaskDialog(task) {
+        // 1. 先重置，清除上一次可能残留的状态
+        this.resetTaskForm();
+        
+        // 2. 标记为编辑模式
         this.isEditing = true;
         this.editingTaskId = task.task_id;
         
-        // 深度拷贝任务数据到表单
+        // 3. 填充基础数据
         this.newTaskForm.title = task.title;
         this.newTaskForm.description = task.description;
-        this.newTaskForm.task_type = task.context?.task_type || 'once';
+        this.newTaskForm.platforms = task.platforms || [];
         this.newTaskForm.agent_type = task.agent_type || 'default';
+        this.newTaskForm.task_type = task.context?.task_type || task.task_type || 'once';
         
-        // 如果有触发配置，也拷贝过来
-        if (task.context?.trigger_config) {
-            this.newTaskForm.trigger_config = JSON.parse(JSON.stringify(task.context.trigger_config));
+        // 4. 填充触发器配置
+        const savedConfig = task.context?.trigger_config;
+        if (savedConfig) {
+            // 使用 assign 或 spread 确保响应式更新
+            Object.assign(this.newTaskForm.trigger_config, JSON.parse(JSON.stringify(savedConfig)));
         }
         
         this.showCreateTaskDialog = true;
@@ -15740,8 +15779,9 @@ openTaskResult(task) {
             
             if (data.success) {
                 showNotification(this.t('success'));
-                this.showCreateTaskDialog = false;
-                this.fetchTasks(); // 刷新列表
+                this.showCreateTaskDialog = false; // 关闭窗口
+                this.resetTaskForm();             // ⭐ 提交成功后重置表单
+                this.fetchTasks();                // 刷新列表
             } else {
                 showNotification(data.error, 'error');
             }
