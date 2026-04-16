@@ -35,7 +35,7 @@
 ### 🚀 **無限の可能性を秘めたAIデスクトップコンパニオン！**
 
 #### デスクトップコンパニオン：カスタムVRMモデル、アクション、3Dシーンをサポートし、[live2D拡張](https://github.com/heshengtao/sap-live2d)にも対応しています。
-![image](doc/image/img-2/vrm.jpeg)
+![image](doc/image/img-2/cover.jpeg)
 
 #### タスクセンター：AIエージェントにバックグラウンドで高度なタスクを実行させ、自動的にコンピュータを制御して作業を完了させます。MCPとAgent Skillsに対応。
 ![image](doc/image/img-2/task.jpeg)

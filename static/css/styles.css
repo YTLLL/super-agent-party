@@ -9816,6 +9816,25 @@ code {
 .card-icon.gold { color: #e6a23c; }
 .card-icon.green { color: #67c23a; }
 .card-icon.purple { color: #9b59b6; }
+.card-icon.cyan {
+  color: #00bcd4;
+}
+
+.card-icon.indigo {
+  color: #3f51b5;
+}
+
+.card-icon.orange {
+  color: #ff9800;
+}
+
+.card-icon.red {
+  color: #ff4136; /* 明亮红色 */
+}
+
+.card-icon.teal {
+  color: #009688;
+}
 
 /* =========================================
    Dashboard 建议标签（Chips）中收藏星星显色

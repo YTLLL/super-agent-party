@@ -900,6 +900,46 @@ function updateElement(el, rawMarkdown, formatFn) {
               </div>
             </div>
 
+            <!-- 5. 创建新任务 -->
+            <div class="guide-card" @click="createNewTask">
+              <div class="card-icon cyan"><i class="fa-solid fa-list-check"></i></div>
+              <div class="card-info">
+                <h3>{{ t('createNewTask') || '创建新任务' }}</h3>
+              </div>
+            </div>
+
+            <!-- 6. AI 浏览器 -->
+            <div class="guide-card" @click="openAiBrowser">
+              <div class="card-icon indigo"  v-if="isElectron"><i class="fa-solid fa-compass"></i></div>
+              <div class="card-info">
+                <h3>{{ t('aiBrowser') || 'AI 浏览器' }}</h3>
+              </div>
+            </div>
+
+            <!-- 7. 连接到聊天软件 -->
+            <div class="guide-card" @click="connectToChatApp">
+              <div class="card-icon orange"><i class="fa-solid fa-share-nodes"></i></div>
+              <div class="card-info">
+                <h3>{{ t('connectChatApp') || '连接到聊天软件' }}</h3>
+              </div>
+            </div>
+
+            <!-- 8. 开始直播 -->
+            <div class="guide-card" @click="startLiveStream">
+              <div class="card-icon red"><i class="fa-solid fa-tower-broadcast"></i></div>
+              <div class="card-info">
+                <h3>{{ t('startLiveStream') || '开始直播' }}</h3>
+              </div>
+            </div>
+
+            <!-- 9. 添加扩展 -->
+            <div class="guide-card" @click="gotoAddExtension">
+              <div class="card-icon teal"><i class="fa-solid fa-plus"></i></div>
+              <div class="card-info">
+                <h3>{{ t('addNewExtension') || '添加扩展' }}</h3>
+              </div>
+            </div>
+
             <!-- 收藏的扩展卡片动态渲染 -->
             <div v-for="ext in favoriteExtensions" :key="ext.id" class="guide-card extension" @click="openExtensionInWindow(ext)">
               <div class="card-icon purple"><i class="fa-solid fa-puzzle-piece"></i></div>

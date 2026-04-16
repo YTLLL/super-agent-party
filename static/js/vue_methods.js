@@ -16542,5 +16542,33 @@ toggleFavoriteExtension(ext) {
   localStorage.setItem('favorite_extensions', JSON.stringify(this.favoriteExtensionIds));
 },
 
+createNewTask(){
+  this.activeMenu = 'home';
+  this.expandSidePanel();
+  this.activeSideView = 'tasks';
+
+},
+openAiBrowser(){
+  this.activeMenu = 'ai-browser';
+  this.chromeMCPSettings.type = 'internal';
+  this.chromeMCPSettings.enabled = true;
+  this.changeChromeMCPEnabled();
+},
+
+connectToChatApp(){
+  this.activeMenu = 'deploy-bot';
+  this.subMenu = 'im_bot';
+},
+
+startLiveStream(){
+  this.activeMenu = 'deploy-bot';
+  this.subMenu = 'live_stream';
+},
+
+gotoAddExtension(){
+  this.activeMenu = 'api-group';
+  this.subMenu = 'extension';
+  this.openAddExtensionDialog();
+},
 
 }

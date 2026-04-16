@@ -1608,4 +1608,7 @@ key3`,
         'editTask': '编辑任务',
         'selectPlatform': '选择平台',
         'PlatformNote':'推送到消息平台之前，你必须在对应平台机器人界面配置要发送的会话ID，可以在对应会话窗口用`/id`命令查看，且你必须在机器人启动后该会话窗口与机器人至少对话过一次',
+
+        'connectChatApp': '连接聊天应用',
+        'startLiveStream': '开始直播',
     }
