@@ -8,7 +8,6 @@ import os
 import argparse
 import socket
 import errno
-
 from py.cli_tool import read_file_tool_local
 from py.task_tools import query_task_progress
 from py.ws_manager import ws_manager
@@ -647,7 +646,6 @@ def get_client_class(config, provider_id):
         return AsyncOpenAI
 
 from py.node_runner import node_mgr
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- [核心防御] 立即清理系统环境变量中的 SOCKS 代理，防止 httpx 崩溃 ---
@@ -656,6 +654,17 @@ async def lifespan(app: FastAPI):
         if val.lower().startswith('socks'):
             # 彻底移除会导致崩溃的 socks 环境变量
             os.environ.pop(env_key, None)
+
+    from py.sleep_guard import SleepGuard
+    sleep_guard = SleepGuard(verbose=True)
+    try:
+        await asyncio.to_thread(sleep_guard.start)
+        if sleep_guard.is_running():
+            print("🛡️ 防休眠保护已启动，系统将不会自动休眠")
+        else:
+            print("⚠️ 防休眠启动失败，系统可能会在空闲时休眠")
+    except Exception as e:
+        print(f"防休眠启动异常: {e}")
 
     # 基础初始化
     await _copy_default_skills()
@@ -832,6 +841,12 @@ async def lifespan(app: FastAPI):
 
     # --- [关闭逻辑] ---
     print("System shutting down, cleaning up...")
+
+    try:
+        await asyncio.to_thread(sleep_guard.stop)
+        print("🛡️ 防休眠保护已停止，系统将恢复正常休眠策略")
+    except Exception as e:
+        print(f"防休眠停止异常: {e}")
 
     if scheduler_task:
         scheduler_task.cancel()
