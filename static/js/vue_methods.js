@@ -531,7 +531,7 @@ let vue_methods = {
         this.fileLinks = conversation.fileLinks;
         this.mainAgent = conversation.mainAgent;
         this.showHistoryDialog = false;
-        this.system_prompt = conversation.system_prompt;
+        this.system_prompt = conversation.system_prompt?conversation.system_prompt:" ";
       }
       else {
         this.system_prompt = " ";
@@ -1242,7 +1242,7 @@ let vue_methods = {
         const container = this.$refs.messagesContainer;
         if (this.isElemNearBottom(container) || this.isForceScrollToBottom) {
           container.scrollTop = container.scrollHeight;
-        }
+          }
       });
       this.scrollPanelToBottom();
       this.browserPanelToBottom();
@@ -1250,19 +1250,19 @@ let vue_methods = {
 
     /* 侧边栏滚动：完全一样的思路 */
     scrollPanelToBottom() {
-      this.$nextTick(() => {
-        const panel = this.$refs.messagesPanel;
-        if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
-          panel.scrollTop = panel.scrollHeight;
-        }
+        this.$nextTick(() => {
+          const panel = this.$refs.messagesPanel;
+          if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
+            panel.scrollTop = panel.scrollHeight;
+          }
       });
     },
     browserPanelToBottom() {
-      this.$nextTick(() => {
-        const panel = this.$refs.browserMessagesContainer;
-        if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
-          panel.scrollTop = panel.scrollHeight;
-        }
+        this.$nextTick(() => {
+          const panel = this.$refs.browserMessagesContainer;
+          if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
+            panel.scrollTop = panel.scrollHeight;
+          }
       });
     },
     changeMainAgent(agent) {
@@ -2856,7 +2856,11 @@ let vue_methods = {
     },
     async clearMessages() {
       this.stopGenerate();
-      this.messages = [{ role: 'system', content: this.system_prompt }];
+      if (this.system_prompt){
+        this.messages = [{ role: 'system', content: this.system_prompt }];
+      } else {
+        this.messages = [{ role: 'system', content: ' ' }];
+      }
       this.conversationId = null;
       this.fileLinks = [];
       this.isThinkOpen = false; // 重置思考模式状态

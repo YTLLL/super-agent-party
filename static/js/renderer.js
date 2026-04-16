@@ -1778,20 +1778,26 @@ directives: {
       mounted(el, binding, vnode) {
         const vm = binding.instance; 
         el._update = (content) => {
-           const html = vm.formatMessage(content, -1);
-           const wrapper = document.createElement('div');
-           wrapper.innerHTML = html;
+           // 1. 解析 Markdown
+          const html = vm.formatMessage(content, -1);
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = html;
+           
+           // 2. 更新真实 DOM
            morphdom(el, wrapper, { 
                childrenOnly: true,
                onBeforeElUpdated: (fromEl, toEl) => {
-                   // 只保护 MathJax 自身的标签，不保护父元素
                    const tag = fromEl.tagName || '';
                    if (tag.startsWith('MJX-') || fromEl.classList.contains('MathJax')) return false;
                    if (fromEl.tagName === 'PRE' && fromEl.isEqualNode(toEl)) return false;
                    return true;
                }
            });
-           // 流式输出期间不调用 MathJax，避免和 morphdom 打架
+           
+            // 🌟 【核心修复点】直接调用，不加 requestAnimationFrame，让 scrollToBottom 自带的 setTimeout 去处理时序
+            if (vm && typeof vm.scrollToBottom === 'function') {
+                vm.scrollToBottom();
+            }
         };
         el._update(binding.value);
       },
