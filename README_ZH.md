@@ -15,10 +15,6 @@
 ####
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/super-agent-party?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-super-agent-party" target="_blank">
-    <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1091325&amp;theme=light&amp;t=1776217919630" alt="Super Agent Party" width="250" height="54">
-  </a>
-  &nbsp;&nbsp;
   <a href="https://trendshift.io/repositories/16259" target="_blank">
     <img src="https://trendshift.io/api/badge/repositories/16259" alt="Trendshift" width="250" height="55">
   </a>
