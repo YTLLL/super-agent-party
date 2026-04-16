@@ -20,26 +20,10 @@ import aiofiles
 import aiofiles.os
 import hashlib
 import anyio
-
+from py.get_setting import load_settings
 from py.get_setting import SKILLS_DIR
 
 COMMAND_TIMEOUT = 300  # 5分钟超时
-
-# 尝试导入SDK，如果是在独立环境运行则忽略错误
-try:
-    from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
-    from py.get_setting import load_settings
-except ImportError:
-    print("[WARN] SDK modules not found. Ensure 'claude_agent_sdk' and 'py.get_setting' are available.")
-    # Mock load_settings for standalone testing if needed
-    async def load_settings():
-        return {
-            "CLISettings": {"cc_path": os.getcwd()},
-            "dsSettings": {},
-            "localEnvSettings": {"permissionMode": "yolo"},
-            "ccSettings": {"permissionMode": "default"},
-            "qcSettings": {"permissionMode": "default"}
-        }
 
 # ==================== 环境初始化 ====================
 
@@ -1784,73 +1768,6 @@ async def todo_write_tool_local(action: str, id: str = None, content: str = None
     except Exception as e:
         return f"[Error] 操作失败: {str(e)}"
     
-# ==================== Claude & Qwen Agents (恢复) ====================
-
-cli_info = "这是一个交互式命令行工具..."
-
-async def claude_code(prompt) -> str | AsyncIterator[str]:
-    settings = await load_settings()
-    cwd = settings.get("CLISettings", {}).get("cc_path")
-    ccSettings = settings.get("ccSettings", {})
-    if not cwd: return "No working directory."
-    
-    extra_config = {}
-    if ccSettings.get("enabled"):
-        extra_config = {
-            "ANTHROPIC_BASE_URL": ccSettings.get("base_url"),
-            "ANTHROPIC_API_KEY": ccSettings.get("api_key"),
-            "ANTHROPIC_MODEL": ccSettings.get("model"),
-        }
-        extra_config = {k: str(v) if v else "" for k, v in extra_config.items()}
-
-    async def _stream():
-        permission_mode=ccSettings.get("permissionMode", "default")
-        if permission_mode == "cowork":
-            permission_mode = "bypassPermissions"
-        options = ClaudeAgentOptions(
-            cwd=cwd,
-            continue_conversation=True,
-            permission_mode=permission_mode,
-            env={**os.environ, **extra_config}
-        )
-        async for message in query(prompt=prompt, options=options):
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock): yield block.text
-    return _stream()
-
-async def qwen_code(prompt: str) -> str | AsyncIterator[str]:
-    settings = await load_settings()
-    cwd = settings.get("CLISettings", {}).get("cc_path")
-    qcSettings = settings.get("qcSettings", {})
-    if not cwd: return "No working directory."
-
-    extra_config = {}
-    if qcSettings.get("enabled"):
-        extra_config = {
-            "OPENAI_BASE_URL": str(qcSettings.get("base_url") or ""),
-            "OPENAI_API_KEY": str(qcSettings.get("api_key") or ""),
-            "OPENAI_MODEL": str(qcSettings.get("model") or ""),
-        }
-    executable = shutil.which("qwen") or "qwen"
-
-    async def _stream():
-        try:
-            permission_mode=qcSettings.get("permissionMode", "default")
-            if permission_mode == "cowork":
-                permission_mode = "yolo"
-            process = await asyncio.create_subprocess_exec(
-                executable, "-p", prompt, "--approval-mode", permission_mode,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                cwd=cwd, env={**os.environ, **extra_config}
-            )
-            async for out in _merge_streams(read_stream(process.stdout), read_stream(process.stderr, is_error=True)):
-                yield out
-            await process.wait()
-        except Exception as e: yield str(e)
-    return _stream()
-
-
 # ==================== [新增] Skill 专用读取工具 ====================
 
 async def read_skill_tool_logic(cwd: str, skill_id: str, is_docker: bool = True) -> str:
@@ -2422,24 +2339,6 @@ LOCAL_TOOLS_REGISTRY = {
                 "required": ["action"]
             }
         }
-    }
-}
-
-# 代理工具定义 (用于其他Agent)
-claude_code_tool = {
-    "type": "function",
-    "function": {
-        "name": "claude_code",
-        "description": f"Interact with Claude Code Agent. {cli_info}",
-        "parameters": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}
-    }
-}
-qwen_code_tool = {
-    "type": "function",
-    "function": {
-        "name": "qwen_code",
-        "description": f"Interact with Qwen Code Agent. {cli_info}",
-        "parameters": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}
     }
 }
 

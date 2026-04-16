@@ -9,6 +9,21 @@ import aiofiles
 import aiofiles.os
 from pydantic import BaseModel, Field
 
+class TaskCreateRequest(BaseModel):
+    title: str
+    description: str
+    agent_type: str = "default"
+    # --- 新增字段 ---
+    task_type: str = "once"           # once, scheduled, recurring
+    run_at_time: Optional[str] = None  # 定时任务的时间点 (ISO格式)
+    interval_minutes: int = 60         # 周期任务的间隔
+
+# 1. 增加任务类型枚举
+class TaskType(str, Enum):
+    ONCE = "once"           # 单次任务 (立即执行)
+    SCHEDULED = "scheduled" # 定时任务 (未来某个时间点执行一次)
+    RECURRING = "recurring" # 周期任务 (每隔一段时间执行)
+
 class TaskStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -32,6 +47,17 @@ class SubTask(BaseModel):
     agent_type: str = "default"
     # 使用 Field(default_factory=dict) 确保每个实例有独立的字典，防止引用污染
     context: Dict[str, Any] = Field(default_factory=dict)
+    
+    task_type: TaskType = TaskType.ONCE
+    
+    # 时间配置
+    schedule_config: Optional[Dict[str, Any]] = None 
+    
+    # 状态跟踪
+    next_run_at: Optional[str] = None
+    last_run_at: Optional[str] = None
+    occurrence_count: int = 0  # 已执行次数 (针对周期任务)
+
 
 class TaskCenter:
     """任务中心 - 管理所有主任务和子任务"""

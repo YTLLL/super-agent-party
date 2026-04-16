@@ -10,47 +10,69 @@ create_subtask_tool = {
     "type": "function",
     "function": {
         "name": "create_subtask",
-        "description": """创建一个子任务并在后台异步执行。
+        "description": """创建一个子任务并在后台异步执行。支持单次、定时触发和周期性重复。
 
 ⚠️ 使用场景：
-- 将大任务拆分成多个独立的小任务并行执行
-- 需要执行耗时较长的任务（如批量处理、深度研究）
-- 需要委托给专门的子智能体处理特定领域问题
+- once (立即执行): 处理当前需要立即开始的长耗时任务。
+- time (定时执行): 在特定的时间点执行，支持按周重复（如：每周一 09:00 执行）。
+- cycle (周期执行): 每隔固定时长执行一次（如：每隔 2 小时执行一次）。
 
 ✅ 特点：
-- 异步执行，不阻塞主对话
-- 自动保存进度，重启后可恢复
-- 可通过 query_task_progress 查看实时状态
-
-📝 返回值：子任务ID，用于后续跟踪进度
-
-⚠️ 注意：
-- 每个子任务都是独立的对话上下文
-- 子任务无法访问主对话的历史记录（除非在description中明确说明）
-- 建议在description中提供完整的背景信息和明确的完成标准
-- 如果不是用户要求，子任务创建后请不要主动查询其进度，客户端UI会自动将当前进度和结果显示给用户""",
+- 异步执行，自动保存进度。
+- 周期性任务会自动根据执行结果存档，并计算下一次运行时间。""",
         "parameters": {
             "type": "object",
             "properties": {
                 "title": {
                     "type": "string",
-                    "description": "子任务的简短标题（建议不超过50字）"
+                    "description": "子任务的简短标题"
                 },
                 "description": {
                     "type": "string",
-                    "description": """子任务的详细描述，必须包含：
-1. 任务目标：期望达成的具体结果
-2. 背景信息：必要的上下文和前置知识
-3. 完成标准：如何判断任务已完成
-4. 约束条件：需要遵守的规则或限制"""
+                    "description": "详细的任务目标、背景信息和完成标准。"
+                },
+                "task_type": {
+                    "type": "string",
+                    "description": "任务类型",
+                    "enum": ["once", "time", "cycle"],
+                    "default": "once"
+                },
+                "trigger_config": {
+                    "type": "object",
+                    "description": "调度配置（仅在 task_type 为 time 或 cycle 时需要）",
+                    "properties": {
+                        "timeValue": {
+                            "type": "string",
+                            "description": "定时时间，格式 HH:mm:ss (用于 time 模式)"
+                        },
+                        "days": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "重复周期（星期）：0代表周日，1-6代表周一至周六 (用于 time 模式)"
+                        },
+                        "cycleValue": {
+                            "type": "string",
+                            "description": "执行间隔，格式 HH:mm:ss (用于 cycle 模式)"
+                        },
+                        "repeatNumber": {
+                            "type": "integer",
+                            "description": "总执行次数",
+                            "default": 1
+                        },
+                        "isInfiniteLoop": {
+                            "type": "boolean",
+                            "description": "是否无限循环 (用于 cycle 模式)",
+                            "default": True
+                        }
+                    }
                 },
                 "agent_type": {
                     "type": "string",
-                    "description": "使用的智能体类型（当前固定为 'default'）",
+                    "description": "使用的智能体类型",
                     "default": "default"
                 }
             },
-            "required": ["title", "description"]
+            "required": ["title", "description", "task_type"]
         }
     }
 }
@@ -141,37 +163,63 @@ finish_task_tool = {
 async def create_subtask(
     title: str,
     description: str,
+    task_type: str = "once",
+    trigger_config: dict = None,
     agent_type: str = "default",
     workspace_dir: str = None,
     settings: dict = None,
     parent_task_id: Optional[str] = None,
     consensus_content: Optional[str] = None
 ) -> str:
-    """创建并启动子任务"""
+    """创建并根据类型分发子任务"""
     try:
+        from py.task_center import get_task_center, TaskStatus
         task_center = await get_task_center(workspace_dir)
         
-        # 创建任务
+        # 构造初始化 context
+        # 必须严格对齐 scheduler.py 和 sub_agent.py 需要的字段
+        context = {
+            "task_type": task_type,
+            "trigger_config": trigger_config or {},
+            "history": [],
+            "results_history": [],
+            "ran_count": 0
+        }
+        
+        # 1. 创建任务记录
         task = await task_center.create_task(
             title=title,
             description=description,
             parent_task_id=parent_task_id,
-            agent_type=agent_type
+            agent_type=agent_type,
+            context=context
         )
         
-        # 在后台异步执行
-        asyncio.create_task(
-            run_subtask_in_background(
-                task_id=task.task_id,
-                workspace_dir=workspace_dir,
-                settings=settings, 
-                consensus_content=consensus_content
+        # 2. 判断执行逻辑
+        if task_type == "once":
+            # 立即执行模式：直接丢进后台运行
+            asyncio.create_task(
+                run_subtask_in_background(
+                    task_id=task.task_id,
+                    workspace_dir=workspace_dir,
+                    settings=settings, 
+                    consensus_content=consensus_content
+                )
             )
-        )
+            mode_msg = "已立即开始执行。"
+        else:
+            # 定时或周期模式：仅保存，由 AgentScheduler 扫描触发
+            mode_msg = f"已进入计划清单，等待调度触发 (模式: {task_type})。"
+            
     except Exception as e:
         return f"❌ 创建子任务失败: {str(e)}"
     
-    return f"✅ 子任务已创建并开始执行\n\n任务ID: {task.task_id}\n标题: {task.title}\n请不要主动查询任务进度，客户端UI会自动将当前进度和结果显示给用户"
+    return (f"✅ 子任务创建成功！\n\n"
+            f"任务ID: {task.task_id}\n"
+            f"标题: {task.title}\n"
+            f"类型: {task_type}\n"
+            f"状态: {mode_msg}\n"
+            f"提示：客户端UI会自动显示当前进度和历史产出，非必要请勿频繁查询。")
 
 async def query_task_progress(
     workspace_dir: str,

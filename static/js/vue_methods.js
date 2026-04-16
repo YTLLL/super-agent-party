@@ -531,7 +531,7 @@ let vue_methods = {
         this.fileLinks = conversation.fileLinks;
         this.mainAgent = conversation.mainAgent;
         this.showHistoryDialog = false;
-        this.system_prompt = conversation.system_prompt;
+        this.system_prompt = conversation.system_prompt?conversation.system_prompt:" ";
       }
       else {
         this.system_prompt = " ";
@@ -1242,7 +1242,7 @@ let vue_methods = {
         const container = this.$refs.messagesContainer;
         if (this.isElemNearBottom(container) || this.isForceScrollToBottom) {
           container.scrollTop = container.scrollHeight;
-        }
+          }
       });
       this.scrollPanelToBottom();
       this.browserPanelToBottom();
@@ -1250,19 +1250,19 @@ let vue_methods = {
 
     /* 侧边栏滚动：完全一样的思路 */
     scrollPanelToBottom() {
-      this.$nextTick(() => {
-        const panel = this.$refs.messagesPanel;
-        if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
-          panel.scrollTop = panel.scrollHeight;
-        }
+        this.$nextTick(() => {
+          const panel = this.$refs.messagesPanel;
+          if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
+            panel.scrollTop = panel.scrollHeight;
+          }
       });
     },
     browserPanelToBottom() {
-      this.$nextTick(() => {
-        const panel = this.$refs.browserMessagesContainer;
-        if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
-          panel.scrollTop = panel.scrollHeight;
-        }
+        this.$nextTick(() => {
+          const panel = this.$refs.browserMessagesContainer;
+          if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
+            panel.scrollTop = panel.scrollHeight;
+          }
       });
     },
     changeMainAgent(agent) {
@@ -1854,6 +1854,11 @@ let vue_methods = {
               } catch (error) { console.error(error); }
         }
 
+        // --- 核心修复点：确保 this.fileLinks 是数组 ---
+        if (!Array.isArray(this.fileLinks)) {
+            this.fileLinks = []; 
+        }
+
         // 构造文件链接字符串
         const fileLinks_content = fileLinks.map(fileLink => `\n[文件名：${fileLink.name}\n文件链接: ${fileLink.path}]`).join('\n') || '';
         const fileLinks_list = Array.isArray(fileLinks) ? fileLinks.map(fileLink => fileLink.path).flat() : []
@@ -2017,7 +2022,7 @@ let vue_methods = {
             if (finalMessages[finalMessages.length - 1].role === 'assistant') {
                 finalMessages.pop();
             }
-            
+
             const response = await fetch(`/v1/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2053,6 +2058,11 @@ let vue_methods = {
                         const parsed = JSON.parse(jsonStr);
                         const delta = parsed.choices?.[0]?.delta;
                         if (!delta) continue;
+
+                        if (currentMsg.content === '' && !isResume) { // 只有非 Resume 或者是新内容开始时才算延迟
+                            this.stopTimer(); 
+                            currentMsg.first_token_latency = this.elapsedTime;
+                        }
 
                         // A. 思考流 (Reasoning)
                         if (delta.reasoning_content) {
@@ -2846,7 +2856,11 @@ let vue_methods = {
     },
     async clearMessages() {
       this.stopGenerate();
-      this.messages = [{ role: 'system', content: this.system_prompt }];
+      if (this.system_prompt){
+        this.messages = [{ role: 'system', content: this.system_prompt }];
+      } else {
+        this.messages = [{ role: 'system', content: ' ' }];
+      }
       this.conversationId = null;
       this.fileLinks = [];
       this.isThinkOpen = false; // 重置思考模式状态
@@ -15513,24 +15527,35 @@ async handleRefreshSkills() {
             const res = await fetch(`/v1/tasks/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.newTaskForm)
+                body: JSON.stringify({
+                    title: this.newTaskForm.title,
+                    description: this.newTaskForm.description,
+                    agent_type: this.newTaskForm.agent_type,
+                    task_type: this.newTaskForm.task_type,
+                    trigger_config: this.newTaskForm.trigger_config // 发送完整配置
+                })
             });
             const data = await res.json();
             
             if (data.success) {
-                showNotification(this.t('success'))
+                showNotification(this.t('success'));
                 this.showCreateTaskDialog = false;
-                this.newTaskForm = { title: '', description: '', agent_type: 'default' };
+                // 重置表单
+                this.newTaskForm = { 
+                    title: '', description: '', task_type: 'once', agent_type: 'default',
+                    trigger_config: { timeValue: '09:00:00', days: [1,2,3,4,5], cycleValue: '01:00:00', repeatNumber: 1, isInfiniteLoop: true }
+                };
                 this.fetchTasks();
             } else {
                 showNotification(data.error, 'error');
             }
         } catch (e) {
-            showNotification(this.t('networkError') || '网络错误', 'error')
+            showNotification(this.t('networkError'), 'error');
         } finally {
             this.isCreatingTask = false;
         }
     },
+
 
     // 取消任务
     async handleCancelTask(taskId) {
@@ -15583,12 +15608,114 @@ async handleRefreshSkills() {
         return map[status] || 'info';
     },
   // 打开任务结果弹窗
-  openTaskResult(task) {
-    this.selectedTaskTitle = `${this.t('taskResult') || '任务结果'}: ${task.title}`;
-    this.selectedTaskResult = task.result || '';
-    this.showTaskResultDialog = true;
-  },
+// 在 Vue 组件的 methods 中
+openTaskResult(task) {
+    this.selectedTaskTitle = task.title;
     
+    // 1. 获取该任务的所有历史产出记录
+    // 如果没有历史记录（比如旧任务），我们造一个包含当前结果的伪记录
+    const rawHistory = task.context?.results_history || [];
+    
+    if (rawHistory.length === 0 && task.result) {
+        this.selectedTaskHistory = [{
+            time: task.updated_at || task.created_at,
+            result: task.result
+        }];
+    } else {
+        // 将历史记录倒序排列（最新的在最上面）
+        this.selectedTaskHistory = [...rawHistory].reverse();
+    }
+    
+    // 2. 默认选中第一项（即最新的一项）
+    this.currentResultIdx = 0;
+    
+    // 3. 打开弹窗
+    this.showTaskResultDialog = true;
+},
+    
+    getModeIcon(type) {
+        const iconMap = {
+            'once': 'fa-solid fa-bolt-lightning',
+            'time': 'fa-regular fa-clock',
+            'cycle': 'fa-solid fa-arrows-rotate'
+        };
+        // 如果 type 为空或不在 map 中，返回默认图标
+        return iconMap[type] || 'fa-solid fa-terminal';
+    },
+
+
+        // 1. 打开编辑对话框
+    openEditTaskDialog(task) {
+        this.isEditing = true;
+        this.editingTaskId = task.task_id;
+        
+        // 深度拷贝任务数据到表单
+        this.newTaskForm.title = task.title;
+        this.newTaskForm.description = task.description;
+        this.newTaskForm.task_type = task.context?.task_type || 'once';
+        this.newTaskForm.agent_type = task.agent_type || 'default';
+        
+        // 如果有触发配置，也拷贝过来
+        if (task.context?.trigger_config) {
+            this.newTaskForm.trigger_config = JSON.parse(JSON.stringify(task.context.trigger_config));
+        }
+        
+        this.showCreateTaskDialog = true;
+    },
+
+    // 2. 统一的提交处理函数
+    async submitTaskForm() {
+        if (!this.newTaskForm.title || !this.newTaskForm.description) {
+            showNotification(this.t('fillRequired'), 'error');
+            return;
+        }
+
+        this.isCreatingTask = true;
+
+        try {
+            // 如果是编辑模式，先停止并删除旧任务
+            if (this.isEditing && this.editingTaskId) {
+                // A. 停止原有任务
+                await fetch(`/v1/tasks/cancel/${this.editingTaskId}`, { method: 'POST' });
+                // B. 删除原有任务
+                await fetch(`/v1/tasks/${this.editingTaskId}`, { method: 'DELETE' });
+                console.log(`Old task ${this.editingTaskId} removed for re-creation`);
+            }
+
+            // C. 创建新任务 (无论是新建还是编辑后的“重建”，都走这个接口)
+            const res = await fetch(`/v1/tasks/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.newTaskForm)
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showNotification(this.t('success'));
+                this.showCreateTaskDialog = false;
+                this.fetchTasks(); // 刷新列表
+            } else {
+                showNotification(data.error, 'error');
+            }
+        } catch (e) {
+            showNotification(this.t('networkError'), 'error');
+        } finally {
+            this.isCreatingTask = false;
+            // 提交完成后重置编辑状态
+            this.isEditing = false;
+            this.editingTaskId = null;
+        }
+    },
+
+    // 3. 这里的 reset 函数在对话框关闭时调用 (el-dialog 的 @closed 事件)
+    resetTaskForm() {
+        this.isEditing = false;
+        this.editingTaskId = null;
+        this.newTaskForm = {
+            title: '', description: '', task_type: 'once', agent_type: 'default',
+            trigger_config: { timeValue: '09:00:00', days: [1,2,3,4,5], cycleValue: '01:00:00', repeatNumber: 1, isInfiniteLoop: true }
+        };
+    },
 // 打开详情页
 openTaskDetailView(task) {
     this.viewingTaskDetail = task;

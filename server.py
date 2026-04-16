@@ -385,7 +385,7 @@ ChromeMCP_client = None
 sql_client = None
 mcp_client_list = {}
 locales = {}
-
+scheduler_task = None
 global_http_client = None  # 用于共享底层的 TCP 连接池
 openai_tts_clients_cache = {}  # 缓存 OpenAI TTS Client
 tetos_speakers_cache = {}      # 缓存 Tetos Speaker 对象
@@ -679,9 +679,16 @@ async def lifespan(app: FastAPI):
     )
     
     # 2. 解包结果
-    global settings, client, reasoner_client, fast_client, mcp_client_list, local_timezone, logger, locales, global_http_client
+    global settings, client, reasoner_client, fast_client, mcp_client_list, local_timezone, logger, locales, global_http_client,scheduler_task
     _, _, locales, settings, local_timezone = results
     
+
+    from py.scheduler import AgentScheduler
+    # 传入全局 settings 对象的引用
+    # 因为 python 字典是引用传递，后续 UI 修改了 settings，这里拿到的也是最新的
+    scheduler = AgentScheduler(settings)
+    scheduler_task = asyncio.create_task(scheduler.start_loop())
+
     # --- [日志系统初始化] ---
     timestamp = time.time()
     log_path = os.path.join(LOG_DIR, f"backend_{timestamp}.log")
@@ -822,6 +829,9 @@ async def lifespan(app: FastAPI):
 
     # --- [关闭逻辑] ---
     print("System shutting down, cleaning up...")
+
+    if scheduler_task:
+        scheduler_task.cancel()
     ext_ids = list(node_mgr.exts.keys())
     for ext_id in ext_ids:
         try: await node_mgr.stop(ext_id)
@@ -998,8 +1008,6 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
 
     # Docker CLI 工具（原有）
     from py.cli_tool import (
-        claude_code,
-        qwen_code,
         docker_sandbox,
         list_files_tool,
         read_file_tool,
@@ -1110,8 +1118,6 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "get_wikipedia_section_content": get_wikipedia_section_content,
         "search_arxiv_papers": search_arxiv_papers,
         "auto_behavior": auto_behavior,
-        "claude_code": claude_code,
-        "qwen_code": qwen_code,
         "list_pages": list_pages,
         "new_page": new_page,
         "close_page": close_page,
@@ -2606,77 +2612,116 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
             except Exception as e:
                 print(f"后端桌面截图失败: {e}")
 
-        # ==================== 精准压缩逻辑 (User + 最终回复锚点) ====================
+        # =========================================================================
+        # 第一阶段：上下文压缩 (仅在达到阈值时触发，决定“保留哪些消息”)
+        # =========================================================================
         max_rounds = settings.get("max_rounds", 0)
-        if max_rounds > 0 and len(request.messages) > (max_rounds * 2 + 1):
-            def get_role(msg):
-                return msg.get("role") if isinstance(msg, dict) else msg.role
+        chat_messages = request.messages # 这里的 chat_messages 包含 system
+        
+        if max_rounds > 0:
+            def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
             
-            def has_tool_calls(msg):
-                if get_role(msg) != "assistant": return False
-                return bool(msg.get("tool_calls")) if isinstance(msg, dict) else bool(getattr(msg, "tool_calls", None))
-
-            system_msgs = [m for m in request.messages if get_role(m) == "system"]
-            chat_msgs = [m for m in request.messages if get_role(m) != "system"]
-
-            # 只要消息量超过阈值才开始压缩
-            if len(chat_msgs) > (max_rounds * 2):
+            # 区分系统消息和对话消息
+            sys_msgs = [m for m in chat_messages if get_role(m) == "system"]
+            dialog_msgs = [m for m in chat_messages if get_role(m) != "system"]
+            
+            # 设定压缩阈值：当非系统消息超过 max_rounds * 2 + 1 时开始压缩
+            if len(dialog_msgs) > (max_rounds * 2 + 1):
                 keep_indices = set()
                 
-                # 1. 遍历消息，识别 User 和每个 turn 的最后一个 Assistant
-                for i in range(len(chat_msgs)):
-                    role = get_role(chat_msgs[i])
-                    
-                    # 规则 A: 所有的 User 消息必须保留
-                    if role == "user":
-                        keep_indices.add(i)
-                    
-                    # 规则 B: 识别“最后一个助手回复”
-                    # 如果当前是 assistant，且下一条消息是 user，或者已经是最后一条了
-                    # 说明这是当前这个问题的最终回答（或者是中间断掉的回答）
-                    if role == "assistant":
-                        is_last_assistant_of_turn = True
-                        for j in range(i + 1, len(chat_msgs)):
-                            next_role = get_role(chat_msgs[j])
-                            if next_role == "assistant":
-                                is_last_assistant_of_turn = False
-                                break
-                            if next_role == "user":
-                                break # 后面是用户，说明当前这个就是本轮最后一条助手回复
-                        
-                        if is_last_assistant_of_turn:
-                            keep_indices.add(i)
-
-                # 2. 规则 C: 必须保留最近 N 条完整消息（尾部窗口保护）
-                # 确保当前正在进行的工具调用链不被破坏
-                tail_start = max(0, len(chat_msgs) - (max_rounds * 2))
-                for i in range(tail_start, len(chat_msgs)):
-                    keep_indices.add(i)
-
-                # 3. 构造初步列表并进行工具链完整性校验 (API 必须)
-                sorted_indices = sorted(list(keep_indices))
-                temp_chat = [chat_msgs[i] for i in sorted_indices]
+                # 1. 总是保留第一条消息 (Anchor User Prompt)
+                if len(dialog_msgs) > 0: keep_indices.add(0)
                 
-                final_chat = []
-                for i, msg in enumerate(temp_chat):
-                    # API 限制：tool 消息前面必须紧跟带 tool_calls 的 assistant
-                    if get_role(msg) == "tool":
-                        prev = final_chat[-1] if final_chat else None
-                        if prev and has_tool_calls(prev):
-                            final_chat.append(msg)
-                    # API 限制：带 tool_calls 的 assistant 后面必须跟 tool 结果
-                    elif has_tool_calls(msg):
-                        # 如果不是最后一条，且下一条是 tool，则保留
-                        if i + 1 < len(temp_chat) and get_role(temp_chat[i+1]) == "tool":
-                            final_chat.append(msg)
-                        # 如果是最后一条，说明是正在进行的调用，必须保留
-                        elif i == len(temp_chat) - 1:
-                            final_chat.append(msg)
-                    else:
-                        final_chat.append(msg)
+                # 2. 保留所有 User 消息 (User 优先策略)
+                for i, m in enumerate(dialog_msgs):
+                    if get_role(m) == "user": keep_indices.add(i)
+                
+                # 3. 保留每个 Turn 的最后一个 Assistant 消息 (最终答案)
+                for i in range(len(dialog_msgs)):
+                    if get_role(dialog_msgs[i]) == "assistant":
+                        is_last = True
+                        for j in range(i + 1, len(dialog_msgs)):
+                            if get_role(dialog_msgs[j]) == "assistant":
+                                is_last = False; break
+                            if get_role(dialog_msgs[j]) == "user": break
+                        if is_last: keep_indices.add(i)
+                
+                # 4. 保留最近的活跃窗口 (最近 N 条消息，确保当前工具链不被切断)
+                tail_start = max(0, len(dialog_msgs) - (max_rounds * 2))
+                for i in range(tail_start, len(dialog_msgs)):
+                    keep_indices.add(i)
+                
+                # 构造初步压缩后的列表
+                compressed_dialog = [dialog_msgs[i] for i in sorted(list(keep_indices))]
+                chat_messages = sys_msgs + compressed_dialog
+                print(f"[Context] Compressed to {len(chat_messages)} msgs.")
 
-                request.messages = system_msgs + final_chat
-                print(f"[Context Compressed] Retained all Users and Final Assistants. Total: {len(request.messages)}")
+        # =========================================================================
+        # 第二阶段：强制合法性清洗 (Sanitizer) - 无论是否压缩都必须执行
+        # 目标：彻底杜绝 Messages with role 'tool' must be a response... 报错
+        # =========================================================================
+        def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
+        def get_tcs(m): 
+            if get_role(m) != "assistant": return None
+            return m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)
+
+        final_messages = []
+        pending_tool_call_ids = set()
+
+        for msg in chat_messages:
+            role = get_role(msg)
+            
+            if role == "tool":
+                t_id = msg.get("tool_call_id") if isinstance(msg, dict) else getattr(msg, "tool_call_id", None)
+                # 核心校验：如果这个 tool 消息不在我们记录的待响应 ID 列表中，直接丢弃
+                if t_id and t_id in pending_tool_call_ids:
+                    final_messages.append(msg)
+                    pending_tool_call_ids.remove(t_id) # 匹配成功，移除
+                else:
+                    print(f"[Sanitizer] 丢弃孤立的 tool 消息: {t_id}")
+                    continue
+            
+            elif role == "assistant":
+                tcs = get_tcs(msg)
+                if tcs:
+                    # 这是一个发起工具调用的消息
+                    # 暂时先存入，并记录它期望的 ID
+                    current_tcs_ids = {tc.get("id") if isinstance(tc, dict) else tc.id for tc in tcs}
+                    final_messages.append(msg)
+                    for tid in current_tcs_ids: pending_tool_call_ids.add(tid)
+                else:
+                    # 普通助手回复
+                    final_messages.append(msg)
+            
+            else:
+                # user 或 system 消息，直接通过
+                final_messages.append(msg)
+
+        # 最终反向检查：如果最后一条是带 tool_calls 的 assistant，但后面没有 tool 消息
+        # 我们需要移除这些 tool_calls 标记，或者直接移除该条消息（取决于业务需求）
+        # 这里选择保留消息文本但清空 tool_calls，防止 API 报错
+        while final_messages:
+            last_msg = final_messages[-1]
+            tcs = get_tcs(last_msg)
+            # 如果最后一条助手消息发起了调用，但我们已经没有后续消息来填补它了
+            if tcs and any( ( (tc.get("id") if isinstance(tc, dict) else tc.id) in pending_tool_call_ids ) for tc in tcs ):
+                # 如果该消息有文本内容，我们抹除 tool_calls 保留文本
+                # 如果没文本，就直接弹出整条消息
+                content = last_msg.get("content") if isinstance(last_msg, dict) else getattr(last_msg, "content", "")
+                if content:
+                    if isinstance(last_msg, dict):
+                        last_msg["tool_calls"] = None
+                    else:
+                        setattr(last_msg, "tool_calls", None)
+                    print("[Sanitizer] 抹除末尾未闭合的 tool_calls")
+                    break # 处理完毕
+                else:
+                    final_messages.pop()
+                    print("[Sanitizer] 弹出末尾无内容的孤立 tool_call 发起消息")
+            else:
+                break
+
+        request.messages = final_messages
         # =========================================================================
         images = await images_in_messages(request.messages,fastapi_base_url)
         request.messages = await message_without_images(request.messages)
@@ -2722,7 +2767,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
             arxiv_tool 
         ) 
         from py.autoBehavior import auto_behavior_tool
-        from py.cli_tool import claude_code_tool,qwen_code_tool,get_tools_for_mode,get_local_tools_for_mode
+        from py.cli_tool import get_tools_for_mode,get_local_tools_for_mode
         from py.cdp_tool import all_cdp_tools
         from py.random_topic import random_topics_tools
         from py.computer_use_tool import computer_use_tools,mouse_use_tools,keyboard_use_tools,desktopVision_use_tools
@@ -2816,11 +2861,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
             if sql_tool:
                 tools.extend(sql_tool)
         if settings['CLISettings']['enabled']:
-            if settings['CLISettings']['engine'] == 'cc':
-                tools.append(claude_code_tool)
-            elif settings['CLISettings']['engine'] == 'qc':
-                tools.append(qwen_code_tool)
-            elif settings['CLISettings']['engine'] == 'ds':
+            if settings['CLISettings']['engine'] == 'ds':
                 tools.extend(get_tools_for_mode('yolo'))
             elif settings['CLISettings']['engine'] == 'local':
                 tools.extend(get_local_tools_for_mode('yolo'))
@@ -3311,10 +3352,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     env_settings = settings.get("localEnvSettings", {})
                 elif engine == "ds":
                     env_settings = settings.get("dsSettings", {})
-                elif engine == "cc":
-                    env_settings = settings.get("ccSettings", {})
-                elif engine == "qc":
-                    env_settings = settings.get("qcSettings", {})
                 else:
                     env_settings = {}
                 
@@ -3363,9 +3400,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     elif request.is_sub_agent:
                         # 子智能体默认只保留安全的工具，移除高风险操作
                         SUBAGENT_BLOCKED_TOOLS = [
-                            # 阻止子智能体执行系统命令
-                            "claude_code",
-                            "qwen_code",
                             
                             # 阻止子智能体管理进程/端口
                             "manage_processes_tool",
@@ -4050,77 +4084,116 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             }
                         )
 
-                        # ==================== 精准压缩逻辑 (User + 最终回复锚点) ====================
+                        # =========================================================================
+                        # 第一阶段：上下文压缩 (仅在达到阈值时触发，决定“保留哪些消息”)
+                        # =========================================================================
                         max_rounds = settings.get("max_rounds", 0)
-                        if max_rounds > 0 and len(request.messages) > (max_rounds * 2 + 1):
-                            def get_role(msg):
-                                return msg.get("role") if isinstance(msg, dict) else msg.role
+                        chat_messages = request.messages # 这里的 chat_messages 包含 system
+                        
+                        if max_rounds > 0:
+                            def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
                             
-                            def has_tool_calls(msg):
-                                if get_role(msg) != "assistant": return False
-                                return bool(msg.get("tool_calls")) if isinstance(msg, dict) else bool(getattr(msg, "tool_calls", None))
-
-                            system_msgs = [m for m in request.messages if get_role(m) == "system"]
-                            chat_msgs = [m for m in request.messages if get_role(m) != "system"]
-
-                            # 只要消息量超过阈值才开始压缩
-                            if len(chat_msgs) > (max_rounds * 2):
+                            # 区分系统消息和对话消息
+                            sys_msgs = [m for m in chat_messages if get_role(m) == "system"]
+                            dialog_msgs = [m for m in chat_messages if get_role(m) != "system"]
+                            
+                            # 设定压缩阈值：当非系统消息超过 max_rounds * 2 + 1 时开始压缩
+                            if len(dialog_msgs) > (max_rounds * 2 + 1):
                                 keep_indices = set()
                                 
-                                # 1. 遍历消息，识别 User 和每个 turn 的最后一个 Assistant
-                                for i in range(len(chat_msgs)):
-                                    role = get_role(chat_msgs[i])
-                                    
-                                    # 规则 A: 所有的 User 消息必须保留
-                                    if role == "user":
-                                        keep_indices.add(i)
-                                    
-                                    # 规则 B: 识别“最后一个助手回复”
-                                    # 如果当前是 assistant，且下一条消息是 user，或者已经是最后一条了
-                                    # 说明这是当前这个问题的最终回答（或者是中间断掉的回答）
-                                    if role == "assistant":
-                                        is_last_assistant_of_turn = True
-                                        for j in range(i + 1, len(chat_msgs)):
-                                            next_role = get_role(chat_msgs[j])
-                                            if next_role == "assistant":
-                                                is_last_assistant_of_turn = False
-                                                break
-                                            if next_role == "user":
-                                                break # 后面是用户，说明当前这个就是本轮最后一条助手回复
-                                        
-                                        if is_last_assistant_of_turn:
-                                            keep_indices.add(i)
-
-                                # 2. 规则 C: 必须保留最近 N 条完整消息（尾部窗口保护）
-                                # 确保当前正在进行的工具调用链不被破坏
-                                tail_start = max(0, len(chat_msgs) - (max_rounds * 2))
-                                for i in range(tail_start, len(chat_msgs)):
-                                    keep_indices.add(i)
-
-                                # 3. 构造初步列表并进行工具链完整性校验 (API 必须)
-                                sorted_indices = sorted(list(keep_indices))
-                                temp_chat = [chat_msgs[i] for i in sorted_indices]
+                                # 1. 总是保留第一条消息 (Anchor User Prompt)
+                                if len(dialog_msgs) > 0: keep_indices.add(0)
                                 
-                                final_chat = []
-                                for i, msg in enumerate(temp_chat):
-                                    # API 限制：tool 消息前面必须紧跟带 tool_calls 的 assistant
-                                    if get_role(msg) == "tool":
-                                        prev = final_chat[-1] if final_chat else None
-                                        if prev and has_tool_calls(prev):
-                                            final_chat.append(msg)
-                                    # API 限制：带 tool_calls 的 assistant 后面必须跟 tool 结果
-                                    elif has_tool_calls(msg):
-                                        # 如果不是最后一条，且下一条是 tool，则保留
-                                        if i + 1 < len(temp_chat) and get_role(temp_chat[i+1]) == "tool":
-                                            final_chat.append(msg)
-                                        # 如果是最后一条，说明是正在进行的调用，必须保留
-                                        elif i == len(temp_chat) - 1:
-                                            final_chat.append(msg)
-                                    else:
-                                        final_chat.append(msg)
+                                # 2. 保留所有 User 消息 (User 优先策略)
+                                for i, m in enumerate(dialog_msgs):
+                                    if get_role(m) == "user": keep_indices.add(i)
+                                
+                                # 3. 保留每个 Turn 的最后一个 Assistant 消息 (最终答案)
+                                for i in range(len(dialog_msgs)):
+                                    if get_role(dialog_msgs[i]) == "assistant":
+                                        is_last = True
+                                        for j in range(i + 1, len(dialog_msgs)):
+                                            if get_role(dialog_msgs[j]) == "assistant":
+                                                is_last = False; break
+                                            if get_role(dialog_msgs[j]) == "user": break
+                                        if is_last: keep_indices.add(i)
+                                
+                                # 4. 保留最近的活跃窗口 (最近 N 条消息，确保当前工具链不被切断)
+                                tail_start = max(0, len(dialog_msgs) - (max_rounds * 2))
+                                for i in range(tail_start, len(dialog_msgs)):
+                                    keep_indices.add(i)
+                                
+                                # 构造初步压缩后的列表
+                                compressed_dialog = [dialog_msgs[i] for i in sorted(list(keep_indices))]
+                                chat_messages = sys_msgs + compressed_dialog
+                                print(f"[Context] Compressed to {len(chat_messages)} msgs.")
 
-                                request.messages = system_msgs + final_chat
-                                print(f"[Context Compressed] Retained all Users and Final Assistants. Total: {len(request.messages)}")
+                        # =========================================================================
+                        # 第二阶段：强制合法性清洗 (Sanitizer) - 无论是否压缩都必须执行
+                        # 目标：彻底杜绝 Messages with role 'tool' must be a response... 报错
+                        # =========================================================================
+                        def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
+                        def get_tcs(m): 
+                            if get_role(m) != "assistant": return None
+                            return m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)
+
+                        final_messages = []
+                        pending_tool_call_ids = set()
+
+                        for msg in chat_messages:
+                            role = get_role(msg)
+                            
+                            if role == "tool":
+                                t_id = msg.get("tool_call_id") if isinstance(msg, dict) else getattr(msg, "tool_call_id", None)
+                                # 核心校验：如果这个 tool 消息不在我们记录的待响应 ID 列表中，直接丢弃
+                                if t_id and t_id in pending_tool_call_ids:
+                                    final_messages.append(msg)
+                                    pending_tool_call_ids.remove(t_id) # 匹配成功，移除
+                                else:
+                                    print(f"[Sanitizer] 丢弃孤立的 tool 消息: {t_id}")
+                                    continue
+                            
+                            elif role == "assistant":
+                                tcs = get_tcs(msg)
+                                if tcs:
+                                    # 这是一个发起工具调用的消息
+                                    # 暂时先存入，并记录它期望的 ID
+                                    current_tcs_ids = {tc.get("id") if isinstance(tc, dict) else tc.id for tc in tcs}
+                                    final_messages.append(msg)
+                                    for tid in current_tcs_ids: pending_tool_call_ids.add(tid)
+                                else:
+                                    # 普通助手回复
+                                    final_messages.append(msg)
+                            
+                            else:
+                                # user 或 system 消息，直接通过
+                                final_messages.append(msg)
+
+                        # 最终反向检查：如果最后一条是带 tool_calls 的 assistant，但后面没有 tool 消息
+                        # 我们需要移除这些 tool_calls 标记，或者直接移除该条消息（取决于业务需求）
+                        # 这里选择保留消息文本但清空 tool_calls，防止 API 报错
+                        while final_messages:
+                            last_msg = final_messages[-1]
+                            tcs = get_tcs(last_msg)
+                            # 如果最后一条助手消息发起了调用，但我们已经没有后续消息来填补它了
+                            if tcs and any( ( (tc.get("id") if isinstance(tc, dict) else tc.id) in pending_tool_call_ids ) for tc in tcs ):
+                                # 如果该消息有文本内容，我们抹除 tool_calls 保留文本
+                                # 如果没文本，就直接弹出整条消息
+                                content = last_msg.get("content") if isinstance(last_msg, dict) else getattr(last_msg, "content", "")
+                                if content:
+                                    if isinstance(last_msg, dict):
+                                        last_msg["tool_calls"] = None
+                                    else:
+                                        setattr(last_msg, "tool_calls", None)
+                                    print("[Sanitizer] 抹除末尾未闭合的 tool_calls")
+                                    break # 处理完毕
+                                else:
+                                    final_messages.pop()
+                                    print("[Sanitizer] 弹出末尾无内容的孤立 tool_call 发起消息")
+                            else:
+                                break
+
+                        request.messages = final_messages
                         # =========================================================================
                         reasoner_messages.append(
                             {
@@ -4739,77 +4812,116 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
     if len(request.messages) > 2:
         DRS_STAGE = 2
 
-        # ==================== 精准压缩逻辑 (User + 最终回复锚点) ====================
+        # =========================================================================
+        # 第一阶段：上下文压缩 (仅在达到阈值时触发，决定“保留哪些消息”)
+        # =========================================================================
         max_rounds = settings.get("max_rounds", 0)
-        if max_rounds > 0 and len(request.messages) > (max_rounds * 2 + 1):
-            def get_role(msg):
-                return msg.get("role") if isinstance(msg, dict) else msg.role
+        chat_messages = request.messages # 这里的 chat_messages 包含 system
+        
+        if max_rounds > 0:
+            def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
             
-            def has_tool_calls(msg):
-                if get_role(msg) != "assistant": return False
-                return bool(msg.get("tool_calls")) if isinstance(msg, dict) else bool(getattr(msg, "tool_calls", None))
-
-            system_msgs = [m for m in request.messages if get_role(m) == "system"]
-            chat_msgs = [m for m in request.messages if get_role(m) != "system"]
-
-            # 只要消息量超过阈值才开始压缩
-            if len(chat_msgs) > (max_rounds * 2):
+            # 区分系统消息和对话消息
+            sys_msgs = [m for m in chat_messages if get_role(m) == "system"]
+            dialog_msgs = [m for m in chat_messages if get_role(m) != "system"]
+            
+            # 设定压缩阈值：当非系统消息超过 max_rounds * 2 + 1 时开始压缩
+            if len(dialog_msgs) > (max_rounds * 2 + 1):
                 keep_indices = set()
                 
-                # 1. 遍历消息，识别 User 和每个 turn 的最后一个 Assistant
-                for i in range(len(chat_msgs)):
-                    role = get_role(chat_msgs[i])
-                    
-                    # 规则 A: 所有的 User 消息必须保留
-                    if role == "user":
-                        keep_indices.add(i)
-                    
-                    # 规则 B: 识别“最后一个助手回复”
-                    # 如果当前是 assistant，且下一条消息是 user，或者已经是最后一条了
-                    # 说明这是当前这个问题的最终回答（或者是中间断掉的回答）
-                    if role == "assistant":
-                        is_last_assistant_of_turn = True
-                        for j in range(i + 1, len(chat_msgs)):
-                            next_role = get_role(chat_msgs[j])
-                            if next_role == "assistant":
-                                is_last_assistant_of_turn = False
-                                break
-                            if next_role == "user":
-                                break # 后面是用户，说明当前这个就是本轮最后一条助手回复
-                        
-                        if is_last_assistant_of_turn:
-                            keep_indices.add(i)
-
-                # 2. 规则 C: 必须保留最近 N 条完整消息（尾部窗口保护）
-                # 确保当前正在进行的工具调用链不被破坏
-                tail_start = max(0, len(chat_msgs) - (max_rounds * 2))
-                for i in range(tail_start, len(chat_msgs)):
-                    keep_indices.add(i)
-
-                # 3. 构造初步列表并进行工具链完整性校验 (API 必须)
-                sorted_indices = sorted(list(keep_indices))
-                temp_chat = [chat_msgs[i] for i in sorted_indices]
+                # 1. 总是保留第一条消息 (Anchor User Prompt)
+                if len(dialog_msgs) > 0: keep_indices.add(0)
                 
-                final_chat = []
-                for i, msg in enumerate(temp_chat):
-                    # API 限制：tool 消息前面必须紧跟带 tool_calls 的 assistant
-                    if get_role(msg) == "tool":
-                        prev = final_chat[-1] if final_chat else None
-                        if prev and has_tool_calls(prev):
-                            final_chat.append(msg)
-                    # API 限制：带 tool_calls 的 assistant 后面必须跟 tool 结果
-                    elif has_tool_calls(msg):
-                        # 如果不是最后一条，且下一条是 tool，则保留
-                        if i + 1 < len(temp_chat) and get_role(temp_chat[i+1]) == "tool":
-                            final_chat.append(msg)
-                        # 如果是最后一条，说明是正在进行的调用，必须保留
-                        elif i == len(temp_chat) - 1:
-                            final_chat.append(msg)
-                    else:
-                        final_chat.append(msg)
+                # 2. 保留所有 User 消息 (User 优先策略)
+                for i, m in enumerate(dialog_msgs):
+                    if get_role(m) == "user": keep_indices.add(i)
+                
+                # 3. 保留每个 Turn 的最后一个 Assistant 消息 (最终答案)
+                for i in range(len(dialog_msgs)):
+                    if get_role(dialog_msgs[i]) == "assistant":
+                        is_last = True
+                        for j in range(i + 1, len(dialog_msgs)):
+                            if get_role(dialog_msgs[j]) == "assistant":
+                                is_last = False; break
+                            if get_role(dialog_msgs[j]) == "user": break
+                        if is_last: keep_indices.add(i)
+                
+                # 4. 保留最近的活跃窗口 (最近 N 条消息，确保当前工具链不被切断)
+                tail_start = max(0, len(dialog_msgs) - (max_rounds * 2))
+                for i in range(tail_start, len(dialog_msgs)):
+                    keep_indices.add(i)
+                
+                # 构造初步压缩后的列表
+                compressed_dialog = [dialog_msgs[i] for i in sorted(list(keep_indices))]
+                chat_messages = sys_msgs + compressed_dialog
+                print(f"[Context] Compressed to {len(chat_messages)} msgs.")
 
-                request.messages = system_msgs + final_chat
-                print(f"[Context Compressed] Retained all Users and Final Assistants. Total: {len(request.messages)}")
+        # =========================================================================
+        # 第二阶段：强制合法性清洗 (Sanitizer) - 无论是否压缩都必须执行
+        # 目标：彻底杜绝 Messages with role 'tool' must be a response... 报错
+        # =========================================================================
+        def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
+        def get_tcs(m): 
+            if get_role(m) != "assistant": return None
+            return m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)
+
+        final_messages = []
+        pending_tool_call_ids = set()
+
+        for msg in chat_messages:
+            role = get_role(msg)
+            
+            if role == "tool":
+                t_id = msg.get("tool_call_id") if isinstance(msg, dict) else getattr(msg, "tool_call_id", None)
+                # 核心校验：如果这个 tool 消息不在我们记录的待响应 ID 列表中，直接丢弃
+                if t_id and t_id in pending_tool_call_ids:
+                    final_messages.append(msg)
+                    pending_tool_call_ids.remove(t_id) # 匹配成功，移除
+                else:
+                    print(f"[Sanitizer] 丢弃孤立的 tool 消息: {t_id}")
+                    continue
+            
+            elif role == "assistant":
+                tcs = get_tcs(msg)
+                if tcs:
+                    # 这是一个发起工具调用的消息
+                    # 暂时先存入，并记录它期望的 ID
+                    current_tcs_ids = {tc.get("id") if isinstance(tc, dict) else tc.id for tc in tcs}
+                    final_messages.append(msg)
+                    for tid in current_tcs_ids: pending_tool_call_ids.add(tid)
+                else:
+                    # 普通助手回复
+                    final_messages.append(msg)
+            
+            else:
+                # user 或 system 消息，直接通过
+                final_messages.append(msg)
+
+        # 最终反向检查：如果最后一条是带 tool_calls 的 assistant，但后面没有 tool 消息
+        # 我们需要移除这些 tool_calls 标记，或者直接移除该条消息（取决于业务需求）
+        # 这里选择保留消息文本但清空 tool_calls，防止 API 报错
+        while final_messages:
+            last_msg = final_messages[-1]
+            tcs = get_tcs(last_msg)
+            # 如果最后一条助手消息发起了调用，但我们已经没有后续消息来填补它了
+            if tcs and any( ( (tc.get("id") if isinstance(tc, dict) else tc.id) in pending_tool_call_ids ) for tc in tcs ):
+                # 如果该消息有文本内容，我们抹除 tool_calls 保留文本
+                # 如果没文本，就直接弹出整条消息
+                content = last_msg.get("content") if isinstance(last_msg, dict) else getattr(last_msg, "content", "")
+                if content:
+                    if isinstance(last_msg, dict):
+                        last_msg["tool_calls"] = None
+                    else:
+                        setattr(last_msg, "tool_calls", None)
+                    print("[Sanitizer] 抹除末尾未闭合的 tool_calls")
+                    break # 处理完毕
+                else:
+                    final_messages.pop()
+                    print("[Sanitizer] 弹出末尾无内容的孤立 tool_call 发起消息")
+            else:
+                break
+
+        request.messages = final_messages
         # =========================================================================
 
     from py.load_files import get_files_content,file_tool,image_tool
@@ -4855,7 +4967,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
         arxiv_tool
     ) 
     from py.autoBehavior import auto_behavior_tool
-    from py.cli_tool import claude_code_tool,qwen_code_tool,get_tools_for_mode,get_local_tools_for_mode
+    from py.cli_tool import get_tools_for_mode,get_local_tools_for_mode
     from py.cdp_tool import all_cdp_tools
     from py.random_topic import random_topics_tools
     from py.computer_use_tool import computer_use_tools,mouse_use_tools,keyboard_use_tools,desktopVision_use_tools
@@ -4943,11 +5055,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
         if sql_tool:
             tools.extend(sql_tool)
     if settings['CLISettings']['enabled']:
-        if settings['CLISettings']['engine'] == 'cc':
-            tools.append(claude_code_tool)
-        elif settings['CLISettings']['engine'] == 'qc':
-            tools.append(qwen_code_tool)
-        elif settings['CLISettings']['engine'] == 'ds':
+        if settings['CLISettings']['engine'] == 'ds':
             tools.extend(get_tools_for_mode('yolo'))
         elif settings['CLISettings']['engine'] == 'local':
             tools.extend(get_local_tools_for_mode('yolo'))
@@ -5796,8 +5904,6 @@ async def execute_tool_manually(request: Request):
 
     # Docker CLI 工具（原有）
     from py.cli_tool import (
-        claude_code,
-        qwen_code,
         docker_sandbox,
         list_files_tool,
         read_file_tool,
@@ -5908,8 +6014,6 @@ async def execute_tool_manually(request: Request):
         "get_wikipedia_section_content": get_wikipedia_section_content,
         "search_arxiv_papers": search_arxiv_papers,
         "auto_behavior": auto_behavior,
-        "claude_code": claude_code,
-        "qwen_code": qwen_code,
         "list_pages": list_pages,
         "new_page": new_page,
         "close_page": close_page,
@@ -6439,6 +6543,8 @@ class TaskCreateRequest(BaseModel):
     title: str
     description: str
     agent_type: str = "default"
+    task_type: str = "once"  # once, time, cycle
+    trigger_config: Optional[Dict[str, Any]] = None
 
 @app.get("/v1/tasks/list")
 async def list_tasks_endpoint():
@@ -6458,26 +6564,34 @@ async def list_tasks_endpoint():
 
 @app.post("/v1/tasks/create")
 async def create_task_endpoint(req: TaskCreateRequest):
-    """手动创建任务"""
+    """手动创建任务：支持单次、定时、周期模式"""
     current_settings = await load_settings()
     workspace_dir = current_settings.get("CLISettings", {}).get("cc_path")
     
     if not workspace_dir:
-        raise HTTPException(status_code=400, detail="工作区路径未配置，请先在工具箱-CLI中设置")
+        raise HTTPException(status_code=400, detail="工作区路径未配置")
 
     try:
-        # 1. 获取任务中心
         task_center = await get_task_center(workspace_dir)
         
-        # 2. 创建任务记录
+        # 构造初始上下文
+        context = {
+            "task_type": req.task_type,
+            "trigger_config": req.trigger_config or {},
+            "history": [],
+            "ran_count": 0
+        }
+        
+        # 1. 创建任务记录
         task = await task_center.create_task(
             title=req.title,
             description=req.description,
             agent_type=req.agent_type,
-            parent_task_id="MANUAL_USER" # 标记为用户手动创建
+            parent_task_id="MANUAL_USER",
+            context=context
         )
         
-        # 3. 读取共识文件（可选）
+        # 2. 读取共识（可选）
         consensus_content = None
         consensus_file = Path(workspace_dir) / ".agent" / "consensus.md"
         if consensus_file.exists():
@@ -6485,17 +6599,23 @@ async def create_task_endpoint(req: TaskCreateRequest):
             async with aiofiles.open(consensus_file, 'r', encoding='utf-8') as f:
                 consensus_content = await f.read()
 
-        # 4. 后台启动执行
-        asyncio.create_task(
-            run_subtask_in_background(
-                task_id=task.task_id,
-                workspace_dir=workspace_dir,
-                settings=current_settings,
-                consensus_content=consensus_content
+        # 3. 执行逻辑分发
+        if req.task_type == "once":
+            # 立即执行模式：直接丢进后台
+            asyncio.create_task(
+                run_subtask_in_background(
+                    task_id=task.task_id,
+                    workspace_dir=workspace_dir,
+                    settings=current_settings,
+                    consensus_content=consensus_content
+                )
             )
-        )
-        
-        return {"success": True, "task": task.model_dump()}
+            msg = "任务已启动"
+        else:
+            # 定时或周期模式：由 scheduler.py 负责，此处仅保存
+            msg = f"计划任务已创建 (模式: {req.task_type})"
+            
+        return {"success": True, "message": msg, "task": task.model_dump()}
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 

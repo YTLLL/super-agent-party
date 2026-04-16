@@ -1074,7 +1074,7 @@ Key3`,
         'AIgening': 'AI is generating',
         'CLItool': 'Computer CLI control',
         'CLItoolSettings': 'Computer CLI control settings',
-        'CLIEngine': 'Command Line Engine (Note! Agent Skills can only be used normally when the local environment or Docker Security Sandbox is selected).',
+        'CLIEngine': 'Command Line Engine',
         'workspace': 'Workspace',
         'webNotSupported': 'Browser mode not supported, desktop only',
         "CLIButton": "Computer CLI control",
@@ -1578,6 +1578,7 @@ Key3`,
         'favorite': 'Favorite',
 
         'maxIterations': 'Subagent Max Iterations',
+        'subAgentPlanProvider': 'Sub-agent process management uses fast models',
 
         'weComBot': 'WeCom Bot',
         'wecom_bot_config': 'WeCom Bot Configuration',
@@ -1596,5 +1597,9 @@ Key3`,
         'filterModeAll': 'All (Chat, Gifts, Entry, Likes)',
         'filterModePaid': 'Chat + Paid (Gifts, SC, Subs)',
         'filterModeOnlyDanmaku': 'Chat Only (Incl. SC)',
+
+        "basicInfo": "Basic Info",
+        "modeOnce": "Execute Immediately",
+        'confirmEdit': 'Confirm Edit',
 
     }
