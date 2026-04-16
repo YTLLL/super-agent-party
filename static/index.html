@@ -9030,6 +9030,14 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </el-input>
                         </el-form-item>
 
+                        <el-form-item :label="t('enabledModeChangeTool')" class="form-item-align" label-position="left">
+                          <el-switch
+                            v-model="CLISettings.mode_change"
+                            @change="autoSaveSettings"
+                            class="tool-switch"
+                          ></el-switch>
+                        </el-form-item>
+
                         <el-form-item :label="t('enabledShortCut')" class="form-item-align" label-position="left">
                           <el-switch
                             v-model="CLISettings.shortcut"

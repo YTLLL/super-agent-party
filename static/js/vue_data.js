@@ -362,7 +362,8 @@ let vue_data = {
       engine: 'local',
       cc_path: '',
       shortcut: true,
-      max_iterations: 100
+      max_iterations: 100,
+      mode_change: false
     },
     visionControlSettings:{
       enabled: false,

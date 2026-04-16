@@ -1608,4 +1608,5 @@ Key3`,
         'PlatformNote': 'Before pushing to the messaging platform, you must configure the session ID to be sent in the corresponding platform bot interface. You can view it using the `/id` command in the corresponding session window, and you must have had at least one conversation with the bot in that session window after the bot is started.',
         'connectChatApp': 'Chat App',
         'startLiveStream': 'Start Live',
+        'enabledModeChangeTool': 'Enable Permission Mode Change Tool',
     }

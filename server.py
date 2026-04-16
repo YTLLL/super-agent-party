@@ -1069,6 +1069,8 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         screenshot
     )
 
+    from py.mode_change import update_workspace_settings
+
     # ==================== 2. 定义工具映射表 ====================
     _TOOL_HOOKS = {
         "DDGsearch": DDGsearch,
@@ -1172,7 +1174,9 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "keyboard_hotkey":keyboard_hotkey,
         "keyboard_hold":keyboard_hold,
         "wait":wait,
-        "screenshot":screenshot
+        "screenshot":screenshot,
+
+        "update_workspace_settings":update_workspace_settings,
     }
     
     # ==================== 3. 权限拦截逻辑 (Human-in-the-loop) ====================
@@ -2768,6 +2772,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
             finish_task_tool,
         )
 
+        from py.mode_change import mode_change_tool
+
         m0 = None
         memoryId = None
         if settings["memorySettings"]["is_memory"] and settings["memorySettings"]["selectedMemory"] and settings["memorySettings"]["selectedMemory"] != ""  and not request.is_sub_agent:
@@ -2854,6 +2860,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 tools.extend(get_tools_for_mode('yolo'))
             elif settings['CLISettings']['engine'] == 'local':
                 tools.extend(get_local_tools_for_mode('yolo'))
+        if  settings['CLISettings']['mode_change']:
+            tools.append(mode_change_tool)
         if settings['visionControlSettings']['enabled']:
             tools.extend(computer_use_tools)
             if settings['visionControlSettings']['mouse']:
@@ -3350,6 +3358,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     tools.append(create_subtask_tool)
                     tools.append(query_tasks_tool)
                     tools.append(cancel_subtask_tool)
+                    if  settings['CLISettings']['mode_change']:
+                        tools.append(mode_change_tool)
 
                 if request.is_sub_agent:
                     tools.append(finish_task_tool)
@@ -4960,6 +4970,8 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
     from py.cdp_tool import all_cdp_tools
     from py.random_topic import random_topics_tools
     from py.computer_use_tool import computer_use_tools,mouse_use_tools,keyboard_use_tools,desktopVision_use_tools
+    
+    from py.mode_change import mode_change_tool
     m0 = None
     if settings["memorySettings"]["is_memory"] and settings["memorySettings"]["selectedMemory"] and settings["memorySettings"]["selectedMemory"] != "":
         memoryId = settings["memorySettings"]["selectedMemory"]
@@ -5048,6 +5060,8 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
             tools.extend(get_tools_for_mode('yolo'))
         elif settings['CLISettings']['engine'] == 'local':
             tools.extend(get_local_tools_for_mode('yolo'))
+    if  settings['CLISettings']['mode_change']:
+        tools.append(mode_change_tool)
     if settings['visionControlSettings']['enabled']:
         tools.extend(computer_use_tools)
         if settings['visionControlSettings']['mouse']:
@@ -5967,6 +5981,8 @@ async def execute_tool_manually(request: Request):
         screenshot
     )
 
+    from py.mode_change import update_workspace_settings
+
     # ==================== 2. 定义工具映射表 ====================
     _TOOL_HOOKS = {
         "DDGsearch": DDGsearch,
@@ -6070,7 +6086,9 @@ async def execute_tool_manually(request: Request):
         "keyboard_hotkey":keyboard_hotkey,
         "keyboard_hold":keyboard_hold,
         "wait":wait,
-        "screenshot":screenshot
+        "screenshot":screenshot,
+
+        "update_workspace_settings":update_workspace_settings,
     }
     
 
