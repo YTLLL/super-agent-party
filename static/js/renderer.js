@@ -849,60 +849,72 @@ const app = Vue.createApp({
     this.$nextTick(() => {
       this.generateQRCode(); // 生成二维码
     });
-    // 1. 时间触发器（每秒扫一次）
-    this.behaviorTimeTimer = setInterval(() => {
-      if (!this.behaviorSettings.enabled) return
-      const now = new Date()
-      const hm = now.toLocaleTimeString('zh-CN', { hour12: false }) // HH:mm:ss
-      const d  = now.getDay() // 0=周日
-      this.behaviorSettings.behaviorList.forEach(b => {
-        if (!b.enabled || b.trigger.type !== 'time' || b.platform !== "chat") return
-        const tv = b.trigger.time.timeValue
-        const ds = b.trigger.time.days
-        if (tv === hm) {
-          if (ds.length === 0 || ds.includes(d)) {
-            this.runBehavior(b)
-            this.disableOnceBehavior(b)
-          }
-        }
-      })
-    }, 1000)
-
-    // 2. 无-input 触发器（每 1s 检查一次）
-    this.noInputSec = 0 // 连续无输入秒数
-    this.behaviorNoInputTimer = setInterval(() => {
-      if (!this.behaviorSettings.enabled) return
-      this.behaviorSettings.behaviorList.forEach(b => {
-        if (!b.enabled || b.trigger.type !== 'noInput'|| b.platform !== "chat" ) return
-        const need = b.trigger.noInput.latency
-        if (this.noInputFlag) {
-          this.noInputSec++
-          if (this.noInputSec >= need) {
-            this.runBehavior(b)
-            this.noInputSec = 0 // 触发后重置
-          }
-        } else {
-          this.noInputSec = 0
-        }
-      })
-    }, 1000)
-
-   // 在 mounted() 函数中添加以下代码
-  this.cycleTimers = []; // 存储所有周期触发器的定时器
-
-  // 3. 周期触发器（每1秒检查一次）
-  this.behaviorCycleTimer = setInterval(() => {
-    if (!this.behaviorSettings.enabled) return;
-    
-    const now = new Date();
-    this.behaviorSettings.behaviorList.forEach((b, index) => {
-      if (!b.enabled || b.trigger.type !== 'cycle' || b.platform !== "chat") return;
-      // 检查是否已有定时器
-      if (!this.cycleTimers[index]) {
-        this.initCycleTimer(b, index);
+// 1. 时间触发器
+this.behaviorTimeTimer = setInterval(() => {
+  if (!this.behaviorSettings.enabled) return
+  const now = new Date()
+  const hm = now.toLocaleTimeString('zh-CN', { hour12: false }) 
+  const d  = now.getDay() 
+  this.behaviorSettings.behaviorList.forEach(b => {
+    // 关键改动：使用 isTargetPlatform 检查是否属于当前网页端(chat)任务
+    if (!b.enabled || b.trigger.type !== 'time' || !this.isTargetPlatform(b, 'chat')) return
+    const tv = b.trigger.time.timeValue
+    const ds = b.trigger.time.days
+    if (tv === hm) {
+      if (ds.length === 0 || ds.includes(d)) {
+        this.runBehavior(b)
+        this.disableOnceBehavior(b)
       }
-    });
-  }, 1000); 
+    }
+  })
+}, 1000)
+
+// 2. 无输入触发器
+this.noInputSec = 0 
+this.behaviorNoInputTimer = setInterval(() => {
+  if (!this.behaviorSettings.enabled) return
+  this.behaviorSettings.behaviorList.forEach(b => {
+    // 关键改动：检查平台
+    if (!b.enabled || b.trigger.type !== 'noInput' || !this.isTargetPlatform(b, 'chat')) return
+    const need = b.trigger.noInput.latency
+    if (this.noInputFlag) {
+      this.noInputSec++
+      if (this.noInputSec >= need) {
+        this.runBehavior(b)
+        this.noInputSec = 0 
+      }
+    } else {
+      this.noInputSec = 0
+    }
+  })
+}, 1000)
+
+// 3. 周期触发器
+this.behaviorCycleTimer = setInterval(() => {
+  // 核心防御：层层判断
+  if (!this.behaviorSettings) return;
+  if (this.behaviorSettings.enabled !== true) return;
+  if (!Array.isArray(this.behaviorSettings.behaviorList)) return;
+
+  this.behaviorSettings.behaviorList.forEach((b, index) => {
+    // 检查 b 及其 trigger 是否存在，防止读取 b.trigger.type 报错
+    if (!b || !b.enabled || !b.trigger) return;
+    
+    // 只处理周期类型的任务
+    if (b.trigger.type !== 'cycle') return;
+
+    // 检查平台 (这里会调用上面的安全函数)
+    if (!this.isTargetPlatform(b, 'chat')) return;
+
+    // 确保存储定时器的数组存在
+    if (!this.cycleTimers) this.cycleTimers = [];
+
+    if (!this.cycleTimers[index]) {
+      this.initCycleTimer(b, index);
+    }
+  });
+}, 1000);
+
     this.scanExtensions(); // 扫描扩展
     if (this.ttsSettings && this.ttsSettings.engine === 'systemtts') {
       this.fetchSystemVoices();

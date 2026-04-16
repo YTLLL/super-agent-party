@@ -1,68 +1,41 @@
 from py.get_setting import load_settings
 
-async def auto_behavior(behaviorType="delay", time="00:00:00",prompt="",days=[],repeatNumber=1,isInfiniteLoop=False):
+async def auto_behavior(behaviorType="delay", time="00:00:00", prompt="", days=[], repeatNumber=1, isInfiniteLoop=False, platforms=["chat"]):
     # Load settings
     settings = await load_settings()
-    if behaviorType == "time":
-        settings["behaviorSettings"]["behaviorList"].append(
-            {
-                "enabled": True,
-                "trigger": {
-                    "type": "time",
-                    "time":{
-                        "timeValue": time, 
-                        "days": days
-                    },
-                    "noInput":{
-                        "latency": 30, 
-                    },
-                    "cycle":{
-                        "cycleValue": "00:00:30", 
-                        "repeatNumber": 1, 
-                        "isInfiniteLoop": False, 
-                    }
-                },
-                "action": {
-                    "type": "prompt",
-                    "prompt": "时间到了，"+prompt, 
-                    "random":{
-                        "events":[""],
-                        "type":"random",
-                        "orderIndex":0,
-                    }
-                }
+    
+    # 构造新行为项
+    new_behavior = {
+        "enabled": True,
+        "platform": platforms[0] if platforms else "chat", # 兼容旧版单一字段逻辑
+        "platforms": platforms,                           # 支持多选的新字段
+        "trigger": {
+            "type": "time" if behaviorType == "time" else "cycle",
+            "time":{
+                "timeValue": time, 
+                "days": days
+            },
+            "noInput":{
+                "latency": 30, 
+            },
+            "cycle":{
+                "cycleValue": time if behaviorType == "delay" else "00:00:30", 
+                "repeatNumber": repeatNumber, 
+                "isInfiniteLoop": isInfiniteLoop, 
             }
-        )
-    elif behaviorType == "delay":
-        settings["behaviorSettings"]["behaviorList"].append(
-            {
-                "enabled": True,
-                "trigger": {
-                    "type": "cycle",
-                    "time":{
-                        "timeValue": "00:00:00", 
-                        "days": [] 
-                    },
-                    "noInput":{
-                        "latency": 30, 
-                    },
-                    "cycle":{
-                        "cycleValue": time, 
-                        "repeatNumber": repeatNumber, 
-                        "isInfiniteLoop": isInfiniteLoop, 
-                    }
-                },
-                "action": {
-                    "type": "prompt",
-                    "prompt": "时间到了，"+prompt, 
-                    "random":{
-                        "events":[""],
-                        "type":"random",
-                        "orderIndex":0,
-                    }
-                }
+        },
+        "action": {
+            "type": "prompt",
+            "prompt": "时间到了，"+prompt, 
+            "random":{
+                "events":[""],
+                "type":"random",
+                "orderIndex":0,
             }
-        )
+        }
+    }
+    
+    settings["behaviorSettings"]["behaviorList"].append(new_behavior)
     settings["behaviorSettings"]['enabled'] = True
     return settings
 
@@ -71,26 +44,26 @@ auto_behavior_tool = {
     "type": "function",
     "function": {
         "name": "auto_behavior",
-        "description": "当用户需要你在特定时间或隔一段时间自动执行某些行为时，你可以使用这个工具。例如，你可以设置在每天的特定时间自动发送问候语，或者设置在特定时间之后自动执行某些任务。",
+        "description": "当用户需要你在特定时间、隔一段时间或在特定渠道自动执行某些行为时使用。你可以一次性设置在多个渠道（如微信、飞书、网页）同步执行任务。",
         "parameters": {
             "type": "object",
             "properties": {
                 "behaviorType": {
                     "type": "string",
-                    "description": "行为类型，可选值为time或delay；time表示在特定时间执行，例如：三点钟提醒我开会；delay表示隔一段时间执行的任务，例如：五分钟后提醒我开会",
+                    "description": "行为类型：time（特定时间点执行，如3点钟），delay（隔一段时间执行，如5分钟后）",
                     "enum": ["time", "delay"],
                 },
                 "time": {
                     "type": "string",
-                    "description": "时间，格式为HH:MM:SS，24小时制，time类型下表示在这个时间点执行，delay类型下表示隔多久时间执行",
+                    "description": "时间格式 HH:MM:SS。time类型下为执行点，delay类型下为时间间隔。",
                 },
                 "prompt": {
                     "type": "string",
-                    "description": "任务描述，例如：请立刻提醒用户开会、请立刻向用户发送问候语",
+                    "description": "任务描述，例如：提醒用户开会、发送问候语",
                 },
                 "days": {
                     "type": "array",
-                    "description": "行为类型为time类型下表示在哪些天执行，例如：[1, 2]表示在周一和周二执行,[0]表示只有周日执行，[]表示不重复执行，[1, 2, 3, 4, 5, 6, 0]表示每天都执行",
+                    "description": "time类型下生效，[1,2,3,4,5]代表工作日，[0]代表周日，[]不重复",
                     "items": {
                         "type": "number",
                         "enum": [0, 1, 2, 3, 4, 5, 6],
@@ -99,20 +72,27 @@ auto_behavior_tool = {
                 },
                 "repeatNumber": {
                     "type": "number",
-                    "description": "行为类型为delay类型下表示重复次数，例如：3表示重复3次，repeatNumber只能在1到100之间",
+                    "description": "delay类型下的重复次数 (1-100)",
                     "minimum": 1,
                     "maximum": 100,
                     "default": 1,
                 },
                 "isInfiniteLoop": {
                     "type": "boolean",
-                    "description": "行为类型为delay类型下表示是否无限循环，例如：True表示无限循环，False表示不循环",
+                    "description": "delay类型下是否无限循环",
                     "default": False,
+                },
+                "platforms": {
+                    "type": "array",
+                    "description": "要推送的渠道列表。chat:网页对话, wechat:微信, feishu:飞书, dingtalk:钉钉, telegram, discord, slack, wecom:企微, all:所有平台",
+                    "items": {
+                        "type": "string",
+                        "enum": ["chat", "wechat", "feishu", "dingtalk", "telegram", "discord", "slack", "wecom", "all"]
+                    },
+                    "default": ["chat"],
                 }
             },
             "required": ["prompt", "behaviorType", "time"],
         },
     },
 }
-
-    

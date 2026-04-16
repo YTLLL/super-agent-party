@@ -41,7 +41,8 @@ class BehaviorItem(BaseModel):
     enabled: bool
     trigger: BehaviorTrigger
     action: BehaviorAction
-    platform: str # "chat", "feishu", "dingtalk", "all"
+    platform: Optional[str] = "chat"     # 保留字段以兼容旧版本
+    platforms: List[str] = []           # 新字段：支持多选
 
 class BehaviorSettings(BaseModel):
     enabled: bool
@@ -156,13 +157,17 @@ class BehaviorEngine:
             if not behavior.enabled: continue
             
             # 确定当前行为要分发到哪些平台
-            target_platforms = []
-            if behavior.platform == "all":
-                target_platforms = list(self.handlers.keys())
-            elif behavior.platform in self.handlers:
-                target_platforms = [behavior.platform]
+            effective_platforms = behavior.platforms if behavior.platforms else [behavior.platform]
             
-            for platform in target_platforms:
+            # 确定当前行为要分发到哪些具体的平台 Key
+            target_platform_keys = []
+            if "all" in effective_platforms:
+                target_platform_keys = list(self.handlers.keys())
+            else:
+                # 过滤掉不支持的平台
+                target_platform_keys = [p for p in effective_platforms if p in self.handlers]
+            
+            for platform in target_platform_keys:
                 handler = self.handlers.get(platform)
                 if not handler: continue
 

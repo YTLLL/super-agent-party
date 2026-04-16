@@ -10907,55 +10907,78 @@ stopTTSActivities() {
   },
 
   // 初始化周期定时器
-  initCycleTimer(behavior, index) {
-    // 清除现有定时器
-    if (this.cycleTimers[index]) {
-      clearInterval(this.cycleTimers[index]);
-    }
-    
-    // 解析周期时间 (HH:mm:ss)
-    const [hours, minutes, seconds] = behavior.trigger.cycle.cycleValue.split(':').map(Number);
-    const cycleMs = (hours * 3600 + minutes * 60 + seconds) * 1000;
-    
-    // 当前周期计数
-    let currentCount = 0;
-    
-    // 创建定时器
-    this.cycleTimers[index] = setInterval(() => {
-      if (!behavior||!behavior.enabled) return;
-      
-      // 检查是否无限循环或未达到重复次数
-      if (behavior.trigger.cycle.isInfiniteLoop || 
-          currentCount < behavior.trigger.cycle.repeatNumber) {
-        
-        this.runBehavior(behavior);
-        currentCount++;
-        
-        // 非无限循环且达到次数时停止
-        if (!behavior.trigger.cycle.isInfiniteLoop && 
-            currentCount >= behavior.trigger.cycle.repeatNumber) {
-          clearInterval(this.cycleTimers[index]);
-          this.cycleTimers[index] = null;
-          behavior.enabled = false;
-        }
-      }
-    }, cycleMs);
-  },
+initCycleTimer(behavior, index) {
+  if (this.cycleTimers[index]) {
+    clearInterval(this.cycleTimers[index]);
+  }
+  const [hours, minutes, seconds] = behavior.trigger.cycle.cycleValue.split(':').map(Number);
+  const cycleMs = (hours * 3600 + minutes * 60 + seconds) * 1000;
+  let currentCount = 0;
   
-  // 当配置变化时重置定时器
-  resetCycleTimers() {
-    this.cycleTimers.forEach((timer, index) => {
-      if (timer) clearInterval(timer);
-      this.cycleTimers[index] = null;
-    });
+  this.cycleTimers[index] = setInterval(() => {
+    // 运行前再次确认启用状态和平台
+    if (!behavior || !behavior.enabled || !this.isTargetPlatform(behavior, 'chat')) return;
     
-    // 重新初始化启用的周期触发器
-    this.behaviorSettings.behaviorList.forEach((b, index) => {
-      if (b.enabled && b.trigger.type === 'cycle' && b.platform === 'chat') {
-        this.initCycleTimer(b, index);
+    if (behavior.trigger.cycle.isInfiniteLoop || currentCount < behavior.trigger.cycle.repeatNumber) {
+      this.runBehavior(behavior);
+      currentCount++;
+      if (!behavior.trigger.cycle.isInfiniteLoop && currentCount >= behavior.trigger.cycle.repeatNumber) {
+        clearInterval(this.cycleTimers[index]);
+        this.cycleTimers[index] = null;
+        behavior.enabled = false;
       }
-    });
-  },
+    }
+  }, cycleMs);
+},
+
+// --- 修改重置逻辑 ---
+resetCycleTimers() {
+  // 防护：如果设置还没加载好，或者列表不存在，直接跳过
+  if (!this.behaviorSettings || !Array.isArray(this.behaviorSettings.behaviorList)) {
+    return;
+  }
+
+  // 确保 cycleTimers 是个数组
+  if (!Array.isArray(this.cycleTimers)) {
+    this.cycleTimers = [];
+  }
+
+  // 清除旧的计时器
+  this.cycleTimers.forEach((timer, index) => {
+    if (timer) clearInterval(timer);
+    this.cycleTimers[index] = null;
+  });
+
+  // 重新初始化
+  this.behaviorSettings.behaviorList.forEach((b, index) => {
+    // 增加 b && b.trigger 的判断
+    if (b && b.enabled && b.trigger && b.trigger.type === 'cycle' && this.isTargetPlatform(b, 'chat')) {
+      this.initCycleTimer(b, index);
+    }
+  });
+},
+
+
+isTargetPlatform(behavior, platformKey) {
+  // 1. 如果 behavior 本身不存在
+  if (!behavior) return false;
+
+  // 2. 检查新字段 platforms (数组)
+  // 必须先判断 Array.isArray 且长度 > 0，才能读取 [0]
+  if (behavior.platforms && Array.isArray(behavior.platforms) && behavior.platforms.length > 0) {
+    if (behavior.platforms.includes('all')) return true;
+    return behavior.platforms.includes(platformKey);
+  }
+
+  // 3. 兼容老数据：检查旧字段 platform (字符串)
+  if (behavior.platform && typeof behavior.platform === 'string') {
+    return behavior.platform === 'all' || behavior.platform === platformKey;
+  }
+
+  // 4. 兜底逻辑
+  return platformKey === 'chat';
+},
+
     startDriverGuide() {
       const KEY = 'driver_guide_shown';
       if (localStorage.getItem(KEY)) return;
@@ -15305,7 +15328,7 @@ async handleRefreshSkills() {
           prompt: '',
           random: { type: 'random', events: [''] }
         },
-        platform:"chat",
+        platforms: ["chat"],  // 新增多选渠道字段（字符串数组）
       };
     },
 
@@ -15319,20 +15342,39 @@ async handleRefreshSkills() {
     saveBehavior() {
       if (!this.tempBehavior) return;
 
-      if (this.currentBehaviorIndex === -1) {
-        // 新增：推入数组
-        this.behaviorSettings.behaviorList.push(this.tempBehavior);
-      } else {
-        // 编辑：替换原数组中的项
-        this.behaviorSettings.behaviorList[this.currentBehaviorIndex] = this.tempBehavior;
+      // 1. 核心修复：确保 platforms 字段一定是数组且有值
+      if (!Array.isArray(this.tempBehavior.platforms)) {
+        // 如果没有数组，根据旧的单选字段转换，或者给默认值
+        let oldVal = this.tempBehavior.platform || 'chat';
+        this.tempBehavior.platforms = [oldVal];
+      }
+      
+      // 如果用户一个都没选（空数组），强制给个 'chat'
+      if (this.tempBehavior.platforms.length === 0) {
+        this.tempBehavior.platforms = ['chat'];
       }
 
-      // 关闭弹窗
+      // 2. 同步旧字段 platform，取数组第一个元素
+      this.tempBehavior.platform = this.tempBehavior.platforms[0];
+
+      // 3. 保存逻辑
+      if (this.isEditingBehavior) {
+        // 查找并替换旧项
+        const idx = this.behaviorSettings.behaviorList.findIndex(b => b === this.editingItemOrigin);
+        if (idx !== -1) {
+          this.behaviorSettings.behaviorList[idx] = JSON.parse(JSON.stringify(this.tempBehavior));
+        }
+      } else {
+        // 新增项
+        this.behaviorSettings.behaviorList.push(JSON.parse(JSON.stringify(this.tempBehavior)));
+      }
+
       this.showBehaviorDialog = false;
       
-      // 触发保存和计时器重置
-      this.resetCycleTimers();
-      this.autoSaveSettings();
+      // 4. 保存后刷新计时器
+      this.$nextTick(() => {
+        this.resetCycleTimers();
+      });
     },
 
     // 确认删除行为
