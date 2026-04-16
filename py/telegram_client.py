@@ -207,6 +207,7 @@ class TelegramClient:
                     "asyncToolsID": self.asyncToolsID[chat_id],
                     "fileLinks": self.fileLinks[chat_id],
                     "is_app_bot": True,
+                    "platform": "slack",
                     # 后端根据这个标志决定是否返回音频流
                 },
             )
@@ -533,7 +534,8 @@ class TelegramClient:
                 stream=False, 
                 extra_body={
                     "is_app_bot": True,
-                    "behavior_trigger": True
+                    "behavior_trigger": True,
+                    "platform": "slack",
                 }
             )
             

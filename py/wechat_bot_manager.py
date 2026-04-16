@@ -409,7 +409,10 @@ class WeChatClient:
                 model=self.WeChatAgent,
                 messages=self.memoryList[chat_id],
                 stream=True,
-                extra_body={"is_app_bot": True}
+                extra_body={
+                    "is_app_bot": True,
+                    "platform": "wechat",
+                }
             )
             
             full_response = []
@@ -539,7 +542,11 @@ class WeChatClient:
                     model=self.WeChatAgent,
                     messages=messages,
                     stream=True, 
-                    extra_body={"is_app_bot": True, "behavior_trigger": True}
+                    extra_body={
+                        "is_app_bot": True,
+                        "platform": "wechat",
+                        "behavior_trigger": True
+                    }
                 ),
                 timeout=60.0
             )

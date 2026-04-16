@@ -50,7 +50,7 @@ class SubTask(BaseModel):
     context: Dict[str, Any] = Field(default_factory=dict)
     
     task_type: TaskType = TaskType.ONCE
-    platforms: List[str] = Field(default_factory=lambda: []) # 新增：记录发布渠道
+    platforms: List[str] = Field(default_factory=list) 
     
     # 时间配置
     schedule_config: Optional[Dict[str, Any]] = None 

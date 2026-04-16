@@ -1324,35 +1324,27 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
                     consensus_content = await f.read()
             
             result = await create_subtask(
-                title=tool_params.get("title"),
-                description=tool_params.get("description"),
-                agent_type=tool_params.get("agent_type", "default"),
                 workspace_dir=cwd,
                 settings=settings, 
-                consensus_content=consensus_content
+                consensus_content=consensus_content,
+                **tool_params  # 这行是关键：它会把 AI 传的 title, platforms 等全部解包传入
             )
             return result
+
         
         elif tool_name == "query_task_progress":
             result = await query_task_progress(
                 workspace_dir=cwd,
-                task_id=tool_params.get("task_id"),         
-                parent_task_id=tool_params.get("parent_task_id"),
-                status=tool_params.get("status"),
-                verbose=tool_params.get("verbose", False)  
+                **tool_params
             )
             return result
         
         elif tool_name == "cancel_subtask":
-            result = await create_subtask(
-                title=tool_params.get("title"),
-                description=tool_params.get("description"),
-                agent_type=tool_params.get("agent_type", "default"),
+            result = await cancel_subtask(
                 workspace_dir=cwd,
-                settings=settings,
-                consensus_content=consensus_content,
-                parent_task_id=tool_params.get("parent_task_id")
+                task_id=tool_params.get("task_id")
             )
+            return result
         elif tool_name == "finish_task":
             result = await finish_task(
                 workspace_dir=cwd,
@@ -1400,6 +1392,7 @@ class ChatRequest(BaseModel):
     asyncToolsID: List[str] = None
     reasoning_effort: str = None
     is_app_bot: bool = False
+    platform: str = None
     is_sub_agent: bool = False
     enable_tools : List[str] = None
     disable_tools: List[str] = None
@@ -1767,6 +1760,10 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
                         combined_files = "\n\n".join(files_content_injected)
                         content_append(request.messages, 'system', f"\n\n📂 **The user has mentioned the following files using the '@' quick syntax, which have been automatically read for you.**:\n\n{combined_files}\n\nPlease refer to the content of the above document to answer the user's question.\n\n")
 
+    if request.is_app_bot and request.platform:
+        platform_message = f"\n\n用户正在使用 {request.platform} 软件与你交流\n\n"
+        content_append(request.messages, 'system', platform_message)
+
     if cwd and Path(cwd).exists() and cli_settings.get("enabled", False):
         permission_message = ""
         # 权限模式提示（原有逻辑，但修复了变量名）
@@ -1777,6 +1774,9 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
             if not request.is_sub_agent:
                 permission_message += "你当前处于协作模式，create_subtask工具可以帮你完成几乎任何任务（比如查资料、写代码、生成报告等），当你遇到难题时，可以尝试把它分解成一个个小任务，交给create_subtask工具去完成！当用户再次询问进度时，你可以用query_task_progress工具查询任务进度和获取详细结果\n\n"
                 content_append(request.messages, 'system', permission_message)
+                if request.is_app_bot and request.platform:
+                    task_platform_message = f"\n\n使用create_subtask工具时请将platforms参数设置为[{request.platform}]，从而将子任务的结果及时发给用户。\n\n"
+                    content_append(request.messages, 'system', task_platform_message)
             else:
                 permission_message = "你当前处于执行模式，你可以自由地使用所有工具，但请注意不要滥用权限！如果有更安全的工具，请不要直接使用bash命令！"
                 content_append(request.messages, 'system', permission_message)
@@ -6577,7 +6577,7 @@ async def create_task_endpoint(req: TaskCreateRequest):
             title=req.title,
             description=req.description,
             agent_type=req.agent_type,
-            parent_task_id="MANUAL_USER",
+            parent_task_id="USER",
             context=context,
             platforms=req.platforms  # 👈👈👈 必须加这一行！
         )

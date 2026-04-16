@@ -300,6 +300,7 @@ class DiscordClient(discord.Client):
                     "asyncToolsID": async_tools,
                     "fileLinks": file_links,
                     "is_app_bot": True,
+                    "platform": "discord",
                 },
             )
         except Exception as e:
