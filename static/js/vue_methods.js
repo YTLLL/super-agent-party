@@ -7907,6 +7907,7 @@ handleCreateSlackSeparator(val) {
         
         await new Promise(resolve => setTimeout(resolve, 10));
       }
+      this.messages[this.messages.length - 1].currentChunk = 0;
       console.log('TTS queue processing completed');
     },
     startTimer() {
@@ -8050,7 +8051,12 @@ handleCreateSlackSeparator(val) {
 
         if (!lastMessage.isPlaying) {
             lastMessage.isPlaying = true;
-                
+            console.log(`Playing audio chunk ${currentIndex}`);
+            if (currentIndex == 0){
+              this.stopTimer();
+              lastMessage.first_sentence_latency = this.elapsedTime;
+            }
+
             try {
                 // --- 核心同步修改点：只有非弹幕块且 VRM 在线时，才在此刻发送二进制数据 ---
                 if (!isVrmSilent && vrmIndex >= 0 && this.vrmOnline && audioChunk.buffer) {
