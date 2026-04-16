@@ -81,17 +81,17 @@ query_tasks_tool = {
     "type": "function",
     "function": {
         "name": "query_task_progress",
-        "description": "查询任务进度。支持按任务ID精确查询，或按父任务、状态批量查询。",
+        "description": "查询任务进度与结果。支持单次任务、定时任务和周期任务的状态追踪。可以查看任务的执行历史和多次运行的具体产出。",
         "parameters": {
             "type": "object",
             "properties": {
                 "task_id": { 
                     "type": "string",
-                    "description": "可选：指定任务ID进行精确查询"
+                    "description": "可选：指定任务ID进行精确查询。"
                 },
                 "parent_task_id": {
                     "type": "string",
-                    "description": "可选：查询指定父任务下的所有子任务"
+                    "description": "可选：查询指定父任务下的所有子任务。"
                 },
                 "status": {
                     "type": "string",
@@ -100,8 +100,12 @@ query_tasks_tool = {
                 },
                 "verbose": {
                     "type": "boolean",
-                    "description": "查看已完成任务的完整结果时设为 true",
+                    "description": "为 true 时显示详细的执行记录和结果内容。",
                     "default": False
+                },
+                "history_index": {
+                    "type": "integer",
+                    "description": "可选：对于周期/重复任务，指定要查看的运行记录索引（0为第一次，-1为最近一次）。默认为 -1。"
                 }
             }
         }
@@ -223,82 +227,95 @@ async def create_subtask(
 
 async def query_task_progress(
     workspace_dir: str,
-    task_id: Optional[str] = None,  # 新增：接收 task_id
+    task_id: Optional[str] = None,
     parent_task_id: Optional[str] = None,
     status: Optional[str] = None,
-    verbose: bool = False
+    verbose: bool = False,
+    history_index: int = -1
 ) -> str:
-    """查询任务进度 - 支持单任务精确查询和列表查询"""
+    """查询任务进度 - 增强版：支持周期/定时任务的深度回溯"""
     try:
         from py.task_center import get_task_center, TaskStatus
-        
         task_center = await get_task_center(workspace_dir)
-        status_enum = TaskStatus(status) if status else None
         
         tasks = []
-
-        # 👉 优化 1：如果有 task_id，优先精确查找，且忽略 status 过滤
         if task_id:
             single_task = await task_center.get_task(task_id)
-            if single_task:
-                tasks = [single_task]
-            else:
-                return f"❌ 未找到 ID 为 {task_id} 的任务，请检查 ID 是否正确。"
-        
-        # 👉 优化 2：如果没有 task_id，再进行列表搜索和过滤
+            if single_task: tasks = [single_task]
+            else: return f"❌ 未找到 ID 为 {task_id} 的任务。"
         else:
             status_enum = TaskStatus(status) if status else None
-            tasks = await task_center.list_tasks(
-                parent_task_id=parent_task_id,
-                status=status_enum
-            )
-        
+            tasks = await task_center.list_tasks(parent_task_id=parent_task_id, status=status_enum)
+
         if not tasks:
             return "📋 任务中心当前没有相关任务。"
-        
-        # 构建输出
-        result_lines = [f"📋 任务中心状态 (共 {len(tasks)} 个任务)"]
-        if verbose:
-            result_lines.append("📢 [详情模式] 已开启：正在展示完整结果...")
-        result_lines.append("-" * 30)
-        
-        for task in tasks:
-            icon = "✅" if task.status == TaskStatus.COMPLETED else "🔄" if task.status == TaskStatus.RUNNING else "⏳"
-            result_lines.append(f"{icon} [{task.task_id}] {task.title}")
-            result_lines.append(f"   状态: {task.status.value.upper()} | 进度: {task.progress}%")
-            
-            history = task.context.get("history", [])
-            
-            # 运行中
-            if task.status == TaskStatus.RUNNING:
-                if history:
-                    result_lines.append(f"   执行动态: {history[-1][:100]}...")
-                if verbose and history:
-                    result_lines.append("   📜 已完成步骤:")
-                    for i, step in enumerate(history, 1):
-                        result_lines.append(f"     {i}. {step[:200]}...")
 
-            # 已完成
-            elif task.status == TaskStatus.COMPLETED:
+        result_lines = [f"📋 任务中心状态报告 (共 {len(tasks)} 个任务)"]
+        result_lines.append("-" * 40)
+
+        for task in tasks:
+            ctx = task.context or {}
+            t_type = ctx.get("task_type", "once").upper()
+            ran_count = ctx.get("ran_count", 0)
+            
+            # 1. 标题与基本状态行
+            icon = "🔁" if t_type == "CYCLE" else "⏰" if t_type == "TIME" else "📄"
+            status_icon = "✅" if task.status == TaskStatus.COMPLETED else "🔄" if task.status == TaskStatus.RUNNING else "⏳"
+            result_lines.append(f"{status_icon} [{task.task_id}] {icon} {task.title}")
+            
+            # 2. 类型与频率信息
+            type_info = f"   类型: {t_type}"
+            if t_type == "CYCLE":
+                type_info += f" (间隔: {ctx.get('trigger_config', {}).get('cycleValue', 'N/A')})"
+            elif t_type == "TIME":
+                days = ctx.get('trigger_config', {}).get('days', [])
+                type_info += f" (时间: {ctx.get('trigger_config', {}).get('timeValue', 'N/A')} 周几: {days if days else '单次'})"
+            result_lines.append(type_info)
+
+            # 3. 调度统计
+            schedule_info = f"   运行统计: 已触发 {ran_count} 次"
+            if ctx.get("next_run_at"):
+                next_run = ctx.get("next_run_at").replace("T", " ")[:16]
+                schedule_info += f" | 下次运行: {next_run}"
+            result_lines.append(schedule_info)
+            result_lines.append(f"   当前状态: {task.status.value.upper()} | 总进度: {task.progress}%")
+
+            # 4. 结果内容处理 (核心改进)
+            results_history = ctx.get("results_history", [])
+            
+            if task.status == TaskStatus.RUNNING:
+                history = ctx.get("history", [])
+                if history:
+                    result_lines.append(f"   ⚡ 实时动态: {history[-1][:120]}...")
+
+            elif task.status in [TaskStatus.COMPLETED, TaskStatus.PENDING] and ran_count > 0:
                 if verbose:
-                    # ✅ 如果 verbose=True，强制显示完整 result
-                    result_content = task.result if task.result else "（无结果内容）"
-                    result_lines.append(f"   🎯 最终完整产出:\n{result_content}\n")
+                    # 尝试从历史中提取特定结果
+                    try:
+                        target_record = results_history[history_index]
+                        record_time = target_record.get("time", "").replace("T", " ")[:16]
+                        result_lines.append(f"\n   🎯 第 {results_history.index(target_record)+1} 次执行产出 ({record_time}):")
+                        result_lines.append(f"--- CONTENT START ---\n{target_record.get('result', '无结果内容')}\n--- CONTENT END ---")
+                    except (IndexError, TypeError):
+                        result_lines.append(f"   ⚠️ 无法找到索引为 {history_index} 的历史记录。")
                     
-                    # 可选：显示中间过程
-                    if history:
-                        result_lines.append("   📜 执行过程回溯 (最近3步):")
-                        for i, step in enumerate(history[-3:], 1):
-                            result_lines.append(f"     ... {step[:100]} ...")
+                    # 如果有多次历史，展示简易索引列表
+                    if len(results_history) > 1:
+                        history_list = ", ".join([f"#{i}" for i in range(len(results_history))])
+                        result_lines.append(f"   📜 可回溯记录索引: {history_list} (总计 {len(results_history)} 条)")
                 else:
-                    summary = task.context.get('summary') or (task.result[:150] + "..." if task.result else "无结果内容")
-                    result_lines.append(f"   📝 结果摘要: {summary}")
-                    result_lines.append(f"   💡 (提示: 使用 verbose=true 可查看完整报告)")
+                    # 非 verbose 模式显示最新摘要
+                    last_res = results_history[-1].get("result", "") if results_history else task.result
+                    summary = (last_res[:150] + "...") if last_res else "无内容"
+                    result_lines.append(f"   📝 最新结果摘要: {summary}")
+                    if len(results_history) > 1:
+                        result_lines.append(f"   💡 (该任务有 {len(results_history)} 条历史记录，使用 verbose=true 和 history_index 查询详情)")
 
             elif task.status == TaskStatus.FAILED:
                 result_lines.append(f"   ❌ 错误信息: {task.error}")
 
-            result_lines.append("") 
+            result_lines.append("") # 换行分隔任务
+
     except Exception as e:
         return f"❌ 查询任务进度失败: {str(e)}"
 
