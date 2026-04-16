@@ -15,8 +15,7 @@
 ####
 
 <div align="center">
-<a href="https://www.producthunt.com/products/super-agent-party?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-super-agent-party" target="_blank" rel="noopener noreferrer"><img alt="Super Agent Party - AI companion with Fast &amp; Slow brains: Empathizes &amp; Executes | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1091325&amp;theme=light&amp;t=1776217919630"></a>
-<a href="https://trendshift.io/repositories/16259" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16259" alt="heshengtao%2Fsuper-agent-party | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+  <a href="https://www.producthunt.com/products/super-agent-party?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-super-agent-party" target="_blank" rel="noopener noreferrer"><img alt="Super Agent Party - AI companion with Fast &amp; Slow brains: Empathizes &amp; Executes | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1091325&amp;theme=light&amp;t=1776217919630"></a>&nbsp;&nbsp;&nbsp;<a href="https://trendshift.io/repositories/16259" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16259" alt="heshengtao%2Fsuper-agent-party | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </div>
 
 ####
@@ -36,7 +35,7 @@
 ### 🚀 **一款拥有无限可能的AI桌面伴侣！**
 
 #### 桌面伴侣：支持自定义VRM模型、动作、3D场景，并支持[live2D扩展](https://github.com/heshengtao/sap-live2d)
-![image](doc/image/img-1/vrm.jpeg)
+![image](doc/image/img-1/cover.jpeg)
 
 #### 任务中心：让你的AI智能体可以在后台执行任何高级任务，自动控制电脑帮你干活，支持 MCP 和 Agent Skills
 ![image](doc/image/img-1/task.jpeg)

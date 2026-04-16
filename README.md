@@ -15,8 +15,7 @@
 ####
 
 <div align="center">
-<a href="https://www.producthunt.com/products/super-agent-party?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-super-agent-party" target="_blank" rel="noopener noreferrer"><img alt="Super Agent Party - AI companion with Fast &amp; Slow brains: Empathizes &amp; Executes | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1091325&amp;theme=light&amp;t=1776217919630"></a>
-<a href="https://trendshift.io/repositories/16259" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16259" alt="heshengtao%2Fsuper-agent-party | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+  <a href="https://www.producthunt.com/products/super-agent-party?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-super-agent-party" target="_blank" rel="noopener noreferrer"><img alt="Super Agent Party - AI companion with Fast &amp; Slow brains: Empathizes &amp; Executes | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1091325&amp;theme=light&amp;t=1776217919630"></a>&nbsp;&nbsp;&nbsp;<a href="https://trendshift.io/repositories/16259" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16259" alt="heshengtao%2Fsuper-agent-party | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </div>
 
 ####
@@ -37,7 +36,7 @@
 ### 🚀 **An AI desktop companion with endless possibilities!**  
 
 #### Desktop Companion: Supports custom VRM models, actions, 3D scenes, and is compatible with [live2D extensions](https://github.com/heshengtao/sap-live2d)
-![image](doc/image/img-2/vrm.jpeg)
+![image](doc/image/img-2/cover.jpeg)
 
 #### Task Center: Enable your AI agents to perform any advanced tasks in the background, automatically control your computer to get work done, supporting MCP and Agent Skills.
 ![image](doc/image/img-2/task.jpeg)

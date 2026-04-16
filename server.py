@@ -10,6 +10,9 @@ import socket
 import errno
 
 from py.cli_tool import read_file_tool_local
+from py.task_tools import query_task_progress
+from py.ws_manager import ws_manager
+import shortuuid
 os.environ["MEM0_TELEMETRY"] = "False"
 parser = argparse.ArgumentParser(description="Run the ASGI application server.")
 parser.add_argument("--host", default="127.0.0.1")
@@ -816,13 +819,13 @@ async def lifespan(app: FastAPI):
             elif m_client:
                 mcp_client_list[name] = m_client
         await save_settings(settings)
-        await broadcast_settings_update(settings)
+        await ws_manager.broadcast_settings_update(settings)
 
     if settings and settings.get('mcpServers'):
         mcp_init_tasks = [asyncio.create_task(init_mcp_with_timeout(k, v)) for k, v in settings['mcpServers'].items()]
         if mcp_init_tasks: asyncio.create_task(check_results())
     else:
-        asyncio.create_task(broadcast_settings_update(settings or {}))
+        asyncio.create_task(ws_manager.broadcast_settings_update(settings or {}))
 
     # --- [启动完成] ---
     yield
@@ -840,22 +843,6 @@ async def lifespan(app: FastAPI):
     if global_http_client:
         await global_http_client.aclose()
     print("All processes terminated.")
-
-
-# WebSocket端点增加连接管理
-active_connections = []
-# 新增广播函数
-async def broadcast_settings_update(settings):
-    """向所有WebSocket连接推送配置更新"""
-    for connection in active_connections:  # 需要维护全局连接列表
-        try:
-            await connection.send_json({
-                "type": "settings_update",
-                "data": settings  # 直接使用内存中的最新配置
-            })
-            print("Settings broadcasted to client")
-        except Exception as e:
-            logger.error(f"Broadcast failed: {e}")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -1391,7 +1378,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         ret_out = await tool_call(**tool_params)
         if tool_name == "auto_behavior":
             settings = ret_out
-            await broadcast_settings_update(settings)
+            await ws_manager.broadcast_settings_update(settings)
             ret_out = "任务设置成功！"
         return ret_out
     except Exception as e:
@@ -1798,7 +1785,9 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
             content_append(request.messages, 'system', permission_message)
 
     if permissionMode == "cowork" and not request.is_sub_agent:
-        pass
+        if cwd and Path(cwd).exists() and cli_settings.get("enabled", False) and engine in ["ds", "local"]:
+            sub_task_context = await query_task_progress(cwd)
+            content_append(request.messages, 'system', sub_task_context)
     elif cwd and Path(cwd).exists() and cli_settings.get("enabled", False) and engine in ["ds", "local"]:
         
         if engine == "local":
@@ -6544,6 +6533,7 @@ class TaskCreateRequest(BaseModel):
     description: str
     agent_type: str = "default"
     task_type: str = "once"  # once, time, cycle
+    platforms: List[str] = []
     trigger_config: Optional[Dict[str, Any]] = None
 
 @app.get("/v1/tasks/list")
@@ -6577,18 +6567,19 @@ async def create_task_endpoint(req: TaskCreateRequest):
         # 构造初始上下文
         context = {
             "task_type": req.task_type,
-            "trigger_config": req.trigger_config or {},
+            "trigger_config": getattr(req, "trigger_config", {}), # 防止取不到报错
             "history": [],
             "ran_count": 0
         }
         
-        # 1. 创建任务记录
+        # 1. 创建任务记录 (⭐ 关键修复：把 req.platforms 传进去)
         task = await task_center.create_task(
             title=req.title,
             description=req.description,
             agent_type=req.agent_type,
             parent_task_id="MANUAL_USER",
-            context=context
+            context=context,
+            platforms=req.platforms  # 👈👈👈 必须加这一行！
         )
         
         # 2. 读取共识（可选）
@@ -6618,7 +6609,7 @@ async def create_task_endpoint(req: TaskCreateRequest):
         return {"success": True, "message": msg, "task": task.model_dump()}
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
-
+    
 @app.post("/v1/tasks/cancel/{task_id}")
 async def cancel_task_endpoint(task_id: str):
     """取消任务"""
@@ -10410,58 +10401,60 @@ async def sync_all_bots_behavior(settings_dict: dict):
 settings_lock = asyncio.Lock()
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    active_connections.append(websocket)
+    # 1. 建立连接
+    await ws_manager.connect(websocket)
 
-    # [关键点 1] 为当前连接生成唯一ID
+    # [状态标记] 为当前连接生成唯一ID并初始化状态
     connection_id = str(shortuuid.ShortUUID().random(length=8))
-    # 标记该连接是否发送过提示词（用于判断断开时是否需要发送移除指令）
     has_sent_prompt = False
     has_start_tts = False
 
     try:
+        # 2. 初始数据推送
         async with settings_lock:
             current_settings = await load_settings()
+            # 兼容旧逻辑：将 conversations 移出 settings 独立存储
             if current_settings.get("conversations", None):
                 await save_covs({"conversations": current_settings["conversations"]})
                 del current_settings["conversations"]
                 await save_settings(current_settings)
+            
             covs = await load_covs()
             current_settings["conversations"] = covs.get("conversations", [])
         
-        await websocket.send_json({"type": "settings", "data": current_settings})
+        await ws_manager.send_json({"type": "settings", "data": current_settings}, websocket)
         
+        # 3. 消息处理循环
         while True:
             data = await websocket.receive_json()
+            msg_type = data.get("type")
             
-            # --- 常规逻辑保持不变 ---
-            if data.get("type") == "ping":
-                await websocket.send_json({"type": "pong"})
-            elif data.get("type") == "save_settings":
+            if msg_type == "ping":
+                await ws_manager.send_json({"type": "pong"}, websocket)
+
+            elif msg_type == "save_settings":
                 settings_dict = data.get("data", {})
-                # 1. 正常的保存逻辑
                 await save_settings(settings_dict)
                 await sync_all_bots_behavior(settings_dict)
 
-                await websocket.send_json({
+                await ws_manager.send_json({
                     "type": "settings_saved",
                     "correlationId": data.get("correlationId"),
                     "success": True
-                })
-                for connection in [conn for conn in active_connections if conn != websocket]:
-                    await connection.send_json({
-                        "type": "settings_update",
-                        "data": data.get("data", {})
-                    })
+                }, websocket)
+                
+                # 广播给其他客户端（不含自己）
+                await ws_manager.broadcast_settings_update(settings_dict, exclude=websocket)
 
-            elif data.get("type") == "save_conversations":
+            elif msg_type == "save_conversations":
                 await save_covs(data.get("data", {}))
-                await websocket.send_json({
+                await ws_manager.send_json({
                     "type": "conversations_saved",
                     "correlationId": data.get("correlationId"),
                     "success": True
-                })
-            elif data.get("type") == "get_settings":
+                }, websocket)
+
+            elif msg_type == "get_settings":
                 settings = await load_settings()
                 if settings.get("conversations", None):
                     await save_covs({"conversations": settings["conversations"]})
@@ -10469,13 +10462,15 @@ async def websocket_endpoint(websocket: WebSocket):
                     await save_settings(settings)
                 covs = await load_covs()
                 settings["conversations"] = covs.get("conversations", [])
-                await websocket.send_json({"type": "settings", "data": settings})
-            elif data.get("type") == "save_agent":
+                await ws_manager.send_json({"type": "settings", "data": settings}, websocket)
+
+            elif msg_type == "save_agent":
                 current_settings = await load_settings()
                 agent_id = str(shortuuid.ShortUUID().random(length=8))
                 config_path = os.path.join(AGENT_DIR, f"{agent_id}.json")
                 with open(config_path, 'w', encoding='utf-8') as f:
                     json.dump(current_settings, f, indent=4, ensure_ascii=False)
+                
                 current_settings['agents'][agent_id] = {
                     "id": agent_id,
                     "name": data['data']['name'],
@@ -10484,125 +10479,86 @@ async def websocket_endpoint(websocket: WebSocket):
                     "enabled": False,
                 }
                 await save_settings(current_settings)
-                await websocket.send_json({"type": "settings", "data": current_settings})
+                await ws_manager.send_json({"type": "settings", "data": current_settings}, websocket)
             
-            elif data.get("type") == "set_user_input":
+            elif msg_type == "set_user_input":
                 user_input = data.get("data", {}).get("text", "")
-                for connection in active_connections:
-                    await connection.send_json({
-                        "type": "update_user_input",
-                        "data": {"text": user_input}
-                    })
+                await ws_manager.broadcast({
+                    "type": "update_user_input",
+                    "data": {"text": user_input}
+                })
 
-            # --- [关键修改] 处理扩展页面发送的系统提示 ---
-            elif data.get("type") == "set_system_prompt":
-                has_sent_prompt = True # 标记该连接为扩展源
+            elif msg_type == "set_system_prompt":
+                has_sent_prompt = True # 标记该连接发送过 Prompt
                 extension_system_prompt = data.get("data", {}).get("text", "")
-                
-                # 广播时携带 connection_id
-                for connection in active_connections:
-                    await connection.send_json({
-                        "type": "update_system_prompt",
-                        "data": {
-                            "id": connection_id,      # 这里传入连接ID
-                            "text": extension_system_prompt
-                        }
-                    })
+                await ws_manager.broadcast({
+                    "type": "update_system_prompt",
+                    "data": {
+                        "id": connection_id,
+                        "text": extension_system_prompt
+                    }
+                })
 
-            elif data.get("type") == "set_tool_input":
+            elif msg_type == "set_tool_input":
                 tool_input = data.get("data", {}).get("text", "")
-                for connection in active_connections:
-                    await connection.send_json({
-                        "type": "update_tool_input",
-                        "data": {"text": tool_input}
-                    })
-            # 把文字传给主界面TTS并播放
-            elif data.get("type") == "start_read":
+                await ws_manager.broadcast({
+                    "type": "update_tool_input",
+                    "data": {"text": tool_input}
+                })
+
+            elif msg_type == "start_read":
                 has_start_tts = True
                 read_input = data.get("data", {}).get("text", "")
-                for connection in active_connections:
-                    await connection.send_json({
-                        "type": "start_tts",
-                        "data": {"text": read_input}
-                    })
+                await ws_manager.broadcast({
+                    "type": "start_tts",
+                    "data": {"text": read_input}
+                })
 
-            # 停止主界面TTS并清空要播放的内容
-            elif data.get("type") == "stop_read":
-                for connection in active_connections:
-                    await connection.send_json({
-                        "type": "stop_tts",
-                        "data": {}
-                    })
+            elif msg_type == "stop_read":
+                await ws_manager.broadcast({
+                    "type": "stop_tts",
+                    "data": {}
+                })
 
-            elif data.get("type") == "trigger_close_extension":
-                for connection in active_connections:
-                    await connection.send_json({
-                        "type": "trigger_close_extension",
-                        "data": {}
-                    })
+            elif msg_type == "trigger_close_extension":
+                await ws_manager.broadcast({"type": "trigger_close_extension", "data": {}})
 
-            elif data.get("type") == "trigger_send_message":
-                for connection in active_connections:
-                    await connection.send_json({
-                        "type": "trigger_send_message",
-                        "data": {}
-                    })
+            elif msg_type == "trigger_send_message":
+                await ws_manager.broadcast({"type": "trigger_send_message", "data": {}})
                     
-            elif data.get("type") == "trigger_clear_message":
-                for connection in active_connections:
-                    await connection.send_json({
-                        "type": "trigger_clear_message",
-                        "data": {}
-                    })
+            elif msg_type == "trigger_clear_message":
+                await ws_manager.broadcast({"type": "trigger_clear_message", "data": {}})
 
-            elif data.get("type") == "get_messages":
-                for connection in active_connections:
-                    await connection.send_json({
-                        "type": "request_messages",
-                        "data": {}
-                    })
+            elif msg_type == "get_messages":
+                await ws_manager.broadcast({"type": "request_messages", "data": {}})
 
-            elif data.get("type") == "broadcast_messages":
+            elif msg_type == "broadcast_messages":
                 messages_data = data.get("data", {})
-                for connection in [conn for conn in active_connections if conn != websocket]:
-                    await connection.send_json({
-                        "type": "messages_update",
-                        "data": messages_data
-                    })
+                # 广播给除自己以外的所有人
+                await ws_manager.broadcast({
+                    "type": "messages_update",
+                    "data": messages_data
+                }, exclude=websocket)
 
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        print(f"WebSocket error for {connection_id}: {e}")
     finally:
-        if websocket in active_connections:
-            active_connections.remove(websocket)
+        # 4. 断开连接并清理
+        ws_manager.disconnect(websocket)
         
-        # --- [关键修改] 连接断开时的处理 ---
-        # 只有当该连接曾经发送过 update_system_prompt 时才触发
-        # 避免普通客户端断开时误删内容
         if has_sent_prompt:
             print(f"Extension {connection_id} disconnected. Removing prompt.")
-            for connection in active_connections:
-                try:
-                    # 发送移除指令，只携带 ID
-                    await connection.send_json({
-                        "type": "remove_system_prompt",
-                        "data": {
-                            "id": connection_id 
-                        }
-                    })
-                except Exception:
-                    pass
+            await ws_manager.broadcast({
+                "type": "remove_system_prompt",
+                "data": {"id": connection_id}
+            })
+            
         if has_start_tts:
-            print(f"Extension {connection_id} disconnected. Removing tts.")
-            for connection in active_connections:
-                try:
-                    # 发送移除指令，只携带 ID
-                    await connection.send_json({
-                        "type": "stop_tts",
-                        "data": {}
-                    })
-                except Exception:
-                    pass
+            print(f"Extension {connection_id} disconnected. Stopping tts.")
+            await ws_manager.broadcast({
+                "type": "stop_tts",
+                "data": {}
+            })
 
 @app.post("/sys/shutdown")
 async def shutdown_server():

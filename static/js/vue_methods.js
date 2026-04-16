@@ -1546,6 +1546,11 @@ let vue_methods = {
           }
           if (this.activeMenu === 'home') this.startDriverGuide();
         } 
+          // 在 initWebSocket() 的 onmessage 逻辑中添加
+          else if (data.type === 'task_notification') {
+              // 调用前端的弹窗提醒
+              showNotification(`${data.data.title}\n${this.t('intask')}`, 'success');
+          }
         else if (data.type === 'settings_saved') {
           if (!data.success) {
             showNotification(this.t('settings_save_failed'), 'error');
@@ -7907,6 +7912,7 @@ handleCreateSlackSeparator(val) {
         
         await new Promise(resolve => setTimeout(resolve, 10));
       }
+      this.messages[this.messages.length - 1].currentChunk = 0;
       console.log('TTS queue processing completed');
     },
     startTimer() {
@@ -8050,7 +8056,12 @@ handleCreateSlackSeparator(val) {
 
         if (!lastMessage.isPlaying) {
             lastMessage.isPlaying = true;
-                
+            console.log(`Playing audio chunk ${currentIndex}`);
+            if (currentIndex == 0){
+              this.stopTimer();
+              lastMessage.first_sentence_latency = this.elapsedTime;
+            }
+
             try {
                 // --- 核心同步修改点：只有非弹幕块且 VRM 在线时，才在此刻发送二进制数据 ---
                 if (!isVrmSilent && vrmIndex >= 0 && this.vrmOnline && audioChunk.buffer) {
@@ -10901,55 +10912,78 @@ stopTTSActivities() {
   },
 
   // 初始化周期定时器
-  initCycleTimer(behavior, index) {
-    // 清除现有定时器
-    if (this.cycleTimers[index]) {
-      clearInterval(this.cycleTimers[index]);
-    }
-    
-    // 解析周期时间 (HH:mm:ss)
-    const [hours, minutes, seconds] = behavior.trigger.cycle.cycleValue.split(':').map(Number);
-    const cycleMs = (hours * 3600 + minutes * 60 + seconds) * 1000;
-    
-    // 当前周期计数
-    let currentCount = 0;
-    
-    // 创建定时器
-    this.cycleTimers[index] = setInterval(() => {
-      if (!behavior||!behavior.enabled) return;
-      
-      // 检查是否无限循环或未达到重复次数
-      if (behavior.trigger.cycle.isInfiniteLoop || 
-          currentCount < behavior.trigger.cycle.repeatNumber) {
-        
-        this.runBehavior(behavior);
-        currentCount++;
-        
-        // 非无限循环且达到次数时停止
-        if (!behavior.trigger.cycle.isInfiniteLoop && 
-            currentCount >= behavior.trigger.cycle.repeatNumber) {
-          clearInterval(this.cycleTimers[index]);
-          this.cycleTimers[index] = null;
-          behavior.enabled = false;
-        }
-      }
-    }, cycleMs);
-  },
+initCycleTimer(behavior, index) {
+  if (this.cycleTimers[index]) {
+    clearInterval(this.cycleTimers[index]);
+  }
+  const [hours, minutes, seconds] = behavior.trigger.cycle.cycleValue.split(':').map(Number);
+  const cycleMs = (hours * 3600 + minutes * 60 + seconds) * 1000;
+  let currentCount = 0;
   
-  // 当配置变化时重置定时器
-  resetCycleTimers() {
-    this.cycleTimers.forEach((timer, index) => {
-      if (timer) clearInterval(timer);
-      this.cycleTimers[index] = null;
-    });
+  this.cycleTimers[index] = setInterval(() => {
+    // 运行前再次确认启用状态和平台
+    if (!behavior || !behavior.enabled || !this.isTargetPlatform(behavior, 'chat')) return;
     
-    // 重新初始化启用的周期触发器
-    this.behaviorSettings.behaviorList.forEach((b, index) => {
-      if (b.enabled && b.trigger.type === 'cycle' && b.platform === 'chat') {
-        this.initCycleTimer(b, index);
+    if (behavior.trigger.cycle.isInfiniteLoop || currentCount < behavior.trigger.cycle.repeatNumber) {
+      this.runBehavior(behavior);
+      currentCount++;
+      if (!behavior.trigger.cycle.isInfiniteLoop && currentCount >= behavior.trigger.cycle.repeatNumber) {
+        clearInterval(this.cycleTimers[index]);
+        this.cycleTimers[index] = null;
+        behavior.enabled = false;
       }
-    });
-  },
+    }
+  }, cycleMs);
+},
+
+// --- 修改重置逻辑 ---
+resetCycleTimers() {
+  // 防护：如果设置还没加载好，或者列表不存在，直接跳过
+  if (!this.behaviorSettings || !Array.isArray(this.behaviorSettings.behaviorList)) {
+    return;
+  }
+
+  // 确保 cycleTimers 是个数组
+  if (!Array.isArray(this.cycleTimers)) {
+    this.cycleTimers = [];
+  }
+
+  // 清除旧的计时器
+  this.cycleTimers.forEach((timer, index) => {
+    if (timer) clearInterval(timer);
+    this.cycleTimers[index] = null;
+  });
+
+  // 重新初始化
+  this.behaviorSettings.behaviorList.forEach((b, index) => {
+    // 增加 b && b.trigger 的判断
+    if (b && b.enabled && b.trigger && b.trigger.type === 'cycle' && this.isTargetPlatform(b, 'chat')) {
+      this.initCycleTimer(b, index);
+    }
+  });
+},
+
+
+isTargetPlatform(behavior, platformKey) {
+  // 1. 如果 behavior 本身不存在
+  if (!behavior) return false;
+
+  // 2. 检查新字段 platforms (数组)
+  // 必须先判断 Array.isArray 且长度 > 0，才能读取 [0]
+  if (behavior.platforms && Array.isArray(behavior.platforms) && behavior.platforms.length > 0) {
+    if (behavior.platforms.includes('all')) return true;
+    return behavior.platforms.includes(platformKey);
+  }
+
+  // 3. 兼容老数据：检查旧字段 platform (字符串)
+  if (behavior.platform && typeof behavior.platform === 'string') {
+    return behavior.platform === 'all' || behavior.platform === platformKey;
+  }
+
+  // 4. 兜底逻辑
+  return platformKey === 'chat';
+},
+
     startDriverGuide() {
       const KEY = 'driver_guide_shown';
       if (localStorage.getItem(KEY)) return;
@@ -15299,7 +15333,7 @@ async handleRefreshSkills() {
           prompt: '',
           random: { type: 'random', events: [''] }
         },
-        platform:"chat",
+        platforms: ["chat"],  // 新增多选渠道字段（字符串数组）
       };
     },
 
@@ -15313,20 +15347,39 @@ async handleRefreshSkills() {
     saveBehavior() {
       if (!this.tempBehavior) return;
 
-      if (this.currentBehaviorIndex === -1) {
-        // 新增：推入数组
-        this.behaviorSettings.behaviorList.push(this.tempBehavior);
-      } else {
-        // 编辑：替换原数组中的项
-        this.behaviorSettings.behaviorList[this.currentBehaviorIndex] = this.tempBehavior;
+      // 1. 核心修复：确保 platforms 字段一定是数组且有值
+      if (!Array.isArray(this.tempBehavior.platforms)) {
+        // 如果没有数组，根据旧的单选字段转换，或者给默认值
+        let oldVal = this.tempBehavior.platform || 'chat';
+        this.tempBehavior.platforms = [oldVal];
+      }
+      
+      // 如果用户一个都没选（空数组），强制给个 'chat'
+      if (this.tempBehavior.platforms.length === 0) {
+        this.tempBehavior.platforms = ['chat'];
       }
 
-      // 关闭弹窗
+      // 2. 同步旧字段 platform，取数组第一个元素
+      this.tempBehavior.platform = this.tempBehavior.platforms[0];
+
+      // 3. 保存逻辑
+      if (this.isEditingBehavior) {
+        // 查找并替换旧项
+        const idx = this.behaviorSettings.behaviorList.findIndex(b => b === this.editingItemOrigin);
+        if (idx !== -1) {
+          this.behaviorSettings.behaviorList[idx] = JSON.parse(JSON.stringify(this.tempBehavior));
+        }
+      } else {
+        // 新增项
+        this.behaviorSettings.behaviorList.push(JSON.parse(JSON.stringify(this.tempBehavior)));
+      }
+
       this.showBehaviorDialog = false;
       
-      // 触发保存和计时器重置
-      this.resetCycleTimers();
-      this.autoSaveSettings();
+      // 4. 保存后刷新计时器
+      this.$nextTick(() => {
+        this.resetCycleTimers();
+      });
     },
 
     // 确认删除行为
@@ -15524,6 +15577,7 @@ async handleRefreshSkills() {
 
         this.isCreatingTask = true;
         try {
+            console.log(this.newTaskForm); // 打印表单数据
             const res = await fetch(`/v1/tasks/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -15532,6 +15586,7 @@ async handleRefreshSkills() {
                     description: this.newTaskForm.description,
                     agent_type: this.newTaskForm.agent_type,
                     task_type: this.newTaskForm.task_type,
+                    platforms: this.newTaskForm.platforms,
                     trigger_config: this.newTaskForm.trigger_config // 发送完整配置
                 })
             });
@@ -15644,20 +15699,52 @@ openTaskResult(task) {
     },
 
 
-        // 1. 打开编辑对话框
+    // 重置表单到初始状态
+    resetTaskForm() {
+        this.newTaskForm = {
+            title: '',
+            description: '',
+            task_type: 'once',
+            platforms: [],
+            agent_type: 'default',
+            trigger_config: {
+                timeValue: '09:00:00',
+                days: [1, 2, 3, 4, 5],
+                cycleValue: '01:00:00',
+                repeatNumber: 1,
+                isInfiniteLoop: true
+            }
+        };
+        this.isEditing = false;
+        this.editingTaskId = null;
+    },
+
+    // 打开新建窗口
+    openCreateTaskDialog() {
+        this.resetTaskForm(); // 确保每次新建前都干净
+        this.showCreateTaskDialog = true;
+    },
+
     openEditTaskDialog(task) {
+        // 1. 先重置，清除上一次可能残留的状态
+        this.resetTaskForm();
+        
+        // 2. 标记为编辑模式
         this.isEditing = true;
         this.editingTaskId = task.task_id;
         
-        // 深度拷贝任务数据到表单
+        // 3. 填充基础数据
         this.newTaskForm.title = task.title;
         this.newTaskForm.description = task.description;
-        this.newTaskForm.task_type = task.context?.task_type || 'once';
+        this.newTaskForm.platforms = task.platforms || [];
         this.newTaskForm.agent_type = task.agent_type || 'default';
+        this.newTaskForm.task_type = task.context?.task_type || task.task_type || 'once';
         
-        // 如果有触发配置，也拷贝过来
-        if (task.context?.trigger_config) {
-            this.newTaskForm.trigger_config = JSON.parse(JSON.stringify(task.context.trigger_config));
+        // 4. 填充触发器配置
+        const savedConfig = task.context?.trigger_config;
+        if (savedConfig) {
+            // 使用 assign 或 spread 确保响应式更新
+            Object.assign(this.newTaskForm.trigger_config, JSON.parse(JSON.stringify(savedConfig)));
         }
         
         this.showCreateTaskDialog = true;
@@ -15692,8 +15779,9 @@ openTaskResult(task) {
             
             if (data.success) {
                 showNotification(this.t('success'));
-                this.showCreateTaskDialog = false;
-                this.fetchTasks(); // 刷新列表
+                this.showCreateTaskDialog = false; // 关闭窗口
+                this.resetTaskForm();             // ⭐ 提交成功后重置表单
+                this.fetchTasks();                // 刷新列表
             } else {
                 showNotification(data.error, 'error');
             }
@@ -16454,5 +16542,33 @@ toggleFavoriteExtension(ext) {
   localStorage.setItem('favorite_extensions', JSON.stringify(this.favoriteExtensionIds));
 },
 
+createNewTask(){
+  this.activeMenu = 'home';
+  this.expandSidePanel();
+  this.activeSideView = 'tasks';
+
+},
+openAiBrowser(){
+  this.activeMenu = 'ai-browser';
+  this.chromeMCPSettings.type = 'internal';
+  this.chromeMCPSettings.enabled = true;
+  this.changeChromeMCPEnabled();
+},
+
+connectToChatApp(){
+  this.activeMenu = 'deploy-bot';
+  this.subMenu = 'im_bot';
+},
+
+startLiveStream(){
+  this.activeMenu = 'deploy-bot';
+  this.subMenu = 'live_stream';
+},
+
+gotoAddExtension(){
+  this.activeMenu = 'api-group';
+  this.subMenu = 'extension';
+  this.openAddExtensionDialog();
+},
 
 }
