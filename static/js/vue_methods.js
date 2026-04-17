@@ -1776,9 +1776,12 @@ let vue_methods = {
         // 基础校验
         if (!this.userInput.trim() && (!this.files || this.files.length === 0) && (!this.images || this.images.length === 0)) return;
         if (this.isTyping) return;
+        
+        // [V2新增]：切换菜单
         if (this.activeMenu === 'dashboard'){
           this.activeMenu = 'home'
         }
+
         // 处理 TTS/Read 中断
         if (this.readState.isPlaying && this.ttsSettings.enabled) { 
             if (this.isReadRunning){
@@ -1845,7 +1848,7 @@ let vue_methods = {
             const formData = new FormData();
               for (const file of imageLinks) {
                   if (file.file instanceof Blob) { 
-                      formData.append('files', file.file, file.name , file.detectedType); 
+                      formData.append('files', file.file, file.name , file.detectedType); // [V2新增]：detectedType
                   } 
               }
               try {
@@ -1854,7 +1857,9 @@ let vue_methods = {
                   if (data.success) {
                     imageLinks = data.fileLinks;
                     this.imageFiles = [...this.imageFiles, ...data.imageFiles];
-                    this.vedioFiles = [...this.vedioFiles, ...data.vedioFiles];
+                    if(data.vedioFiles) { // [V2新增]：视频支持
+                        this.vedioFiles = [...(this.vedioFiles || []), ...data.vedioFiles];
+                    }
                   }
               } catch (error) { console.error(error); }
         }
@@ -1952,12 +1957,97 @@ let vue_methods = {
         let tts_buffer = '';
         let isCodeBlock = false;
         this.cur_voice = 'default';
+        
+        const toolCallStack = [];
+        this.toolArgsAccumulator = this.toolArgsAccumulator || {}; 
 
-        // 1. 初始化或复用消息对象
+        // 内部函数：准备发送给 API 的消息历史
+        const prepareMessages = (msgs) => {
+            const rawMessages = msgs.flatMap(msg => {
+                const userName = this.memorySettings?.userName || 'User';
+
+                if (this.isGroupMode && (msg.role === 'user' || (msg.role === 'assistant' && msg.agentName !== agentDisplayName))) {
+                    let textContent = (msg.pure_content ?? msg.content) + (msg.fileLinks_content ?? '');
+                    const prefix = msg.role === 'user' ? userName : msg.agentName;
+                    const finalContent = `${prefix}: ${textContent}`;
+
+                    if (msg.imageLinks && msg.imageLinks.length > 0) {
+                        const contentArray = [{ type: "text", text: finalContent }];
+                        msg.imageLinks.forEach(imageLink => {
+                            contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                        });
+                        return [{ role: 'user', content: contentArray }];
+                    } else {
+                        return [{ role: 'user', content: finalContent }];
+                    }
+                }
+
+                if (msg.role === 'assistant' && msg.backend_content && msg.backend_content.length > 0) {
+                    return msg.backend_content.filter(m => 
+                        (m.content && String(m.content).trim() !== '') || 
+                        (m.tool_calls && m.tool_calls.length > 0) || 
+                        m.role === 'tool'
+                    );
+                }
+                
+                let apiRole = msg.role === 'system' ? 'system' : (msg.role === 'assistant' ? 'assistant' : 'user');
+                let textContent = (msg.pure_content ?? msg.content) + (msg.fileLinks_content ?? '');
+                
+                if (msg.imageLinks && msg.imageLinks.length > 0) {
+                    const contentArray = [{ type: "text", text: textContent }];
+                    msg.imageLinks.forEach(imageLink => {
+                        contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                    });
+                    return [{ role: apiRole, content: contentArray }];
+                } else {
+                    return [{ role: apiRole, content: textContent }];
+                }
+            });
+
+            const sanitized =[];
+            for (let i = 0; i < rawMessages.length; i++) {
+                const current = rawMessages[i];
+                if (current.role === 'tool') {
+                    let prev = sanitized.length > 0 ? sanitized[sanitized.length - 1] : null;
+                    if (!prev || prev.role !== 'assistant') {
+                        prev = { role: 'assistant', content: null, tool_calls:[] };
+                        sanitized.push(prev);
+                    }
+                    if (!prev.tool_calls) prev.tool_calls =[];
+                    
+                    const safeToolCallId = current.tool_call_id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                    current.tool_call_id = safeToolCallId;
+
+                    const hasMatchingId = prev.tool_calls.some(tc => tc.id === safeToolCallId);
+                    if (!hasMatchingId) {
+                        prev.tool_calls.push({
+                            id: safeToolCallId,
+                            type: 'function',
+                            function: { name: current.name || 'unknown_tool', arguments: "{}" }
+                        });
+                    }
+                }
+                sanitized.push(current);
+            }
+            return sanitized;
+        };
+
+        // 【致命 Bug 修复点：完全恢复 V1 的时序】
+        // 第一步：直接把包括您最新的一句提问的整个 this.messages 打包成 Payload
+        let messagesPayload = prepareMessages(this.messages);
+
+        // 第二步：注入扩展的 System Prompts
+        if(this.extensionsSystemPromptsDict){
+            const combinedPrompt = Object.values(this.extensionsSystemPromptsDict).filter(Boolean).join('\n\n');
+            if (messagesPayload[0].role === 'system') messagesPayload[0].content += '\n\n' + combinedPrompt;
+            else messagesPayload.unshift({ role: 'system', content: combinedPrompt });
+        }
+
+        // 第三步：创建或复用给助手用的坑位（一定要在 prepareMessages 后执行，避免污染 Payload）
         let currentMsg;
         if (isResume && this.messages.length > 0) {
             currentMsg = this.messages[this.messages.length - 1];
-            currentMsg.generationFinished = false;
+            currentMsg.generationFinished = false; 
         } else {
             const newMsgData = {
                 id: Date.now() + Math.random(),
@@ -1966,7 +2056,8 @@ let vue_methods = {
                 content: '',
                 pure_content: '', 
                 backend_content: [{ role: 'assistant', content: '' }],
-                displayBlocks: [], 
+                toolBlocks: {}, 
+                displayBlocks: [], // V2 新增双轨渲染支撑
                 isOmni: this.settings.enableOmniTTS || this.fastSettings.enableOmniTTS, 
                 omniAudioChunks: [], ttsChunks: [], chunks_voice: [], audioChunks: [], 
                 isPlaying: false, total_tokens: 0, first_token_latency: 0, elapsedTime: 0, 
@@ -1976,19 +2067,14 @@ let vue_methods = {
             currentMsg = this.messages[this.messages.length - 1]; 
         }
 
-        // 2. 稳定的区块获取函数：解决流式卡顿和嵌套问题
         const getBlock = (type, id = null, name = null) => {
             if (!currentMsg.displayBlocks) currentMsg.displayBlocks = [];
             let last = currentMsg.displayBlocks[currentMsg.displayBlocks.length - 1];
-            
-            // 只要类型相同，且（没有ID 或 ID匹配），就坚决不换块
             const canReuse = last && last.type === type && (!id || last.id === id);
-
             if (canReuse) {
                 if (name && !last.name) last.name = name;
                 return last;
             }
-            // 只有在真正需要切换（如从思考切到文本，或换了一个工具ID）时才开新块
             const newBlock = { type, id, name, content: '', args: '', data: null };
             currentMsg.displayBlocks.push(newBlock);
             return newBlock;
@@ -1996,44 +2082,28 @@ let vue_methods = {
 
         this.$nextTick(() => { this.scrollToBottom(); });
 
-        // TTS 初始化
+        let audioResolve = null;
+        let audioProcess = null;
+        const audioPromise = new Promise((resolve) => { audioResolve = resolve; });
+        
         if (this.ttsSettings.enabled) {
             this.startTTSProcess(currentMsg);
-            this.startAudioPlayProcess(currentMsg, (res) => {});
+            this.startAudioPlayProcess(currentMsg, audioResolve);
+            audioProcess = audioPromise;
         }
 
-        // 准备 Payload
-        const prepareMessages = (msgs) => {
-            return msgs.flatMap(msg => {
-                const userName = this.memorySettings?.userName || 'User';
-                if (this.isGroupMode && msg.role === 'user') return [{ role: 'user', content: `${userName}: ${(msg.pure_content ?? msg.content)}${msg.fileLinks_content ?? ''}` }];
-                if (this.isGroupMode && msg.role === 'assistant' && msg.agentName !== agentDisplayName) return [{ role: 'user', content: `${msg.agentName}: ${(msg.pure_content ?? msg.content)}${msg.fileLinks_content ?? ''}` }];
-                if (msg.role === 'assistant' && msg.backend_content) return msg.backend_content;
-                let apiRole = msg.role === 'system' ? 'system' : (msg.role === 'assistant' ? 'assistant' : 'user');
-                return [{ role: apiRole, content: (msg.pure_content ?? msg.content) + (msg.fileLinks_content ?? '') }];
-            });
+        const escapeHtml = (text) => {
+            if (!text) return '';
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         };
 
         try {
-            // 1. 获取基础消息范围
-            const messagesToPayload = isResume 
-                ? this.messages 
-                : this.messages.slice(0, -1);
-
-            // 2. 转换为 API 格式
-            let finalMessages = prepareMessages(messagesToPayload);
-
-            // 3. 如果最后一个消息时助手消息，就移除
-            if (finalMessages[finalMessages.length - 1].role === 'assistant') {
-                finalMessages.pop();
-            }
-
             const response = await fetch(`/v1/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: targetAgentId,
-                    messages: finalMessages, // 使用修复后的 finalMessages
+                    messages: messagesPayload, 
                     stream: true,
                     fileLinks: this.fileLinks,
                     asyncToolsID: this.asyncToolsID || [],
@@ -2042,7 +2112,22 @@ let vue_methods = {
                 signal: this.abortController.signal 
             });
             
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) {
+                let errText = await response.text();
+                try {
+                    const errObj = JSON.parse(errText);
+                    errText = errObj.error?.message || errText;
+                } catch(e) {}
+                throw new Error(errText);
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                let errText = await response.text();
+                try { const errObj = JSON.parse(errText); errText = errObj.error?.message || errText; } catch(e) {}
+                throw new Error(errText);
+            }
+
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -2064,130 +2149,396 @@ let vue_methods = {
                         const delta = parsed.choices?.[0]?.delta;
                         if (!delta) continue;
 
-                        if (currentMsg.content === '' && !isResume) { // 只有非 Resume 或者是新内容开始时才算延迟
+                        if (currentMsg.content === '' && !isResume) { 
                             this.stopTimer(); 
                             currentMsg.first_token_latency = this.elapsedTime;
                         }
 
-                        // A. 思考流 (Reasoning)
+                        // A. 处理思考 (Reasoning)
                         if (delta.reasoning_content) {
-                            const b = getBlock('reasoning');
-                            b.content += delta.reasoning_content;
+                            getBlock('reasoning').content += delta.reasoning_content; 
+                            if (!this.isThinkOpen) {
+                                currentMsg.content += '<div class="highlight-block-reasoning">';
+                                this.isThinkOpen = true;
+                            }
+                            currentMsg.content += delta.reasoning_content.replace(/\n/g, '<br>');
                             this.scrollToBottom();
                         }
 
-                        // B. 文本流 (Content) - 确保实时更新主内容以维持流式感
+                        // B. 处理文本 (Content)
                         if (delta.content) {
-                            const b = getBlock('text');
-                            b.content += delta.content;
-                            currentMsg.content += delta.content; // 同步给主文本
+                            getBlock('text').content += delta.content; 
+                            if (this.isThinkOpen) { 
+                                currentMsg.content += '</div>\n\n';
+                                this.isThinkOpen = false; 
+                            }
+                            currentMsg.content += delta.content; 
                             currentMsg.pure_content += delta.content;
 
-                            let lastBC = currentMsg.backend_content[currentMsg.backend_content.length - 1];
-                            if (!lastBC || lastBC.role !== 'assistant' || lastBC.tool_calls) {
+                            let last = currentMsg.backend_content[currentMsg.backend_content.length - 1];
+                            if (last.role !== 'assistant' || (last.tool_calls && last.tool_calls.length > 0)) {
                                 currentMsg.backend_content.push({ role: 'assistant', content: delta.content });
                             } else {
-                                lastBC.content += delta.content;
+                                last.content += delta.content;
                             }
+                            this.scrollToBottom();
                             
                             if (this.ttsSettings.enabled) {
-                                tts_buffer += delta.content;
+                                const parts = delta.content.split('```');
+                                for (let i = 0; i < parts.length; i++) {
+                                    if (!isCodeBlock) { tts_buffer += parts[i]; }
+                                    if (i < parts.length - 1) { isCodeBlock = !isCodeBlock; }
+                                }
                                 const { chunks, chunks_voice, remaining, remaining_voice } = this.splitTTSBuffer(tts_buffer);
-                                if (chunks.length > 0) { currentMsg.chunks_voice.push(...chunks_voice); currentMsg.ttsChunks.push(...chunks); }
-                                tts_buffer = remaining; this.cur_voice = remaining_voice;
+                                if (chunks.length > 0) {
+                                    currentMsg.chunks_voice.push(...chunks_voice);
+                                    currentMsg.ttsChunks.push(...chunks);
+                                }
+                                tts_buffer = remaining;
+                                this.cur_voice = remaining_voice;
                             }
-                            this.scrollToBottom();
                         }
 
-                        // C. 工具参数流 (Arguments) - 【修复：自动判断增量/全量】
+                        // C. 处理工具 Loading 状态
                         if (delta.tool_progress) {
-                            const p = delta.tool_progress;
-                            const tid = p.tool_call_id || p.id || `call_active`;
-                            const b = getBlock('tool_call', tid, p.name);
+                            const progress = delta.tool_progress;
+                            let toolCallId = progress.tool_call_id || progress.id; 
                             
-                            if (p.arguments !== undefined) {
-                                // 核心修复：如果新收到的参数已经包含了旧参数，说明是全量推送，直接覆盖
-                                if (b.args && p.arguments.startsWith(b.args)) {
-                                    b.args = p.arguments; 
+                            if (!toolCallId) {
+                                const existingCall = toolCallStack.find(c => c.name === progress.name && !c.resolved);
+                                if (existingCall) { toolCallId = existingCall.id; } 
+                                else {
+                                    toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                    toolCallStack.push({ id: toolCallId, name: progress.name, resolved: false });
+                                }
+                            } else if (!toolCallStack.find(c => c.id === toolCallId)) {
+                                toolCallStack.push({ id: toolCallId, name: progress.name, resolved: false });
+                            }
+
+                            let accArgs = this.toolArgsAccumulator[toolCallId] || "";
+                            if (progress.arguments !== undefined) {
+                                if (progress.arguments.startsWith(accArgs) && accArgs !== "") {
+                                    accArgs = progress.arguments; 
                                 } else {
-                                    // 否则是标准增量推送，进行追加
-                                    b.args += p.arguments;
+                                    accArgs += progress.arguments; 
+                                }
+                                this.toolArgsAccumulator[toolCallId] = accArgs;
+                            }
+                            
+                            const b = getBlock('tool_call', toolCallId, progress.name);
+                            b.args = accArgs;
+
+                            const blockId = `tool-call-${toolCallId}`;
+                            const existingBlock = currentMsg.content.includes(`id="${blockId}"`);
+                            const displayArgs = escapeHtml(accArgs);
+                            
+                            if (!existingBlock) {
+                                if (this.isThinkOpen) { currentMsg.content += '</div>\n\n'; this.isThinkOpen = false; }
+                                let html = `\n<div class="highlight-block" id="${blockId}">`;
+                                html += `<div style="font-weight: bold; margin-bottom: 5px;">${this.t('call')}${progress.name}${this.t('tool')}</div>`;
+                                html += `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${displayArgs}</pre>`;
+                                html += '</div>\n\n';
+                                currentMsg.content += html;
+                            } else {
+                                const blockStart = currentMsg.content.indexOf(`id="${blockId}"`);
+                                const preStart = currentMsg.content.indexOf('<pre', blockStart);
+                                const contentStart = currentMsg.content.indexOf('>', preStart) + 1;
+                                const preEnd = currentMsg.content.indexOf('</pre>', contentStart);
+                                if (contentStart > 0 && preEnd > 0) {
+                                    currentMsg.content = currentMsg.content.substring(0, contentStart) + displayArgs + currentMsg.content.substring(preEnd);
                                 }
                             }
                             this.scrollToBottom();
+                            continue;
                         }
 
-                        // D. 工具结果/状态转换
+                        // D. 处理工具结果 (Result / Error / Approval)
                         if (delta.tool_content) {
                             const tool = delta.tool_content;
-                            const tid = delta.tool_call_id || delta.async_tool_id || `call_active`;
+                            const toolName = tool.title || 'unknown';
+                            let toolCallId = delta.tool_call_id || delta.async_tool_id;
 
-                            if (tool.type === 'tool_approval' || (tool.type === 'tool_result' && String(tool.content).includes('approval_required'))) {
-                                const b = getBlock('approval', tid, tool.title);
-                                try { b.data = JSON.parse(tool.content); } catch(e){ b.data = { tool_name: tool.title, tool_params: {} }; }
-                            } else if (tool.type === 'tool_result_stream') {
-                                const b = getBlock('tool_result', tid, tool.title || 'Result');
-                                b.content += tool.content; // 结果通常是增量的
+                            if (tool.type === 'call') {
+                                if (!toolCallId) toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                toolCallStack.push({ id: toolCallId, name: toolName, resolved: false });
                             } else {
-                                // 最终结果或错误
-                                const bType = tool.type === 'error' ? 'error' : 'tool_result';
-                                const b = getBlock(bType, tid, tool.title || 'Result');
-                                b.content = tool.content; // 最终态直接覆盖
+                                if (!toolCallId) {
+                                    const pendingCall = toolCallStack.find(c => c.name === toolName && !c.resolved);
+                                    if (pendingCall) {
+                                        toolCallId = pendingCall.id; pendingCall.resolved = true;
+                                    } else { toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`; }
+                                }
+                                const callItem = toolCallStack.find(c => c.id === toolCallId);
+                                if (callItem) callItem.resolved = true;
+                            }
+                            
+                            if (delta.async_tool_id && (tool.type === 'tool_result' || tool.type === 'error')) {
+                                if (this.asyncToolsID) {
+                                    const index = this.asyncToolsID.indexOf(delta.async_tool_id);
+                                    if (index > -1) {
+                                        this.asyncToolsID.splice(index, 1);
+                                        const stackIndex = toolCallStack.findIndex(c => c.id === delta.async_tool_id);
+                                        if (stackIndex > -1) toolCallStack.splice(stackIndex, 1);
+                                    }
+                                }
+                            }
+
+                            let isApproval = false;
+                            let approvalData = null;
+
+                            if (tool.type === 'tool_approval') {
+                                isApproval = true;
+                                try { approvalData = JSON.parse(tool.content); } catch(e){ console.error(e); }
+                            } else if (tool.type === 'tool_result' && typeof tool.content === 'string' && tool.content.includes('"approval_required"')) {
+                                try {
+                                    const temp = JSON.parse(tool.content);
+                                    if (temp.type === 'approval_required') { isApproval = true; approvalData = temp; }
+                                } catch (e) {}
+                            }
+
+                            if (isApproval && approvalData) {
+                                const b = getBlock('approval', toolCallId, toolName);
+                                b.data = approvalData;
+
+                                if (this.isThinkOpen) { currentMsg.content += '</div>\n\n'; this.isThinkOpen = false; }
+                                const blockId = `approval-${toolCallId}`;
+                                this.approvalMap[toolCallId] = approvalData;
                                 
-                                // 同步至后端上下文
-                                if (tool.type !== 'call') {
-                                    currentMsg.backend_content.push({ role: 'tool', tool_call_id: tid, name: tool.title, content: tool.content });
-                                    currentMsg.backend_content.push({ role: 'assistant', content: '' });
+                                let html = `\n<div class="approval-card" id="${blockId}">`;
+                                html += `<div class="approval-header">${this.t('permissionRequest')} (${approvalData.permission_mode})</div>`;
+                                html += `<div class="approval-body">${this.t('AIwantsToExecute')}: <b>${approvalData.tool_name}</b></div>`;
+                                html += `<div class="approval-params">${escapeHtml(JSON.stringify(approvalData.tool_params, null, 2))}</div>`;
+                                html += `<div class="approval-actions">`;
+                                html += `<button onclick="window.handleToolApproval('${toolCallId}', 'once')" class="btn-allow-once">${this.t('AllowOnce')}</button>`;
+                                html += `<button onclick="window.handleToolApproval('${toolCallId}', 'always')" class="btn-allow-always">${this.t('AllowAlways')}</button>`;
+                                html += `<button onclick="window.handleToolApproval('${toolCallId}', 'deny')" class="btn-deny">${this.t('Deny')}</button>`;
+                                html += `</div></div>\n`;
+
+                                currentMsg.content += html;
+
+                                currentMsg.backend_content.push({ role: 'tool', tool_call_id: toolCallId, name: toolName, content: "{}" });
+                                currentMsg.backend_content.push({ role: 'assistant', content: '' });
+                                this.scrollToBottom();
+                            } 
+                            else if (tool.type === 'tool_result_stream' && tool.title === "tool_result_stream") {
+                                getBlock('tool_result', toolCallId, toolName).content += tool.content;
+
+                                const preIdMatch = `id="pre-result-${toolCallId}"`;
+                                let preStartIndex = currentMsg.content.lastIndexOf(preIdMatch);
+                                
+                                if (preStartIndex > -1) {
+                                    let nextPreEndIndex = currentMsg.content.indexOf('</pre>', preStartIndex);
+                                    if (nextPreEndIndex > -1) {
+                                        const contentToAppend = escapeHtml(tool.content);
+                                        currentMsg.content = currentMsg.content.substring(0, nextPreEndIndex) + contentToAppend + currentMsg.content.substring(nextPreEndIndex);
+                                    }
+                                } else {
+                                    const blockEndTag = '</pre>';
+                                    let lastBlockEndIndex = currentMsg.content.lastIndexOf(blockEndTag);
+                                    if (lastBlockEndIndex > -1) {
+                                        currentMsg.content = currentMsg.content.substring(0, lastBlockEndIndex) + escapeHtml(tool.content) + currentMsg.content.substring(lastBlockEndIndex);
+                                    } else {
+                                        currentMsg.content += ' ' + escapeHtml(tool.content);
+                                    }
+                                }
+                                
+                                const lastToolIndex = currentMsg.backend_content.length - 1;
+                                for (let i = lastToolIndex; i >= 0; i--) {
+                                    if (currentMsg.backend_content[i].role === 'tool' && currentMsg.backend_content[i].tool_call_id === toolCallId) {
+                                        currentMsg.backend_content[i].content += tool.content;
+                                        break;
+                                    }
+                                }
+                            } else {
+                                const bType = tool.type === 'error' ? 'error' : 'tool_result';
+                                getBlock(bType, toolCallId, toolName).content = tool.content;
+
+                                if (this.isThinkOpen) { currentMsg.content += '</div>\n\n'; this.isThinkOpen = false; }
+                                let className = (tool.type === 'error') ? 'highlight-block-error' : 'highlight-block';
+                                const blockId = tool.type === 'call' ? `tool-call-${toolCallId}` : `tool-result-${toolCallId}`;
+                                const isCallAlreadyRendered = (tool.type === 'call' && currentMsg.content.includes(`id="${blockId}"`));
+
+                                if (!isCallAlreadyRendered) {
+                                    let uiTitle = tool.type === 'call' ? `${this.t('call')}${tool.title}${this.t('tool')}` : 
+                                                  (tool.type === 'error' ? (tool.title || 'Error') : 
+                                                  `${delta.async_tool_id || (tool.title !== 'tool_result_stream' ? tool.title : 'Tool')}${this.t('tool_result')}`);
+
+                                    let html = `\n<div class="${className}" id="${blockId}">`;
+                                    html += `<div style="font-weight: bold; margin-bottom: 5px;">${uiTitle}</div>`;
+                                    if (tool.content) { 
+                                        if (tool.type === 'call') {
+                                            html += `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${escapeHtml(tool.content)}</pre>`;
+                                        } else {
+                                            html += `<pre id="pre-result-${toolCallId}" style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${escapeHtml(tool.content)}</pre>`;
+                                        }
+                                    }
+                                    html += '</div>\n\n';
+                                    currentMsg.content += html;
+                                }
+
+                                if (tool.type === 'call') {
+                                    let last = currentMsg.backend_content[currentMsg.backend_content.length - 1];
+                                    if (last.role === 'assistant') {
+                                        if (!last.tool_calls) last.tool_calls = [];
+                                        if (!last.tool_calls.some(tc => tc.id === toolCallId)) {
+                                            last.tool_calls.push({ id: toolCallId, type: 'function', function: { name: tool.title, arguments: "{}" } });
+                                        }
+                                    } else {
+                                        currentMsg.backend_content.push({ role: 'assistant', content: null, tool_calls: [{ id: toolCallId, type: 'function', function: { name: tool.title, arguments: "{}" } }] });
+                                    }
+                                } else if (tool.type === 'tool_result' || tool.type === 'tool_result_stream' || tool.type === 'error') {
+                                    const toolContent = (this.toolsSettings.hideToolResults.enabled && tool.type === 'tool_result') 
+                                        ? '<hide to save token>' : (tool.content || '');
+                                    
+                                    let updated = false;
+                                    for(let i=currentMsg.backend_content.length-1; i>=0; i--){
+                                        if(currentMsg.backend_content[i].role === 'tool' && currentMsg.backend_content[i].tool_call_id === toolCallId){
+                                            currentMsg.backend_content[i].content = toolContent;
+                                            updated = true;
+                                            break;
+                                        }
+                                    }
+                                    if(!updated) {
+                                        currentMsg.backend_content.push({ role: 'tool', tool_call_id: toolCallId, name: toolName, content: toolContent });
+                                    }
+                                    if(currentMsg.backend_content[currentMsg.backend_content.length-1].role !== 'assistant'){
+                                        currentMsg.backend_content.push({ role: 'assistant', content: '' });
+                                    }
                                 }
                             }
                             this.scrollToBottom();
                         }
+
+                        if (delta.audio?.data) {
+                            this.playPCMChunk(delta.audio.data, currentMsg.pure_content, currentMsg);
+                        }
+                        if (parsed.usage?.total_tokens) {
+                            currentMsg.total_tokens = parsed.usage.total_tokens;
+                        }
+                        if (delta.async_tool_id) {
+                            if (!this.asyncToolsID) this.asyncToolsID = [];
+                            if (!this.asyncToolsID.includes(delta.async_tool_id)) {
+                                this.asyncToolsID.push(delta.async_tool_id);
+                            }
+                        }
+
+                        this.sendMessagesToExtension();
                     }
                 }
             }
+            
+            if (tts_buffer.trim() && this.ttsSettings.enabled) {
+                currentMsg.chunks_voice.push(this.cur_voice);
+                currentMsg.ttsChunks.push(tts_buffer);
+            }
+            
             currentMsg.generationFinished = true;
+                        
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    if (window.MathJax) {
+                        const els = document.querySelectorAll('.stream-content');
+                        window.MathJax.typesetPromise([...els]).catch(() => {});
+                    }
+                }, 100);
+            });
+
+            if (this.ttsSettings.enabled) {
+                if (this.audioStartTime > this.audioCtx.currentTime) {
+                    const remainingTime = (this.audioStartTime - this.audioCtx.currentTime) * 1000;
+                    setTimeout(() => { this.sendTTSStatusToVRM('allChunksCompleted', {}); }, remainingTime);
+                } else {
+                    this.sendTTSStatusToVRM('allChunksCompleted', {});
+                }
+            }
+
         } catch (error) {
             console.error(error);
             if (error.name !== 'AbortError') {
+                showNotification(error.message, 'error');
+                
                 const b = getBlock('error', 'err', 'System Error');
                 b.content = error.message;
+
+                if (currentMsg) {
+                    const fallbackText = 'response error';
+                    if (!currentMsg.pure_content && currentMsg.backend_content.length <= 1) {
+                        currentMsg.content = fallbackText;
+                        currentMsg.pure_content = fallbackText;
+                        currentMsg.backend_content = [{ role: 'assistant', content: fallbackText }];
+                    } else {
+                        currentMsg.content += `\n\n<div class="highlight-block-error">${fallbackText}</div>`;
+                        const lastBackend = currentMsg.backend_content[currentMsg.backend_content.length - 1];
+                        if (lastBackend && lastBackend.role === 'assistant' && lastBackend.tool_calls) {
+                            delete lastBackend.tool_calls;
+                        }
+                        currentMsg.backend_content.push({ role: 'assistant', content: fallbackText });
+                    }
+                }
             }
+            if (audioResolve) audioResolve();
         } finally {
             this.isSending = false;
             this.isTyping = false;
-            // 处理会话保存逻辑
+            this.voiceStack = ['default'];
+            if (this.allBriefly) currentMsg.briefly = true;
+            
             if (this.conversationId === null) {
                 this.conversationId = uuid.v4();
-                this.conversations.unshift({
+                const newConv = {
                     id: this.conversationId,
-                    title: currentMsg.pure_content?.substring(0, 30) || 'New Chat',
+                    title: this.generateConversationTitle(messagesPayload),
+                    mainAgent: this.mainAgent,
                     timestamp: Date.now(),
                     messages: this.messages,
-                    mainAgent: this.mainAgent
-                });
+                    fileLinks: this.fileLinks,
+                    system_prompt: this.system_prompt,
+                };
+                this.conversations.unshift(newConv);
             } else {
-                const conv = this.conversations.find(c => c.id === this.conversationId);
-                if (conv) { conv.messages = this.messages; conv.timestamp = Date.now(); }
+                const conv = this.conversations.find(conv => conv.id === this.conversationId);
+                if (conv) {
+                    conv.messages = this.messages;
+                    conv.timestamp = Date.now();
+                    conv.fileLinks = this.fileLinks;
+                }
             }
             this.saveConversations();
+
+            if (this.ttsSettings.enabled && audioProcess) {
+                await audioProcess;
+            }
+
+            this.isThinkOpen = false;
+            
+            setTimeout(() => {
+                if (!this.isSending && this.audioStartTime <= this.audioCtx.currentTime) {
+                    this.sendTTSStatusToVRM('allChunksCompleted', {});
+                }
+            }, 1000);
         }
     },
-    // === Human-in-the-loop 处理函数 (修复版：支持立即反馈) ===
+
+    // === Human-in-the-loop 处理函数 ===
     async processToolApproval(toolCallId, action) {
         const currentMsg = this.messages[this.messages.length - 1];
-        if (!currentMsg || !currentMsg.displayBlocks) return;
+        if (!currentMsg) return;
         
-        // 1. 找到对应的审批块
-        const block = currentMsg.displayBlocks.find(b => b.id === toolCallId && b.type === 'approval');
-        if (!block) return;
+        const data = this.approvalMap[toolCallId];
+        const toolName = data?.tool_name || 'Tool';
+        const blockId = `approval-${toolCallId}`;
 
-        const toolName = block.data?.tool_name || 'Tool';
-        const params = block.data?.tool_params || {};
+        if (currentMsg.displayBlocks) {
+            const block = currentMsg.displayBlocks.find(b => b.id === toolCallId && b.type === 'approval');
+            if (block) {
+                block.type = 'tool_result';
+                block.name = action === 'deny' ? this.t('denying') : `${this.t('executing')} ${toolName}...`;
+                block.content = ''; 
+            }
+        }
 
-        // 2. 将卡片立即变更为“执行中”的状态
-        block.type = 'tool_result';
-        block.name = action === 'deny' ? this.t('denying') : `${this.t('executing')} ${toolName}...`;
-        block.content = ''; 
+        const feedbackTitle = action === 'deny' ? (this.t('denying') || 'Denying...') : `${this.t('executing') || 'Executing'} ${toolName}...`;
+        this.updateUIBlock(currentMsg, blockId, `\n`);
 
         this.isSending = true; 
         this.isTyping = true;
@@ -2197,58 +2548,61 @@ let vue_methods = {
             let resultText = "";
             if (action === 'deny') {
                 resultText = `User denied the execution of tool '${toolName}'.`;
-                block.type = 'error';
-                block.name = this.t('tool_deny');
             } else {
-                // 等待后端返回结果
-                resultText = await this.executeToolBackend(toolName, params, action);
-                block.type = 'tool_result';
-                block.name = `${toolName} ${this.t('tool_result')}`;
+                resultText = await this.executeToolBackend(toolName, data.tool_params, action);
             }
 
-            // 3. 更新块内容
-            block.content = resultText;
+            if (currentMsg.displayBlocks) {
+                const block = currentMsg.displayBlocks.find(b => b.id === toolCallId);
+                if (block) {
+                    block.type = action === 'deny' ? 'error' : 'tool_result';
+                    block.name = action === 'deny' ? this.t('tool_deny') : `${toolName} ${this.t('tool_result')}`;
+                    block.content = resultText;
+                }
+            }
 
-            // 4. 更新后端上下文，确保 AI 知道结果
+            const className = action === 'deny' ? 'highlight-block-error' : 'highlight-block';
+            const finalTitle = action === 'deny' ? this.t('tool_deny') : `${toolName} ${this.t('tool_result')}`;
+            const resultHtml = `\n<div class="${className}" id="${blockId}">
+                <div style="font-weight: bold; margin-bottom: 5px;">${this.escapeHtml(finalTitle)}</div>
+                <pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${this.escapeHtml(resultText)}</pre>
+            </div>\n`;
+            this.updateUIBlock(currentMsg, blockId, resultHtml);
+
             if (currentMsg.backend_content) {
-                const target = currentMsg.backend_content.find(bc => bc.tool_call_id === toolCallId);
-                if (target) target.content = resultText;
+                for (let i = currentMsg.backend_content.length - 1; i >= 0; i--) {
+                    const item = currentMsg.backend_content[i];
+                    if (item.role === 'tool' && item.tool_call_id === toolCallId) {
+                        item.content = resultText;
+                        break;
+                    }
+                }
             }
             
-            // 5. 触发 AI 继续生成回复
             await this.generateAIResponse(this.mainAgent, currentMsg.agentName, true);
 
         } catch (e) {
-            console.error(e);
-            block.type = 'error';
-            block.content = `Execution failed: ${e.message}`;
+            console.error("Approval flow failed:", e);
+            showNotification("Tool execution failed", 'error');
             this.isSending = false;
             this.isTyping = false;
         }
     },
 
-  // 辅助：精确定位并替换 UI 中的某个 ID 块
     updateUIBlock(msg, blockId, newHtml) {
         const content = msg.content;
-        // 匹配开始标签（带特定 ID）
         const startTag = `id="${blockId}"`;
         const startSearchIndex = content.indexOf(startTag);
         
         if (startSearchIndex === -1) {
-            // 如果没找到（可能在末尾），直接追加
             msg.content += newHtml;
             return;
         }
 
-        // 向上寻找该块的起始 <div
         const startIndex = content.lastIndexOf('<div', startSearchIndex);
-        
-        // 向下寻找该块的结束（根据审批卡片和高亮块的结构，它们都是以 </div>\n 或 </div></div> 结尾）
-        // 这里采用更稳健的方法：寻找下一个块的特征或当前块的闭合
         let endIndex = -1;
         const searchPart = content.substring(startIndex);
         
-        // 审批卡片结构是 </div></div>\n，高亮块是 </div>\n\n
         if (searchPart.includes('</div></div>')) {
             endIndex = startIndex + searchPart.indexOf('</div></div>') + 12;
         } else if (searchPart.includes('</div>\n')) {
@@ -2258,7 +2612,6 @@ let vue_methods = {
         if (startIndex !== -1 && endIndex !== -1) {
             msg.content = content.substring(0, startIndex) + newHtml + content.substring(endIndex);
         } else {
-            // 兜底方案：如果解析失败，直接追加
             msg.content += newHtml;
         }
     },
