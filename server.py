@@ -387,6 +387,7 @@ ChromeMCP_client = None
 sql_client = None
 mcp_client_list = {}
 locales = {}
+sleep_guard = None
 scheduler_task = None
 global_http_client = None  # 用于共享底层的 TCP 连接池
 openai_tts_clients_cache = {}  # 缓存 OpenAI TTS Client
@@ -655,17 +656,6 @@ async def lifespan(app: FastAPI):
             # 彻底移除会导致崩溃的 socks 环境变量
             os.environ.pop(env_key, None)
 
-    from py.sleep_guard import SleepGuard
-    sleep_guard = SleepGuard(verbose=True)
-    try:
-        await asyncio.to_thread(sleep_guard.start)
-        if sleep_guard.is_running():
-            print("🛡️ 防休眠保护已启动，系统将不会自动休眠")
-        else:
-            print("⚠️ 防休眠启动失败，系统可能会在空闲时休眠")
-    except Exception as e:
-        print(f"防休眠启动异常: {e}")
-
     # 基础初始化
     await _copy_default_skills()
     
@@ -691,9 +681,20 @@ async def lifespan(app: FastAPI):
     )
     
     # 2. 解包结果
-    global settings, client, reasoner_client, fast_client, mcp_client_list, local_timezone, logger, locales, global_http_client,scheduler_task
+    global settings, client, reasoner_client, fast_client, mcp_client_list, local_timezone, logger, locales, global_http_client,scheduler_task,sleep_guard
     _, _, locales, settings, local_timezone = results
     
+    from py.sleep_guard import SleepGuard
+    sleep_guard = SleepGuard(verbose=True)
+    try:
+        await asyncio.to_thread(sleep_guard.start)
+        if sleep_guard.is_running():
+            print("🛡️ 防休眠保护已启动，系统将不会自动休眠")
+        else:
+            print("⚠️ 防休眠启动失败，系统可能会在空闲时休眠")
+    except Exception as e:
+        print(f"防休眠启动异常: {e}")
+
 
     from py.scheduler import AgentScheduler
     # 传入全局 settings 对象的引用
