@@ -102,7 +102,7 @@ let vue_data = {
       model: '',
       base_url: '',
       api_key: '',
-      temperature: 0.7,  // 默认温度值
+      temperature: 1,  // 默认温度值
       max_tokens: 8192,    // 默认最大输出长度
       max_rounds: 0,    // 默认最大轮数
       selectedProvider: null,
@@ -118,7 +118,7 @@ let vue_data = {
       model: '',
       base_url: '',
       api_key: '',
-      temperature: 0.7,  // 默认温度值
+      temperature: 1,  // 默认温度值
       max_tokens: 8192,    // 默认最大输出长度
       max_rounds: 0,    // 默认最大轮数
       selectedProvider: null,
@@ -137,7 +137,7 @@ let vue_data = {
       base_url: '',
       api_key: '',
       selectedProvider: null,
-      temperature: 0.7,  // 默认温度值
+      temperature: 1,  // 默认温度值
       max_tokens: 4096,  // 默认最大输出长度
       stop_words: [',', '.', '，', '。'], // 停止词列表
       reasoning_effort: null,
@@ -157,7 +157,7 @@ let vue_data = {
       base_url: '',
       api_key: '',
       selectedProvider: null,
-      temperature: 0.7,  // 默认温度值
+      temperature: 1,  // 默认温度值
       desktopVision: false,
       wakeWord: '看\nsee\nlook\n桌面\ndesktop',
       enableWakeWord: false,
