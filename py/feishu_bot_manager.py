@@ -655,6 +655,7 @@ class FeishuClient:
                     "asyncToolsID": asyncToolsID,
                     "fileLinks": fileLinks,
                     "is_app_bot": True,
+                    "platform": "feishu",
                 }
             )
             
@@ -1358,6 +1359,7 @@ class FeishuClient:
                 stream=False, 
                 extra_body={
                     "is_app_bot": True,
+                    "platform": "feishu",
                     "behavior_trigger": True
                 }
             )

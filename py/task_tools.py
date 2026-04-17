@@ -26,7 +26,7 @@ create_subtask_tool = {
                         "type": "string",
                         "enum": ["wechat", "feishu", "dingtalk", "telegram", "discord", "slack", "wecom"]
                     },
-                    "description": "执行结果推送渠道，默认为空，不推送",
+                    "description": "如果希望在任务完成后主动推送到聊天软件，请在此处指定",
                     "default": []
                 },
                 "trigger_config": {
@@ -102,19 +102,21 @@ async def create_subtask(
     title: str,
     description: str,
     task_type: str = "once",
-    platforms: List[str] = [], # 新增参数
     trigger_config: dict = None,
     agent_type: str = "default",
     workspace_dir: str = None,
     settings: dict = None,
     parent_task_id: Optional[str] = None,
-    consensus_content: Optional[str] = None
+    consensus_content: Optional[str] = None,
+    platforms: List[str] = []
 ) -> str:
     try:
         task_center = await get_task_center(workspace_dir)
+        actual_parent_id = parent_task_id or "MAIN_AGENT"
         context = {
             "task_type": task_type,
             "trigger_config": trigger_config or {},
+            "platforms": platforms,
             "history": [],
             "results_history": [],
             "ran_count": 0
@@ -123,7 +125,7 @@ async def create_subtask(
         task = await task_center.create_task(
             title=title,
             description=description,
-            parent_task_id=parent_task_id,
+            parent_task_id=actual_parent_id,
             agent_type=agent_type,
             context=context,
             platforms=platforms # 传入平台列表
@@ -190,6 +192,10 @@ async def query_task_progress(
             status_icon = "✅" if task.status == TaskStatus.COMPLETED else "🔄" if task.status == TaskStatus.RUNNING else "⏳"
             result_lines.append(f"{status_icon} [{task.task_id}] {icon} {task.title}")
             
+            display_platforms = task.platforms or ctx.get("platforms", [])
+            platform_str = ", ".join(display_platforms) if display_platforms else "无"
+            result_lines.append(f"   推送渠道: {platform_str}")
+
             # 2. 类型与频率信息
             type_info = f"   类型: {t_type}"
             if t_type == "CYCLE":

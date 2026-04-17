@@ -8,7 +8,6 @@ import os
 import argparse
 import socket
 import errno
-
 from py.cli_tool import read_file_tool_local
 from py.task_tools import query_task_progress
 from py.ws_manager import ws_manager
@@ -647,7 +646,6 @@ def get_client_class(config, provider_id):
         return AsyncOpenAI
 
 from py.node_runner import node_mgr
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- [核心防御] 立即清理系统环境变量中的 SOCKS 代理，防止 httpx 崩溃 ---
@@ -656,6 +654,17 @@ async def lifespan(app: FastAPI):
         if val.lower().startswith('socks'):
             # 彻底移除会导致崩溃的 socks 环境变量
             os.environ.pop(env_key, None)
+
+    from py.sleep_guard import SleepGuard
+    sleep_guard = SleepGuard(verbose=True)
+    try:
+        await asyncio.to_thread(sleep_guard.start)
+        if sleep_guard.is_running():
+            print("🛡️ 防休眠保护已启动，系统将不会自动休眠")
+        else:
+            print("⚠️ 防休眠启动失败，系统可能会在空闲时休眠")
+    except Exception as e:
+        print(f"防休眠启动异常: {e}")
 
     # 基础初始化
     await _copy_default_skills()
@@ -833,6 +842,12 @@ async def lifespan(app: FastAPI):
     # --- [关闭逻辑] ---
     print("System shutting down, cleaning up...")
 
+    try:
+        await asyncio.to_thread(sleep_guard.stop)
+        print("🛡️ 防休眠保护已停止，系统将恢复正常休眠策略")
+    except Exception as e:
+        print(f"防休眠停止异常: {e}")
+
     if scheduler_task:
         scheduler_task.cancel()
     ext_ids = list(node_mgr.exts.keys())
@@ -926,10 +941,16 @@ async def get_image_content(image_url: str) -> str:
         else:
             images_content = [{"type": "text", "text": "请仔细描述图片中的内容，包含图片中可能存在的文字、数字、颜色、形状、大小、位置、人物、物体、场景等信息。"},{"type": "image_url", "image_url": {"url": url}}]
             client = AsyncOpenAI(api_key=settings['vision']['api_key'],base_url=settings['vision']['base_url'])
+            
+            extra = {}
+
+            if settings['vision']['temperature'] !=1:
+                extra['temperature'] = settings['vision']['temperature']
+            
             response = await client.chat.completions.create(
                 model=settings['vision']['model'],
                 messages = [{"role": "user", "content": images_content}],
-                temperature=settings['vision']['temperature'],
+                **extra
             )
             content = f"\n\nn图片(URL:{image_url} 哈希值：{image_hash})信息如下：\n\n"+str(response.choices[0].message.content)+"\n\n"
             with open(os.path.join(UPLOAD_FILES_DIR, f"{image_hash}.txt"), "w", encoding='utf-8') as f:
@@ -942,10 +963,16 @@ async def get_image_content(image_url: str) -> str:
         else:
             images_content = [{"type": "text", "text": "请仔细描述图片中的内容，包含图片中可能存在的文字、数字、颜色、形状、大小、位置、人物、物体、场景等信息。"},{"type": "image_url", "image_url": {"url": url}}]
             client = AsyncOpenAI(api_key=settings['api_key'],base_url=settings['base_url'])
+            
+            extra = {}
+
+            if settings['temperature'] !=1:
+                extra['temperature'] = settings['temperature']
+            
             response = await client.chat.completions.create(
                 model=settings['model'],
                 messages = [{"role": "user", "content": images_content}],
-                temperature=settings['temperature'],
+                **extra
             )
             content = f"\n\nn图片(URL:{image_url} 哈希值：{image_hash})信息如下：\n\n"+str(response.choices[0].message.content)+"\n\n"
             with open(os.path.join(UPLOAD_FILES_DIR, f"{image_hash}.txt"), "w", encoding='utf-8') as f:
@@ -1069,6 +1096,8 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         screenshot
     )
 
+    from py.mode_change import update_workspace_settings
+
     # ==================== 2. 定义工具映射表 ====================
     _TOOL_HOOKS = {
         "DDGsearch": DDGsearch,
@@ -1172,7 +1201,9 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "keyboard_hotkey":keyboard_hotkey,
         "keyboard_hold":keyboard_hold,
         "wait":wait,
-        "screenshot":screenshot
+        "screenshot":screenshot,
+
+        "update_workspace_settings":update_workspace_settings,
     }
     
     # ==================== 3. 权限拦截逻辑 (Human-in-the-loop) ====================
@@ -1324,35 +1355,27 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
                     consensus_content = await f.read()
             
             result = await create_subtask(
-                title=tool_params.get("title"),
-                description=tool_params.get("description"),
-                agent_type=tool_params.get("agent_type", "default"),
                 workspace_dir=cwd,
                 settings=settings, 
-                consensus_content=consensus_content
+                consensus_content=consensus_content,
+                **tool_params  # 这行是关键：它会把 AI 传的 title, platforms 等全部解包传入
             )
             return result
+
         
         elif tool_name == "query_task_progress":
             result = await query_task_progress(
                 workspace_dir=cwd,
-                task_id=tool_params.get("task_id"),         
-                parent_task_id=tool_params.get("parent_task_id"),
-                status=tool_params.get("status"),
-                verbose=tool_params.get("verbose", False)  
+                **tool_params
             )
             return result
         
         elif tool_name == "cancel_subtask":
-            result = await create_subtask(
-                title=tool_params.get("title"),
-                description=tool_params.get("description"),
-                agent_type=tool_params.get("agent_type", "default"),
+            result = await cancel_subtask(
                 workspace_dir=cwd,
-                settings=settings,
-                consensus_content=consensus_content,
-                parent_task_id=tool_params.get("parent_task_id")
+                task_id=tool_params.get("task_id")
             )
+            return result
         elif tool_name == "finish_task":
             result = await finish_task(
                 workspace_dir=cwd,
@@ -1400,6 +1423,7 @@ class ChatRequest(BaseModel):
     asyncToolsID: List[str] = None
     reasoning_effort: str = None
     is_app_bot: bool = False
+    platform: str = None
     is_sub_agent: bool = False
     enable_tools : List[str] = None
     disable_tools: List[str] = None
@@ -1479,10 +1503,16 @@ async def images_add_in_messages(request_messages: List[Dict], images: List[Dict
                             
                             # 直接交给视觉模型（视觉模型需原生支持视频）
                             client = AsyncOpenAI(api_key=settings['vision']['api_key'], base_url=settings['vision']['base_url'])
+                            
+                            extra = {}
+
+                            if settings['vision']['temperature'] !=1:
+                                extra['temperature'] = settings['vision']['temperature']
+
                             response = await client.chat.completions.create(
                                 model=settings['vision']['model'],
                                 messages=[{"role": "user", "content": media_content}],
-                                temperature=settings['vision']['temperature'],
+                                **extra
                             )
                             result_text = str(response.choices[0].message.content)
                             messages[index]['content'] += f"\n\nsystem: 用户发送的{media_name}(哈希值：{file_hash})信息如下：\n\n{result_text}\n\n"
@@ -1767,6 +1797,10 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
                         combined_files = "\n\n".join(files_content_injected)
                         content_append(request.messages, 'system', f"\n\n📂 **The user has mentioned the following files using the '@' quick syntax, which have been automatically read for you.**:\n\n{combined_files}\n\nPlease refer to the content of the above document to answer the user's question.\n\n")
 
+    if request.is_app_bot and request.platform:
+        platform_message = f"\n\n用户正在使用 {request.platform} 软件与你交流\n\n"
+        content_append(request.messages, 'system', platform_message)
+
     if cwd and Path(cwd).exists() and cli_settings.get("enabled", False):
         permission_message = ""
         # 权限模式提示（原有逻辑，但修复了变量名）
@@ -1777,6 +1811,9 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
             if not request.is_sub_agent:
                 permission_message += "你当前处于协作模式，create_subtask工具可以帮你完成几乎任何任务（比如查资料、写代码、生成报告等），当你遇到难题时，可以尝试把它分解成一个个小任务，交给create_subtask工具去完成！当用户再次询问进度时，你可以用query_task_progress工具查询任务进度和获取详细结果\n\n"
                 content_append(request.messages, 'system', permission_message)
+                if request.is_app_bot and request.platform:
+                    task_platform_message = f"\n\n使用create_subtask工具时请将platforms参数设置为[{request.platform}]，从而将子任务的结果及时发给用户。\n\n"
+                    content_append(request.messages, 'system', task_platform_message)
             else:
                 permission_message = "你当前处于执行模式，你可以自由地使用所有工具，但请注意不要滥用权限！如果有更安全的工具，请不要直接使用bash命令！"
                 content_append(request.messages, 'system', permission_message)
@@ -2768,6 +2805,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
             finish_task_tool,
         )
 
+        from py.mode_change import mode_change_tool
+
         m0 = None
         memoryId = None
         if settings["memorySettings"]["is_memory"] and settings["memorySettings"]["selectedMemory"] and settings["memorySettings"]["selectedMemory"] != ""  and not request.is_sub_agent:
@@ -2854,6 +2893,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 tools.extend(get_tools_for_mode('yolo'))
             elif settings['CLISettings']['engine'] == 'local':
                 tools.extend(get_local_tools_for_mode('yolo'))
+        if  settings['CLISettings']['mode_change']:
+            tools.append(mode_change_tool)
         if settings['visionControlSettings']['enabled']:
             tools.extend(computer_use_tools)
             if settings['visionControlSettings']['mouse']:
@@ -3350,6 +3391,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     tools.append(create_subtask_tool)
                     tools.append(query_tasks_tool)
                     tools.append(cancel_subtask_tool)
+                    if  settings['CLISettings']['mode_change']:
+                        tools.append(mode_change_tool)
 
                 if request.is_sub_agent:
                     tools.append(finish_task_tool)
@@ -3432,7 +3475,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     response = await client.chat.completions.create(
                         model=model,
                         messages=deepsearch_messages,
-                        temperature=0.5,
                         stream=True,  # 新增
                         extra_body = extra_params, # 其他参数
                     )
@@ -3486,12 +3528,14 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             break
                     msg = await images_add_in_messages(reasoner_messages, images,settings)
                     if vendor == 'Ollama':
+                        if settings['reasoner']['temperature'] !=1:
+                            reasoner_extra['temperature'] = settings['reasoner']['temperature']
+
                         # 流式调用推理模型
                         reasoner_stream = await reasoner_client.chat.completions.create(
                             model=settings['reasoner']['model'],
                             messages=msg,
                             stream=True,
-                            temperature=settings['reasoner']['temperature'],
                             **reasoner_extra
                         )
                         full_reasoning = ""
@@ -3556,13 +3600,14 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                                 buffer = ""
                                             break  # 等待更多内容
                     else:
+                        if settings['reasoner']['temperature'] !=1:
+                            reasoner_extra['temperature'] = settings['reasoner']['temperature']
                         # 流式调用推理模型
                         reasoner_stream = await reasoner_client.chat.completions.create(
                             model=settings['reasoner']['model'],
                             messages=msg,
                             stream=True,
                             stop=settings['reasoner']['stop_words'],
-                            temperature=settings['reasoner']['temperature'],
                             **reasoner_extra
                         )
                         full_reasoning = ""
@@ -3601,25 +3646,21 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 msg = await images_add_in_messages(request.messages, images,settings)
                 if request.top_p != 1 or settings['top_p'] != 1:
                     extra['top_p'] = request.top_p or settings['top_p']
+
+                if settings['temperature'] !=1:
+                    extra['temperature'] = settings['temperature']
+
                 if tools:
-                    response = await client.chat.completions.create(
-                        model=model,
-                        messages=msg,  # 添加图片信息到消息
-                        temperature=request.temperature or settings['temperature'],
-                        tools=tools,
-                        stream=True,
-                        extra_body = extra_params, # 其他参数
-                        **extra
-                    )
-                else:
-                    response = await client.chat.completions.create(
-                        model=model,
-                        messages=msg,  # 添加图片信息到消息
-                        temperature=request.temperature or settings['temperature'],
-                        stream=True,
-                        extra_body = extra_params, # 其他参数
-                        **extra
-                    )
+                    extra['tools'] = tools
+
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=msg,  # 添加图片信息到消息
+                    stream=True,
+                    extra_body = extra_params, # 其他参数
+                    **extra
+                )
+
                 tool_calls = []
                 full_content = ""
                 search_not_done = False
@@ -3758,7 +3799,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             "content": search_prompt,
                             }
                         ],
-                        temperature=0.5,
                         extra_body = extra_params, # 其他参数
                     )
                     response_content = response.choices[0].message.content
@@ -4217,12 +4257,14 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 break
                         msg = await images_add_in_messages(reasoner_messages, images,settings)
                         if vendor == 'Ollama':
+                            if settings['reasoner']['temperature'] !=1:
+                                reasoner_extra['temperature'] = settings['reasoner']['temperature']
                             # 流式调用推理模型
                             reasoner_stream = await reasoner_client.chat.completions.create(
                                 model=settings['reasoner']['model'],
                                 messages=msg,
                                 stream=True,
-                                temperature=settings['reasoner']['temperature']
+                                **reasoner_extra
                             )
                             full_reasoning = ""
                             buffer = ""  # 跨chunk的内容缓冲区
@@ -4286,13 +4328,16 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                                     buffer = ""
                                                 break  # 等待更多内容
                         else:
+                            if settings['reasoner']['temperature'] !=1:
+                                reasoner_extra['temperature'] = settings['reasoner']['temperature']
+
                             # 流式调用推理模型
                             reasoner_stream = await reasoner_client.chat.completions.create(
                                 model=settings['reasoner']['model'],
                                 messages=msg,
                                 stream=True,
                                 stop=settings['reasoner']['stop_words'],
-                                temperature=settings['reasoner']['temperature']
+                                **reasoner_extra
                             )
                             full_reasoning = ""
                             # 处理推理模型的流式响应
@@ -4317,7 +4362,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 yield f"data: {json.dumps(chunk_dict)}\n\n"
 
                         # 在推理结束后添加完整推理内容到消息
-                        content_append(request.messages, 'usr', f"\n\n可参考的推理过程：{full_reasoning}") # 可参考的推理过程
+                        content_append(request.messages, 'user', f"\n\n可参考的推理过程：{full_reasoning}") # 可参考的推理过程
                     
                     vision_control_enabled = settings.get('visionControlSettings', {}).get('enabled', False)
                     if vision_control_enabled and (results =='[Getting screenshot]' or settings.get('visionControlSettings', {}).get('desktopVision', False)):
@@ -4416,25 +4461,19 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     msg = await images_add_in_messages(request.messages, images, settings)
                     if request.top_p != 1 or settings['top_p'] != 1:
                         extra['top_p'] = request.top_p or settings['top_p']
+
+                    if settings['temperature'] !=1:
+                        extra['temperature'] = settings['temperature']
+
                     if tools:
-                        response = await client.chat.completions.create(
-                            model=model,
-                            messages=msg,  # 添加图片信息到消息
-                            temperature=request.temperature or settings['temperature'],
-                            tools=tools,
-                            stream=True,
-                            extra_body = extra_params, # 其他参数
-                            **extra
-                        )
-                    else:
-                        response = await client.chat.completions.create(
-                            model=model,
-                            messages=msg,  # 添加图片信息到消息
-                            temperature=request.temperature or settings['temperature'],
-                            stream=True,
-                            extra_body = extra_params, # 其他参数
-                            **extra
-                        )
+                        extra['tools'] = tools
+                    response = await client.chat.completions.create(
+                        model=model,
+                        messages=msg,  # 添加图片信息到消息
+                        stream=True,
+                        extra_body = extra_params, # 其他参数
+                        **extra
+                    )
                     tool_calls = []
                     async for chunk in response:
                         if not chunk.choices:
@@ -4566,7 +4605,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 "content": search_prompt,
                                 }
                             ],
-                            temperature=0.5,
                             extra_body = extra_params, # 其他参数
                         )
                         response_content = response.choices[0].message.content
@@ -4960,6 +4998,8 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
     from py.cdp_tool import all_cdp_tools
     from py.random_topic import random_topics_tools
     from py.computer_use_tool import computer_use_tools,mouse_use_tools,keyboard_use_tools,desktopVision_use_tools
+    
+    from py.mode_change import mode_change_tool
     m0 = None
     if settings["memorySettings"]["is_memory"] and settings["memorySettings"]["selectedMemory"] and settings["memorySettings"]["selectedMemory"] != "":
         memoryId = settings["memorySettings"]["selectedMemory"]
@@ -5048,6 +5088,8 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
             tools.extend(get_tools_for_mode('yolo'))
         elif settings['CLISettings']['engine'] == 'local':
             tools.extend(get_local_tools_for_mode('yolo'))
+    if  settings['CLISettings']['mode_change']:
+        tools.append(mode_change_tool)
     if settings['visionControlSettings']['enabled']:
         tools.extend(computer_use_tools)
         if settings['visionControlSettings']['mouse']:
@@ -5967,6 +6009,8 @@ async def execute_tool_manually(request: Request):
         screenshot
     )
 
+    from py.mode_change import update_workspace_settings
+
     # ==================== 2. 定义工具映射表 ====================
     _TOOL_HOOKS = {
         "DDGsearch": DDGsearch,
@@ -6070,7 +6114,9 @@ async def execute_tool_manually(request: Request):
         "keyboard_hotkey":keyboard_hotkey,
         "keyboard_hold":keyboard_hold,
         "wait":wait,
-        "screenshot":screenshot
+        "screenshot":screenshot,
+
+        "update_workspace_settings":update_workspace_settings,
     }
     
 
@@ -6577,7 +6623,7 @@ async def create_task_endpoint(req: TaskCreateRequest):
             title=req.title,
             description=req.description,
             agent_type=req.agent_type,
-            parent_task_id="MANUAL_USER",
+            parent_task_id="USER",
             context=context,
             platforms=req.platforms  # 👈👈👈 必须加这一行！
         )

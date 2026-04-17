@@ -223,6 +223,7 @@ class SlackBotManager:
                     "asyncToolsID": self.async_tools[cid],
                     "fileLinks": self.file_links[cid],
                     "is_app_bot": True,
+                    "platform": "slack",
                 },
             )
 
@@ -392,7 +393,8 @@ class SlackBotManager:
                 stream=False, 
                 extra_body={
                     "is_app_bot": True,
-                    "behavior_trigger": True
+                    "behavior_trigger": True,
+                    "platform": "slack",
                 }
             )
             

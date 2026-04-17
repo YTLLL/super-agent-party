@@ -158,7 +158,7 @@ class SubAgentExecutor:
         await ws_manager.broadcast({
             "type": "task_notification",
             "data": {
-                "title": f"任务已完成: {task.title}",
+                "title": f"Task completed: {task.title}",
                 "message": result[:150] + ("..." if len(result) > 150 else ""),
                 "task_id": task_id
             }

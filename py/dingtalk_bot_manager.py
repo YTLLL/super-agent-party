@@ -320,12 +320,16 @@ class DingtalkClientLogic:
         # --- D. AI 调用与流式输出 ---
         ai_client = AsyncOpenAI(api_key="none", base_url=f"http://127.0.0.1:{self.port}/v1")
         state = {"text_buffer": "", "full_response": ""}
-        
+
         try:
             stream = await ai_client.chat.completions.create(
                 model=self.config.DingtalkAgent,
                 messages=self.memoryList[cid],
-                stream=True
+                stream=True,
+                extra_body={
+                    "is_app_bot": True,
+                    "platform": "dingtalk",
+                },
             )
 
             async for chunk in stream:

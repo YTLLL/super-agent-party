@@ -1724,6 +1724,14 @@ ipcMain.handle('upload-to-workspace', async (event, { targetDirPath, sourceFileP
 
   let currentGlobalKey = null;
 
+  ipcMain.handle('unregister-global-shortcut', () => {
+    if (currentGlobalKey) {
+      globalShortcut.unregister(currentGlobalKey);
+      currentGlobalKey = null;
+    }
+    return true;
+  });
+
   ipcMain.handle('register-global-shortcut', (event, key) => {
     // 如果之前有注册过的，先注销
     if (currentGlobalKey) {
@@ -1751,15 +1759,6 @@ ipcMain.handle('upload-to-workspace', async (event, { targetDirPath, sourceFileP
       return false;
     }
   });
-
-  ipcMain.handle('unregister-global-shortcut', () => {
-    if (currentGlobalKey) {
-      globalShortcut.unregister(currentGlobalKey);
-      currentGlobalKey = null;
-    }
-    return true;
-  });
-
 // ================= [新增：工作区文件树后台逻辑] =================
     // 1. 读取目录内容 (懒加载)
     ipcMain.handle('read-directory', async (event, dirPath) => {

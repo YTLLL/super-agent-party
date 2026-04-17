@@ -1611,4 +1611,5 @@ key3`,
 
         'connectChatApp': '连接聊天应用',
         'startLiveStream': '开始直播',
+        'enabledModeChangeTool': '启用权限模式切换工具',
     }

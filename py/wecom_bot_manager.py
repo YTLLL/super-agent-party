@@ -254,7 +254,10 @@ class WeComClient:
                 model=self.WeComAgent,
                 messages=self.memoryList[chat_id],
                 stream=True,
-                extra_body={"is_app_bot": True}
+                extra_body={
+                    "is_app_bot": True,
+                    "platform": "wecom",
+                }
             )
             async for chunk in stream:
                 delta = chunk.choices[0].delta
@@ -293,7 +296,11 @@ class WeComClient:
             client = AsyncOpenAI(api_key="sk", base_url=f"http://127.0.0.1:{self.port}/v1")
             response = await client.chat.completions.create(
                 model=self.WeComAgent, messages=messages, stream=False, 
-                extra_body={"is_app_bot": True, "behavior_trigger": True}
+                extra_body={
+                    "is_app_bot": True,
+                    "platform": "wecom",
+                    "behavior_trigger": True
+                }
             )
             reply = response.choices[0].message.content
             if reply:
