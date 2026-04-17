@@ -941,10 +941,16 @@ async def get_image_content(image_url: str) -> str:
         else:
             images_content = [{"type": "text", "text": "请仔细描述图片中的内容，包含图片中可能存在的文字、数字、颜色、形状、大小、位置、人物、物体、场景等信息。"},{"type": "image_url", "image_url": {"url": url}}]
             client = AsyncOpenAI(api_key=settings['vision']['api_key'],base_url=settings['vision']['base_url'])
+            
+            extra = {}
+
+            if settings['vision']['temperature'] !=1:
+                extra['temperature'] = settings['vision']['temperature']
+            
             response = await client.chat.completions.create(
                 model=settings['vision']['model'],
                 messages = [{"role": "user", "content": images_content}],
-                temperature=settings['vision']['temperature'],
+                **extra
             )
             content = f"\n\nn图片(URL:{image_url} 哈希值：{image_hash})信息如下：\n\n"+str(response.choices[0].message.content)+"\n\n"
             with open(os.path.join(UPLOAD_FILES_DIR, f"{image_hash}.txt"), "w", encoding='utf-8') as f:
@@ -957,10 +963,16 @@ async def get_image_content(image_url: str) -> str:
         else:
             images_content = [{"type": "text", "text": "请仔细描述图片中的内容，包含图片中可能存在的文字、数字、颜色、形状、大小、位置、人物、物体、场景等信息。"},{"type": "image_url", "image_url": {"url": url}}]
             client = AsyncOpenAI(api_key=settings['api_key'],base_url=settings['base_url'])
+            
+            extra = {}
+
+            if settings['temperature'] !=1:
+                extra['temperature'] = settings['temperature']
+            
             response = await client.chat.completions.create(
                 model=settings['model'],
                 messages = [{"role": "user", "content": images_content}],
-                temperature=settings['temperature'],
+                **extra
             )
             content = f"\n\nn图片(URL:{image_url} 哈希值：{image_hash})信息如下：\n\n"+str(response.choices[0].message.content)+"\n\n"
             with open(os.path.join(UPLOAD_FILES_DIR, f"{image_hash}.txt"), "w", encoding='utf-8') as f:
@@ -1491,10 +1503,16 @@ async def images_add_in_messages(request_messages: List[Dict], images: List[Dict
                             
                             # 直接交给视觉模型（视觉模型需原生支持视频）
                             client = AsyncOpenAI(api_key=settings['vision']['api_key'], base_url=settings['vision']['base_url'])
+                            
+                            extra = {}
+
+                            if settings['vision']['temperature'] !=1:
+                                extra['temperature'] = settings['vision']['temperature']
+
                             response = await client.chat.completions.create(
                                 model=settings['vision']['model'],
                                 messages=[{"role": "user", "content": media_content}],
-                                temperature=settings['vision']['temperature'],
+                                **extra
                             )
                             result_text = str(response.choices[0].message.content)
                             messages[index]['content'] += f"\n\nsystem: 用户发送的{media_name}(哈希值：{file_hash})信息如下：\n\n{result_text}\n\n"
@@ -3457,7 +3475,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     response = await client.chat.completions.create(
                         model=model,
                         messages=deepsearch_messages,
-                        temperature=0.5,
                         stream=True,  # 新增
                         extra_body = extra_params, # 其他参数
                     )
@@ -3511,12 +3528,14 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             break
                     msg = await images_add_in_messages(reasoner_messages, images,settings)
                     if vendor == 'Ollama':
+                        if settings['reasoner']['temperature'] !=1:
+                            reasoner_extra['temperature'] = settings['reasoner']['temperature']
+
                         # 流式调用推理模型
                         reasoner_stream = await reasoner_client.chat.completions.create(
                             model=settings['reasoner']['model'],
                             messages=msg,
                             stream=True,
-                            temperature=settings['reasoner']['temperature'],
                             **reasoner_extra
                         )
                         full_reasoning = ""
@@ -3581,13 +3600,14 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                                 buffer = ""
                                             break  # 等待更多内容
                     else:
+                        if settings['reasoner']['temperature'] !=1:
+                            reasoner_extra['temperature'] = settings['reasoner']['temperature']
                         # 流式调用推理模型
                         reasoner_stream = await reasoner_client.chat.completions.create(
                             model=settings['reasoner']['model'],
                             messages=msg,
                             stream=True,
                             stop=settings['reasoner']['stop_words'],
-                            temperature=settings['reasoner']['temperature'],
                             **reasoner_extra
                         )
                         full_reasoning = ""
@@ -3626,25 +3646,21 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 msg = await images_add_in_messages(request.messages, images,settings)
                 if request.top_p != 1 or settings['top_p'] != 1:
                     extra['top_p'] = request.top_p or settings['top_p']
+
+                if settings['temperature'] !=1:
+                    extra['temperature'] = settings['temperature']
+
                 if tools:
-                    response = await client.chat.completions.create(
-                        model=model,
-                        messages=msg,  # 添加图片信息到消息
-                        temperature=request.temperature or settings['temperature'],
-                        tools=tools,
-                        stream=True,
-                        extra_body = extra_params, # 其他参数
-                        **extra
-                    )
-                else:
-                    response = await client.chat.completions.create(
-                        model=model,
-                        messages=msg,  # 添加图片信息到消息
-                        temperature=request.temperature or settings['temperature'],
-                        stream=True,
-                        extra_body = extra_params, # 其他参数
-                        **extra
-                    )
+                    extra['tools'] = tools
+
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=msg,  # 添加图片信息到消息
+                    stream=True,
+                    extra_body = extra_params, # 其他参数
+                    **extra
+                )
+
                 tool_calls = []
                 full_content = ""
                 search_not_done = False
@@ -3783,7 +3799,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                             "content": search_prompt,
                             }
                         ],
-                        temperature=0.5,
                         extra_body = extra_params, # 其他参数
                     )
                     response_content = response.choices[0].message.content
@@ -4242,12 +4257,14 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 break
                         msg = await images_add_in_messages(reasoner_messages, images,settings)
                         if vendor == 'Ollama':
+                            if settings['reasoner']['temperature'] !=1:
+                                reasoner_extra['temperature'] = settings['reasoner']['temperature']
                             # 流式调用推理模型
                             reasoner_stream = await reasoner_client.chat.completions.create(
                                 model=settings['reasoner']['model'],
                                 messages=msg,
                                 stream=True,
-                                temperature=settings['reasoner']['temperature']
+                                **reasoner_extra
                             )
                             full_reasoning = ""
                             buffer = ""  # 跨chunk的内容缓冲区
@@ -4311,13 +4328,16 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                                     buffer = ""
                                                 break  # 等待更多内容
                         else:
+                            if settings['reasoner']['temperature'] !=1:
+                                reasoner_extra['temperature'] = settings['reasoner']['temperature']
+
                             # 流式调用推理模型
                             reasoner_stream = await reasoner_client.chat.completions.create(
                                 model=settings['reasoner']['model'],
                                 messages=msg,
                                 stream=True,
                                 stop=settings['reasoner']['stop_words'],
-                                temperature=settings['reasoner']['temperature']
+                                **reasoner_extra
                             )
                             full_reasoning = ""
                             # 处理推理模型的流式响应
@@ -4342,7 +4362,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 yield f"data: {json.dumps(chunk_dict)}\n\n"
 
                         # 在推理结束后添加完整推理内容到消息
-                        content_append(request.messages, 'usr', f"\n\n可参考的推理过程：{full_reasoning}") # 可参考的推理过程
+                        content_append(request.messages, 'user', f"\n\n可参考的推理过程：{full_reasoning}") # 可参考的推理过程
                     
                     vision_control_enabled = settings.get('visionControlSettings', {}).get('enabled', False)
                     if vision_control_enabled and (results =='[Getting screenshot]' or settings.get('visionControlSettings', {}).get('desktopVision', False)):
@@ -4441,25 +4461,19 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                     msg = await images_add_in_messages(request.messages, images, settings)
                     if request.top_p != 1 or settings['top_p'] != 1:
                         extra['top_p'] = request.top_p or settings['top_p']
+
+                    if settings['temperature'] !=1:
+                        extra['temperature'] = settings['temperature']
+
                     if tools:
-                        response = await client.chat.completions.create(
-                            model=model,
-                            messages=msg,  # 添加图片信息到消息
-                            temperature=request.temperature or settings['temperature'],
-                            tools=tools,
-                            stream=True,
-                            extra_body = extra_params, # 其他参数
-                            **extra
-                        )
-                    else:
-                        response = await client.chat.completions.create(
-                            model=model,
-                            messages=msg,  # 添加图片信息到消息
-                            temperature=request.temperature or settings['temperature'],
-                            stream=True,
-                            extra_body = extra_params, # 其他参数
-                            **extra
-                        )
+                        extra['tools'] = tools
+                    response = await client.chat.completions.create(
+                        model=model,
+                        messages=msg,  # 添加图片信息到消息
+                        stream=True,
+                        extra_body = extra_params, # 其他参数
+                        **extra
+                    )
                     tool_calls = []
                     async for chunk in response:
                         if not chunk.choices:
@@ -4591,7 +4605,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 "content": search_prompt,
                                 }
                             ],
-                            temperature=0.5,
                             extra_body = extra_params, # 其他参数
                         )
                         response_content = response.choices[0].message.content
