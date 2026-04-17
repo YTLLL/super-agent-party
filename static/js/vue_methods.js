@@ -1966,6 +1966,7 @@ let vue_methods = {
             const rawMessages = msgs.flatMap(msg => {
                 const userName = this.memorySettings?.userName || 'User';
 
+                // --- 1. 处理人类用户 / 群聊消息 ---
                 if (this.isGroupMode && (msg.role === 'user' || (msg.role === 'assistant' && msg.agentName !== agentDisplayName))) {
                     let textContent = (msg.pure_content ?? msg.content) + (msg.fileLinks_content ?? '');
                     const prefix = msg.role === 'user' ? userName : msg.agentName;
@@ -1974,7 +1975,15 @@ let vue_methods = {
                     if (msg.imageLinks && msg.imageLinks.length > 0) {
                         const contentArray = [{ type: "text", text: finalContent }];
                         msg.imageLinks.forEach(imageLink => {
-                            contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                            // 【修复核心1】：恢复 V1 的视频格式后缀判断
+                            const ext = imageLink.path.split('.').pop().toLowerCase();
+                            const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi'];
+                            
+                            if (videoExts.includes(ext)) {
+                                contentArray.push({ type: "video_url", video_url: { url: imageLink.path } });
+                            } else {
+                                contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                            }
                         });
                         return [{ role: 'user', content: contentArray }];
                     } else {
@@ -1993,10 +2002,19 @@ let vue_methods = {
                 let apiRole = msg.role === 'system' ? 'system' : (msg.role === 'assistant' ? 'assistant' : 'user');
                 let textContent = (msg.pure_content ?? msg.content) + (msg.fileLinks_content ?? '');
                 
+                // --- 2. 处理单聊 / 常规消息 ---
                 if (msg.imageLinks && msg.imageLinks.length > 0) {
                     const contentArray = [{ type: "text", text: textContent }];
                     msg.imageLinks.forEach(imageLink => {
-                        contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                        // 【修复核心2】：恢复 V1 的视频格式后缀判断
+                        const ext = imageLink.path.split('.').pop().toLowerCase();
+                        const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi'];
+                        
+                        if (videoExts.includes(ext)) {
+                            contentArray.push({ type: "video_url", video_url: { url: imageLink.path } });
+                        } else {
+                            contentArray.push({ type: "image_url", image_url: { url: imageLink.path } });
+                        }
                     });
                     return [{ role: apiRole, content: contentArray }];
                 } else {
@@ -2032,8 +2050,7 @@ let vue_methods = {
             return sanitized;
         };
 
-        // 【致命 Bug 修复点：完全恢复 V1 的时序】
-        // 第一步：直接把包括您最新的一句提问的整个 this.messages 打包成 Payload
+        // 第一步：打包 Payload
         let messagesPayload = prepareMessages(this.messages);
 
         // 第二步：注入扩展的 System Prompts
@@ -2043,7 +2060,7 @@ let vue_methods = {
             else messagesPayload.unshift({ role: 'system', content: combinedPrompt });
         }
 
-        // 第三步：创建或复用给助手用的坑位（一定要在 prepareMessages 后执行，避免污染 Payload）
+        // 第三步：创建或复用给助手用的坑位
         let currentMsg;
         if (isResume && this.messages.length > 0) {
             currentMsg = this.messages[this.messages.length - 1];
