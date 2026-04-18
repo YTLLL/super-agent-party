@@ -7445,7 +7445,16 @@ handleCreateSlackSeparator(val) {
     async toggleASR() {
       this.asrSettings.enabled = !this.asrSettings.enabled;
       this.autoSaveSettings();
-      
+      if (this.asrSettings.enabled === true && this.asrSettings.engine === 'sherpa'){
+        if (!this.sherpaModelExists){
+          showNotification(this.t('autoDownloadModel'), 'info');
+          this.asrSettings.enabled = false;
+          let source = await this.getAutoSource();
+          await this.sherpaDownload(source);
+          this.autoSaveSettings();
+          return;
+        }
+      }
       if (this.asrSettings.enabled) {
         await this.startASR();
       } else {
@@ -7460,12 +7469,24 @@ handleCreateSlackSeparator(val) {
       
       // 先彻底停止
       await this.stopASR(); 
-      
+      if (this.asrSettings.enabled === true && this.asrSettings.engine === 'sherpa'){
+        if (!this.sherpaModelExists){
+          showNotification(this.t('autoDownloadModel'), 'info');
+          this.asrSettings.enabled = false;
+          let source = await this.getAutoSource();
+          await this.sherpaDownload(source);
+          this.autoSaveSettings();
+          return;
+        }
+      }
+
       if (this.asrSettings.enabled) {
         // 给系统 200ms 时间回收资源
         await new Promise(resolve => setTimeout(resolve, 200));
         await this.startASR();
       }
+
+      this.autoSaveSettings();
     },
 
     // 修改：启动ASR
@@ -8098,6 +8119,30 @@ handleCreateSlackSeparator(val) {
       }
     },
 
+    // 自动判断下载源的工具函数
+    async getAutoSource() {
+      try {
+        // 1. 检查时区
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const isMainlandChinaTimezone = [
+          'Asia/Shanghai', 
+          'Asia/Chongqing', 
+          'Asia/Harbin', 
+          'Asia/Urumqi'
+        ].includes(timezone);
+
+        // 2. 检查语言
+        const isChineseLanguage = navigator.language.startsWith('zh');
+
+        if (isMainlandChinaTimezone || isChineseLanguage) {
+          return 'modelscope';
+        }
+      } catch (e) {
+        console.error('Failed to detect locale', e);
+      }
+      return 'huggingface'; // 默认源
+    },
+
     async changeTTSstatus() {
       if (!this.ttsSettings.enabled) {
         this.TTSrunning = false;
@@ -8105,6 +8150,13 @@ handleCreateSlackSeparator(val) {
       if (this.ttsSettings.enabled === true && this.settings.enableOmniTTS === true) {
         this.settings.enableOmniTTS = false;
         showNotification(this.t('autoDisableOmniControlSettings'), 'warning');
+      }else if (this.ttsSettings.enabled === true && this.ttsSettings.engine === 'moss'){
+        if (!this.mossModelExists){
+          showNotification(this.t('autoDownloadModel'), 'info');
+          this.ttsSettings.enabled = false;
+          let source = await this.getAutoSource();
+          await this.mossDownload(source);
+        }
       }
       await this.autoSaveSettings();
     },
@@ -8126,8 +8178,7 @@ handleCreateSlackSeparator(val) {
             .replace(/[\u{2600}-\u{27BF}\u{2700}-\u{27BF}\u{1F300}-\u{1F9FF}]/gu, '')
             .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
             .replace(/!\[.*?\]\(.*?\)/g, '')
-            .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-            .trim();
+            .replace(/\[(.*?)\]\(.*?\)/g, '$1');
 
         if (!buffer) {
             return {
@@ -11099,7 +11150,7 @@ stopTTSActivities() {
       name: '',
       enabled: true,
       SampleText: 'super agent party链接一切！',
-      engine: 'edgetts',
+      engine: 'moss',
       edgettsLanguage: 'zh-CN',
       edgettsGender: 'Female',
       edgettsVoice: 'XiaoyiNeural',
@@ -11121,6 +11172,8 @@ stopTTSActivities() {
       customTTSserver: "http://127.0.0.1:9880",
       customTTSspeaker: "",
       customTTSspeed: 1.0,
+      mossVoice: 'Junhao',
+      mossSpeed: 1.0,
     };
     this.showAddTTSDialog = true;
   },

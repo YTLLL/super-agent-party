@@ -793,6 +793,10 @@ let vue_data = {
       // Google
       googleServiceAccount: '', // JSON 字符串
       googleVoice: '',
+
+      mossVoice: 'Junhao',
+      mossSpeed: 1.0,
+
       newtts:{}
     },
     cur_voice :'default',

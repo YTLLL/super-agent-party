@@ -1614,4 +1614,7 @@ key3`,
         'enabledModeChangeTool': '启用权限模式切换工具',
         'moss-TTS': 'MOSS TSS (需本地下载，不需要GPU就能运行)',
         'DefaultVoice': '默认语音',
+        'autoDownloadModel': '模型未安装，自动下载模型',
+        'modelDownloadSuccess': '模型下载成功',
+        'modelDownloadFailed': '模型下载失败',
     }
