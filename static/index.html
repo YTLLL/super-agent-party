@@ -7401,9 +7401,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <el-option label="Saki (ja-female)" value="Saki"></el-option>
                           <el-option label="Arisa (ja-female)" value="Arisa"></el-option>
                           <el-option label="Umiri (ja-female)" value="Umiri"></el-option>
-
-                          <!-- 其他特殊音色 -->
-                          <el-option label="Mortis (en-male)" value="Mortis"></el-option>
+                          <el-option label="Mortis (ja-female)" value="Mortis"></el-option>
                         </el-select>
                       </el-form-item>
 
@@ -7446,55 +7444,55 @@ function updateElement(el, rawMarkdown, formatFn) {
                         <i class="fa-solid fa-plus"></i> {{ t('addRefAudio') || '添加参考音频' }}
                       </el-button>
 
-                      <!-- MOSS 下载卡片 -->
-                      <el-card shadow="hover" class="sherpa-card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                          <span><strong>MOSS TTS Nano</strong></span>
-                          <div class="d-flex gap-2">
-                            <el-tag type="info" effect="dark">~784MB</el-tag>
-                            <el-tag :type="mossModelExists ? 'success' : 'info'" effect="dark">
-                              {{ mossModelExists ? t('installed') : t('notInstalled') }}
-                            </el-tag>
-                          </div>
-                        </div>
-
-                        <div class="card-actions">
-                          <div class="left-actions">
-                            <el-button
-                              type="primary"
-                              :disabled="mossModelExists || mossDownloading"
-                              :loading="mossDownloading && mossDownloadSource==='modelscope'"
-                              @click="mossDownload('modelscope')"
-                            >
-                              {{ t('downloadFromModelScope') }}
-                            </el-button>
-                            <el-button
-                              type="primary"
-                              :style="{ margin: '0' }"
-                              :disabled="mossModelExists || mossDownloading"
-                              :loading="mossDownloading && mossDownloadSource==='huggingface'"
-                              @click="mossDownload('huggingface')"
-                            >
-                              {{ t('downloadFromHuggingFace') }}
-                            </el-button>
-                          </div>
-                          <el-button v-if="mossModelExists" type="danger" @click="mossRemove">
-                            {{ t('deleteModel') }}
-                          </el-button>
-                        </div>
-
-                        <!-- 下载过程中的等待进度条 -->
-                        <el-progress
-                          v-if="mossDownloading"
-                          :percentage="mossPercent"
-                          :show-text="false"
-                          style="margin-top: 16px;"
-                          :stroke-width="10"
-                        ></el-progress>
-                      </el-card>
-
                     </div>
                   </div>
+
+                  <!-- MOSS 下载卡片 -->
+                  <el-card shadow="hover" class="sherpa-card" v-show="ttsSettings.engine === 'moss'">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                      <span><strong>MOSS TTS Nano</strong></span>
+                      <div class="d-flex gap-2">
+                        <el-tag type="info" effect="dark">~784MB</el-tag>
+                        <el-tag :type="mossModelExists ? 'success' : 'info'" effect="dark">
+                          {{ mossModelExists ? t('installed') : t('notInstalled') }}
+                        </el-tag>
+                      </div>
+                    </div>
+
+                    <div class="card-actions">
+                      <div class="left-actions">
+                        <el-button
+                          type="primary"
+                          :disabled="mossModelExists || mossDownloading"
+                          :loading="mossDownloading && mossDownloadSource==='modelscope'"
+                          @click="mossDownload('modelscope')"
+                        >
+                          {{ t('downloadFromModelScope') }}
+                        </el-button>
+                        <el-button
+                          type="primary"
+                          :style="{ margin: '0' }"
+                          :disabled="mossModelExists || mossDownloading"
+                          :loading="mossDownloading && mossDownloadSource==='huggingface'"
+                          @click="mossDownload('huggingface')"
+                        >
+                          {{ t('downloadFromHuggingFace') }}
+                        </el-button>
+                      </div>
+                      <el-button v-if="mossModelExists" type="danger" @click="mossRemove">
+                        {{ t('deleteModel') }}
+                      </el-button>
+                    </div>
+
+                    <!-- 下载过程中的等待进度条 -->
+                    <el-progress
+                      v-if="mossDownloading"
+                      :percentage="mossPercent"
+                      :show-text="false"
+                      style="margin-top: 16px;"
+                      :stroke-width="10"
+                    ></el-progress>
+                  </el-card>
 
                   <div class="tool-item" v-show="ttsSettings.engine === 'openai'">
                     <div class="tool-header">
