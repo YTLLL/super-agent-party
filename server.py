@@ -786,6 +786,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"尝试启动sherpa失败: {e}")
 
+    try:
+        from py.moss_tts import _get_moss_runtime
+        # 将重型的本地 TTS 加载也扔到后台线程池，如果没有下载模型它只会静默返回 None
+        asyncio.get_running_loop().run_in_executor(None, _get_moss_runtime)
+    except Exception as e:
+        logger.error(f"尝试预热 MOSS TTS 失败: {e}")
+
     # MCP 初始化逻辑 (保持你原有的逻辑，但内部会复用 global_http_client)
     mcp_init_tasks = []
 
@@ -8076,6 +8083,69 @@ async def text_to_speech(request: Request):
                     }
                 )
             
+        # ==========================================
+        # 9. MOSS TTS (纯本地 CPU 引擎，懒加载)
+        # ==========================================
+        elif tts_engine == 'moss':
+            from py.moss_tts import moss_generate_audio
+            
+            # 读取 MOSS 参数设定
+            moss_voice = tts_settings.get('mossVoice', 'Junhao')
+            moss_speed = float(tts_settings.get('mossSpeed', 1.0))
+            
+            # 移动端语速安全降速
+            if mobile_optimized:
+                moss_speed = min(moss_speed * 0.95, 1.2)
+            
+            # 处理音色克隆
+            # MOSS 复用已有的 gsvRefAudioPath 选择文件
+            clone_audio_path = tts_settings.get('gsvRefAudioPath', '')
+            abs_clone_path = ""
+            if clone_audio_path:
+                abs_clone_path = os.path.join(UPLOAD_FILES_DIR, clone_audio_path)
+                if not os.path.exists(abs_clone_path):
+                    abs_clone_path = clone_audio_path # 退避策略，万一传的是绝对路径
+                    
+            async def generate_moss_audio():
+                try:
+                    # 获取生成完的 WAV 字节流
+                    wav_data = await moss_generate_audio(
+                        text=text,
+                        voice=moss_voice,
+                        speed=moss_speed,
+                        prompt_audio_path=abs_clone_path
+                    )
+                    
+                    final_data = wav_data
+                    # 如果移动端要求 OPUS，调用你已经写好的 converter
+                    if target_format == "opus":
+                        res = await asyncio.to_thread(convert_to_opus_simple, wav_data)
+                        final_data = res[0] if isinstance(res, tuple) else res
+                    
+                    # 切片流式传输
+                    chunk_size = 4096
+                    for i in range(0, len(final_data), chunk_size):
+                        yield final_data[i:i + chunk_size]
+                        
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    print(f"MOSS TTS 生成错误: {e}")
+                    raise HTTPException(status_code=500, detail=f"MOSS TTS 错误: {str(e)}")
+
+            # 根据返回格式决定响应头
+            media_type = "audio/ogg" if target_format == "opus" else "audio/wav"
+            filename = f"tts_{index}.opus" if target_format == "opus" else f"tts_{index}.wav"
+            return StreamingResponse(
+                generate_moss_audio(), 
+                media_type=media_type, 
+                headers={
+                    "Content-Disposition": f"inline; filename={filename}", 
+                    "X-Audio-Index": str(index),
+                    "X-Audio-Format": target_format
+                }
+            )
+
         raise HTTPException(status_code=400, detail="不支持的TTS引擎")
     
     except Exception as e:
@@ -10641,6 +10711,9 @@ app.include_router(skills_router)
 
 from py.sherpa_model_manager import router as sherpa_model_router
 app.include_router(sherpa_model_router)
+
+from py.moss_model_manager import router as moss_model_router
+app.include_router(moss_model_router)
 
 from py.ebd_model_manager import router as ebd_model_router
 app.include_router(ebd_model_router)
