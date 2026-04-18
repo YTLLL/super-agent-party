@@ -783,6 +783,7 @@ const app = Vue.createApp({
     await this.probeDocker();
     this.checkMobile();
     this.loadSherpaStatus();
+    this.loadMossStatus();
     this.minilmModelStatus();
     window.addEventListener('resize', this.handleResize);
     if (isElectron) {

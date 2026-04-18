@@ -13149,6 +13149,92 @@ async togglePlugin(plugin) {
     await this.sherpaModelStatus()
   },
 
+// 1. 获取 MOSS 模型状态
+  async mossModelStatus() {
+    try {
+      const res = await fetch('/moss-model/status')
+      if (!res.ok) return
+      const data = await res.json()
+      this.mossModelExists = data.exists
+      
+      // 同步后台下载状态（比如刷新页面后恢复 UI）
+      if (data.downloading) {
+        this.mossDownloading = true
+        // 自动恢复轮询
+        if (!this.mossPollInterval) this.startMossPolling()
+      } else {
+        this.mossDownloading = false
+      }
+    } catch (e) {
+      console.error('Failed to get MOSS status:', e)
+    }
+  },
+
+// 触发下载时把进度清零
+  async mossDownload(source = 'modelscope') {
+    this.mossDownloading = true
+    this.mossDownloadSource = source
+    this.mossPercent = 0 // 初始化为 0
+    
+    try {
+      const res = await fetch(`/moss-model/download/${source}`, { method: 'POST' })
+      if (!res.ok) throw new Error('Network error')
+      this.startMossPolling()
+    } catch (e) {
+      this.mossDownloading = false
+      showNotification(this.t('modelDownloadFailed') || '下载失败', 'error')
+    }
+  },
+
+  startMossPolling() {
+    if (this.mossPollInterval) clearInterval(this.mossPollInterval)
+    
+    this.mossPollInterval = setInterval(async () => {
+      try {
+        const statusRes = await fetch('/moss-model/status')
+        const data = await statusRes.json()
+        
+        // 更新真实进度 (后台根据文件夹大小计算出的)
+        if (data.percent !== undefined) {
+          this.mossPercent = data.percent
+        }
+        
+        if (!data.downloading) {
+          clearInterval(this.mossPollInterval)
+          this.mossPollInterval = null
+          this.mossDownloading = false
+          this.mossModelExists = data.exists
+          
+          if (data.exists) {
+            this.mossPercent = 100 // 完成强制打满
+            showNotification(this.t('modelDownloadSuccess') || 'MOSS 模型下载成功')
+          } else if (data.download_error) {
+            showNotification((this.t('modelDownloadFailed') || '下载失败: ') + data.download_error, 'error')
+          }
+        }
+      } catch (err) {
+        console.error('MOSS Polling error', err)
+      }
+    }, 1000) // 每 1 秒轮询一次，让进度条更顺滑
+  },
+
+  // 4. 删除 MOSS 模型
+  async mossRemove() {
+    try {
+      const res = await fetch('/moss-model/remove', { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      showNotification(this.t('deleteSuccess') || '模型删除成功')
+      this.mossModelExists = false
+    } catch {
+      showNotification(this.t('deleteFailed') || '模型删除失败', 'error')
+    }
+  },
+
+  // 5. 在初始化时调用 (类似于 loadSherpaStatus)
+  async loadMossStatus() {
+    await this.mossModelStatus()
+  },
+
     /**
      * 检查 MiniLM 模型状态 (是否存在)
      */

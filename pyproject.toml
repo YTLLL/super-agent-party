@@ -76,4 +76,7 @@ dependencies = [
     "wecom-aibot-python-sdk>=1.0.2",
     "wechatbot-sdk>=0.2.0",
     "qrcode>=8.2",
+    "sentencepiece>=0.2.1",
+    "huggingface-hub>=1.7.1",
+    "modelscope>=1.35.4",
 ]

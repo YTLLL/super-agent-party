@@ -567,6 +567,12 @@ let vue_data = {
     minilmDownloading: false,       // 是否正在下载
     minilmPercent: 0,               // 实时进度 0-100
     minilmEventSource: null,        // 当前 SSE 实例
+    mossModelExists: false,
+    mossDownloading: false,
+    mossDownloadSource: '',
+    mossPollInterval: null,
+    mossPercent: 0, // 新增：真实进度条百分比
+
     asrSettings: {
       enabled: false,
       engine: 'sherpa',
@@ -698,6 +704,10 @@ let vue_data = {
       elevenLabsModel: 'eleven_multilingual_v2',
       elevenLabsRate: 1.0,
 
+
+      // moss
+      mossVoice: 'Junhao',
+      mossSpeed: 1.0,
     },
     volcResourceOptions: [
         { value: 'volc_tts_release', label: '旧版/标准版 (Standard)' },
