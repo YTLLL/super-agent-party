@@ -1788,23 +1788,6 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
                                 except Exception as e:
                                     print(f"读取技能文档失败: {e}")
 
-                # --- (3) 处理 '@' : 提取并注入文件内容 ---
-                # 使用 (?:^|\s) 防止把邮箱前缀误认为是文件路径，例如 "user@mail.com" 不会触发
-                file_matches = re.findall(r'(?:^|\s)@([\w\.\-\/\\]+)', user_text)
-                if file_matches:
-                    files_content_injected = []
-                    for file_path in set(file_matches):  # 使用 set 去重
-                        try:
-                            # 直接复用你原有的 read_file_tool_local 函数读取工作区文件
-                            file_res = await read_file_tool_local(file_path)
-                            files_content_injected.append(f"文件 `{file_path}` 的内容：\n```\n{file_res}\n```")
-                        except Exception as e:
-                            files_content_injected.append(f"读取文件 `{file_path}` 失败: {str(e)}")
-                    
-                    if files_content_injected:
-                        combined_files = "\n\n".join(files_content_injected)
-                        content_append(request.messages, 'system', f"\n\n📂 **The user has mentioned the following files using the '@' quick syntax, which have been automatically read for you.**:\n\n{combined_files}\n\nPlease refer to the content of the above document to answer the user's question.\n\n")
-
     if request.is_app_bot and request.platform:
         platform_message = f"\n\n用户正在使用 {request.platform} 软件与你交流\n\n"
         content_append(request.messages, 'system', platform_message)
