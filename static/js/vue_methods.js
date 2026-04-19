@@ -17101,4 +17101,27 @@ gotoAddExtension(){
   this.openAddExtensionDialog();
 },
 
+  // 2. 添加这两个处理鼠标状态的方法
+  handleExtMouseMove() {
+    this.extButtonVisible = true;
+    
+    // 清除上一次的定时器
+    if (this.extMouseTimer) {
+      clearTimeout(this.extMouseTimer);
+    }
+    
+    // 如果鼠标停止移动 1.5 秒，自动隐藏按钮
+    this.extMouseTimer = setTimeout(() => {
+      this.extButtonVisible = false;
+    }, 1500);
+  },
+  
+  hideExtButton() {
+    this.extButtonVisible = false;
+    if (this.extMouseTimer) {
+      clearTimeout(this.extMouseTimer);
+    }
+  },
+
+
 }

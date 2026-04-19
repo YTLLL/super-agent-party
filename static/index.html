@@ -2256,13 +2256,28 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </div>
 
                   <!-- 2. 扩展 Iframe 视图 -->
-                  <iframe class="side-panel-iframe" 
-                          v-else-if="sidePanelURL" 
-                          :src="sidePanelURL" 
-                          frameborder="0" 
-                          allowfullscreen 
-                          style="width: 100%; height: 100%;">
-                  </iframe>
+                  <div v-else-if="sidePanelURL" class="ext-iframe-wrapper">
+                      
+                      <!-- ✨ 左侧和顶部边缘的隐形感应区 (防止 iframe 吞噬事件) -->
+                      <div class="ext-edge-trigger top" @mousemove="handleExtMouseMove" @mouseleave="hideExtButton"></div>
+                      <div class="ext-edge-trigger left" @mousemove="handleExtMouseMove" @mouseleave="hideExtButton"></div>
+
+                      <!-- ✨ 悬浮返回按钮 (绑定 is-active 类) -->
+                      <div class="ext-floating-close-btn" 
+                          :class="{ 'is-active': extButtonVisible }"
+                          @mousemove="handleExtMouseMove"
+                          @click="resetToDefaultView()" 
+                          :title="t('backToDefaultView') || '返回默认视图'">
+                          <i class="fa-solid fa-arrow-left"></i> 
+                      </div>
+
+                      <!-- 原本的 iframe -->
+                      <iframe class="side-panel-iframe" 
+                              :src="sidePanelURL" 
+                              frameborder="0" 
+                              allowfullscreen>
+                      </iframe>
+                  </div>
 
                   <!-- 3. 加载中状态 -->
                   <div v-else-if="currentExtension" class="loading-container">

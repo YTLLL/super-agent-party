@@ -2186,5 +2186,6 @@ main();`,
     activeLogPanels: ['logs'],
     selectedTaskHistory: [],
     currentResultIdx: 0,
-
+    extButtonVisible: false,  // 控制按钮是否显示
+    extMouseTimer: null,      // 鼠标静止定时器
 };
