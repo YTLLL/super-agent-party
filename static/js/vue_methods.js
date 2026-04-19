@@ -7445,7 +7445,16 @@ handleCreateSlackSeparator(val) {
     async toggleASR() {
       this.asrSettings.enabled = !this.asrSettings.enabled;
       this.autoSaveSettings();
-      
+      if (this.asrSettings.enabled === true && this.asrSettings.engine === 'sherpa'){
+        if (!this.sherpaModelExists){
+          showNotification(this.t('autoDownloadModel'), 'info');
+          this.asrSettings.enabled = false;
+          let source = await this.getAutoSource();
+          await this.sherpaDownload(source);
+          this.autoSaveSettings();
+          return;
+        }
+      }
       if (this.asrSettings.enabled) {
         await this.startASR();
       } else {
@@ -7460,12 +7469,24 @@ handleCreateSlackSeparator(val) {
       
       // 先彻底停止
       await this.stopASR(); 
-      
+      if (this.asrSettings.enabled === true && this.asrSettings.engine === 'sherpa'){
+        if (!this.sherpaModelExists){
+          showNotification(this.t('autoDownloadModel'), 'info');
+          this.asrSettings.enabled = false;
+          let source = await this.getAutoSource();
+          await this.sherpaDownload(source);
+          this.autoSaveSettings();
+          return;
+        }
+      }
+
       if (this.asrSettings.enabled) {
         // 给系统 200ms 时间回收资源
         await new Promise(resolve => setTimeout(resolve, 200));
         await this.startASR();
       }
+
+      this.autoSaveSettings();
     },
 
     // 修改：启动ASR
@@ -8098,6 +8119,30 @@ handleCreateSlackSeparator(val) {
       }
     },
 
+    // 自动判断下载源的工具函数
+    async getAutoSource() {
+      try {
+        // 1. 检查时区
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const isMainlandChinaTimezone = [
+          'Asia/Shanghai', 
+          'Asia/Chongqing', 
+          'Asia/Harbin', 
+          'Asia/Urumqi'
+        ].includes(timezone);
+
+        // 2. 检查语言
+        const isChineseLanguage = navigator.language.startsWith('zh');
+
+        if (isMainlandChinaTimezone || isChineseLanguage) {
+          return 'modelscope';
+        }
+      } catch (e) {
+        console.error('Failed to detect locale', e);
+      }
+      return 'huggingface'; // 默认源
+    },
+
     async changeTTSstatus() {
       if (!this.ttsSettings.enabled) {
         this.TTSrunning = false;
@@ -8105,6 +8150,13 @@ handleCreateSlackSeparator(val) {
       if (this.ttsSettings.enabled === true && this.settings.enableOmniTTS === true) {
         this.settings.enableOmniTTS = false;
         showNotification(this.t('autoDisableOmniControlSettings'), 'warning');
+      }else if (this.ttsSettings.enabled === true && this.ttsSettings.engine === 'moss'){
+        if (!this.mossModelExists){
+          showNotification(this.t('autoDownloadModel'), 'info');
+          this.ttsSettings.enabled = false;
+          let source = await this.getAutoSource();
+          await this.mossDownload(source);
+        }
       }
       await this.autoSaveSettings();
     },
@@ -8126,8 +8178,7 @@ handleCreateSlackSeparator(val) {
             .replace(/[\u{2600}-\u{27BF}\u{2700}-\u{27BF}\u{1F300}-\u{1F9FF}]/gu, '')
             .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
             .replace(/!\[.*?\]\(.*?\)/g, '')
-            .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-            .trim();
+            .replace(/\[(.*?)\]\(.*?\)/g, '$1');
 
         if (!buffer) {
             return {
@@ -11099,7 +11150,7 @@ stopTTSActivities() {
       name: '',
       enabled: true,
       SampleText: 'super agent party链接一切！',
-      engine: 'edgetts',
+      engine: 'moss',
       edgettsLanguage: 'zh-CN',
       edgettsGender: 'Female',
       edgettsVoice: 'XiaoyiNeural',
@@ -11121,6 +11172,8 @@ stopTTSActivities() {
       customTTSserver: "http://127.0.0.1:9880",
       customTTSspeaker: "",
       customTTSspeed: 1.0,
+      mossVoice: 'Junhao',
+      mossSpeed: 1.0,
     };
     this.showAddTTSDialog = true;
   },
@@ -12836,73 +12889,64 @@ async togglePlugin(plugin) {
     if (!this.chatAreaOpen || !this.sidePanelOpen) return;
     
     const container = this.$refs.chatWrapperRef;
-    if (!container) {
-      console.error('Container not found');
-      return;
-    }
-    
+    // 获取当前历史侧边栏是否可见并获取宽度
+    const historySidebar = container.querySelector('.chat-history-sidebar');
+    const isSidebarVisible = this.showHistorySidebar && !this.isMobile;
+    const sidebarWidth = isSidebarVisible ? historySidebar.offsetWidth : 0;
+
     this.isResizing = true;
-    const startX = e.clientX;
     const containerRect = container.getBoundingClientRect();
-    const containerWidth = containerRect.width;
+    const availableWidth = containerRect.width - sidebarWidth; // 减去历史栏宽度
     
-    // 添加拖拽状态类到容器
     container.classList.add('resizing');
 
     const handleMouseMove = (e) => {
       if (!this.isResizing) return;
       
-      // 计算鼠标相对于容器的位置
-      const mouseX = e.clientX - containerRect.left;
+      // 这里的 mouseX 必须相对于聊天区的左边缘
+      const mouseXInChat = e.clientX - (containerRect.left + sidebarWidth);
+      const clampedMouseX = Math.max(0, Math.min(mouseXInChat, availableWidth));
       
-      // 限制鼠标位置在容器范围内
-      const clampedMouseX = Math.max(0, Math.min(mouseX, containerWidth));
+      const leftWidth = clampedMouseX;
+      const rightWidth = availableWidth - clampedMouseX - 10; // 10 是分割条宽
       
-      // 计算新的分割条位置（像素值）
-      const newResizerPosition = clampedMouseX;
+      const leftPercent = (leftWidth / availableWidth) * 100;
+      const rightPercent = (rightWidth / availableWidth) * 100;
       
-      // 计算左右面板的像素宽度
-      const leftWidth = newResizerPosition;
-      const rightWidth = containerWidth - newResizerPosition - 8; // 8px 是分割条宽度
-      
-      // 转换为百分比（用于检查最小宽度）
-      const leftPercent = (leftWidth / containerWidth) * 100;
-      const rightPercent = (rightWidth / containerWidth) * 100;
-      
-      // 检查是否需要收起面板
       if (leftPercent < this.minPanelWidth) {
         this.collapseChatArea();
+        handleMouseUp();
         return;
       }
       
       if (rightPercent < this.minPanelWidth) {
         this.collapseSidePanel();
+        handleMouseUp();
         return;
       }
       
-      // 直接设置像素宽度，而不是百分比
       this.updatePanelWidthsWithPixels(leftWidth, rightWidth);
     };
 
     const handleMouseUp = () => {
       this.isResizing = false;
-      
-      // 移除拖拽状态类
       container.classList.remove('resizing');
-      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      
-      // 拖拽结束后，重新计算百分比（用于响应式）
-      this.recalculatePercentages();
+      this.recalculatePercentages(availableWidth);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
+  },
+
+  handleHistoryToggle() {
+      this.showHistorySidebar = !this.showHistorySidebar;
+      // 强制触发一次 recalculate，让右侧聊天区重新适应剩余宽度
+      this.$nextTick(() => {
+          this.handleResize(); 
+      });
   },
 
   // 使用像素宽度更新面板
@@ -12923,22 +12967,26 @@ async togglePlugin(plugin) {
   },
 
   // 重新计算百分比（用于保存状态和响应式）
-  recalculatePercentages() {
+  recalculatePercentages(providedAvailableWidth) {
     const container = this.$refs.chatWrapperRef;
-    if (!container) return;
+    const historySidebar = container?.querySelector('.chat-history-sidebar');
+    const sidebarWidth = (historySidebar && !this.isMobile) ? historySidebar.offsetWidth : 0;
     
-    const containerWidth = container.offsetWidth;
+    // 如果没有传入宽度，则实时计算
+    const availableWidth = providedAvailableWidth || (container.offsetWidth - sidebarWidth);
+    
     const chatArea = this.$refs.chatAreaRef;
     const sidePanel = this.$refs.sidePanelRef;
     
     if (chatArea && sidePanel && this.chatAreaOpen && this.sidePanelOpen) {
-      const chatAreaWidth = chatArea.offsetWidth;
-      const sidePanelWidth = sidePanel.offsetWidth;
+      const chatAreaWidthPx = chatArea.offsetWidth;
+      const sidePanelWidthPx = sidePanel.offsetWidth;
       
-      this.chatAreaWidth = (chatAreaWidth / containerWidth) * 100;
-      this.sidePanelWidth = (sidePanelWidth / containerWidth) * 100;
+      // 基于可用宽度计算比例
+      this.chatAreaWidth = (chatAreaWidthPx / availableWidth) * 100;
+      this.sidePanelWidth = (sidePanelWidthPx / availableWidth) * 100;
     }
-  },
+  },  
 
   // 处理分割条点击
   handleResizerClick(e) {
