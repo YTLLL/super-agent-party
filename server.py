@@ -3077,6 +3077,9 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 print("添加相关记忆：\n\n" + relevant_memories + "\n\n相关结束\n\n")
                 content_append(request.messages, 'system', "之前的相关记忆：\n\n" + relevant_memories + "\n\n相关结束\n\n")                   
         request = await tools_change_messages(request, settings)
+        # 如果系统消息为空字符串或者仅包含空白符，则将系统消息改成"you are a helpful assistant."
+        if request.messages[0]['role'] == 'system' and not request.messages[0]['content'].strip():
+            request.messages[0]['content'] = "you are a helpful assistant."
         chat_vendor = 'OpenAI'
         reasoner_vendor = 'OpenAI'
         for modelProvider in settings['modelProviders']: 
@@ -5308,6 +5311,9 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
         else:
             kb_list = []
         request = await tools_change_messages(request, settings)
+        # 如果系统消息为空字符串或者仅包含空白符，则将系统消息改成"you are a helpful assistant."
+        if request.messages[0]['role'] == 'system' and not request.messages[0]['content'].strip():
+            request.messages[0]['content'] = "you are a helpful assistant."
         chat_vendor = 'OpenAI'
         reasoner_vendor = 'OpenAI'
         for modelProvider in settings['modelProviders']: 
