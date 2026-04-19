@@ -189,9 +189,9 @@ def _sample_audio_token(
     return _sample_from_scores(
         penalized_scores,
         do_sample=True,
-        temperature=float(generation_defaults["audio_temperature"]),
-        top_k=int(generation_defaults["audio_top_k"]),
-        top_p=float(generation_defaults["audio_top_p"]),
+        temperature=0.0001,
+        top_k=1,
+        top_p=0.1,
         rng=rng,
     )
 
