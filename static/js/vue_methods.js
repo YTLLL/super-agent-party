@@ -13001,18 +13001,40 @@ async togglePlugin(plugin) {
   },
 
   // 收起对话区域
-  collapseChatArea() {
-    this.chatAreaOpen = false;
-    this.sidePanelWidth = 100;
-    this.updatePanelWidths();
-  },
+// 收起左侧对话区域（让右侧面板向左填充）
+collapseChatArea() {
+  const sidePanel = this.$refs.sidePanelRef;
+  const chatArea = this.$refs.chatAreaRef;
 
-  // 收起侧边栏
-  collapseSidePanel() {
-    this.sidePanelOpen = false;
-    this.chatAreaWidth = 100;
-    this.updatePanelWidths();
-  },
+  // 1. 核心修复：在隐藏左侧前，先清除右侧的像素限制
+  if (sidePanel) sidePanel.style.width = '';
+  if (chatArea) chatArea.style.width = '';
+
+  // 2. 更新状态
+  this.chatAreaOpen = false;
+  this.sidePanelOpen = true; 
+  this.sidePanelWidth = 100;
+  this.chatAreaWidth = 0;
+
+  // 3. 应用百分比布局
+  this.updatePanelWidths();
+},
+
+// 收起右侧侧边栏（让左侧对话区向右填充）
+collapseSidePanel() {
+  const chatArea = this.$refs.chatAreaRef;
+  const sidePanel = this.$refs.sidePanelRef;
+
+  if (chatArea) chatArea.style.width = '';
+  if (sidePanel) sidePanel.style.width = '';
+
+  this.sidePanelOpen = false;
+  this.chatAreaOpen = true;
+  this.chatAreaWidth = 100;
+  this.sidePanelWidth = 0;
+
+  this.updatePanelWidths();
+},
 
   // 展开对话区域
   expandChatArea() {
@@ -13039,7 +13061,7 @@ async togglePlugin(plugin) {
     this.updatePanelWidths();
   },
 
-  // 更新面板宽度样式（用于非拖拽时的调整）
+  // 更新面板宽度样式
   updatePanelWidths() {
     this.$nextTick(() => {
       const chatArea = this.$refs.chatAreaRef;
@@ -13048,6 +13070,10 @@ async togglePlugin(plugin) {
       if (!chatArea || !sidePanel) {
         return;
       }
+      
+      // ✨ 核心修复 1：每次切换状态前，强制清除拖拽留下的内联 px 宽度
+      chatArea.style.width = '';
+      sidePanel.style.width = '';
       
       if (this.chatAreaOpen && this.sidePanelOpen) {
         chatArea.style.width = `${this.chatAreaWidth}%`;
