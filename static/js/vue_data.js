@@ -1562,6 +1562,7 @@ let vue_data = {
     },
     deployTiles: [
       { id: 'table_pet', title: 'tablePet', icon: "fa-solid fa-user-ninja"},
+      { id: 'vts_config', title: 'vtsbot', icon: "fa-solid fa-child"},
       { id: 'live_stream', title: 'live_stream_bot', icon: "fa-solid fa-video"},
       { id: 'im_bot', title: 'imBot', icon: 'fa-solid fa-comment' },
       { id: 'read_bot', title: 'readBot', icon: "fa-solid fa-book-open-reader"}, 
@@ -2188,4 +2189,15 @@ main();`,
     currentResultIdx: 0,
     extButtonVisible: false,  // 控制按钮是否显示
     extMouseTimer: null,      // 鼠标静止定时器
+    isVTSConnecting: false,
+    
+    isVTSStarting: false, // 按钮的加载状态
+    vtsOnline: false, 
+    VTSConfig: {
+      enabled: false,
+      url: 'ws://127.0.0.1:8001',
+      enabledExpressions: true,
+      enabledMotions: true
+    },
+
 };
