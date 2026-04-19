@@ -1013,7 +1013,7 @@ function updateElement(el, rawMarkdown, formatFn) {
               <!-- A. 新建对话 -->
               <div class="history-header">
                 <el-button class="new-chat-btn" @click="clearMessages">
-                  <i class="fa-solid fa-plus"></i> {{ t('newChat') }}
+                  {{ t('newChat') }}
                 </el-button>
               </div>
 
@@ -1042,6 +1042,12 @@ function updateElement(el, rawMarkdown, formatFn) {
                     @click="loadConversation(conv.id)">
                   <i class="fa-regular fa-comment item-icon"></i>
                   <span class="item-title">{{ conv.title || t('untitled') }}</span>
+                  <el-button 
+                    class="item-delete-btn" 
+                    circle 
+                    @click.stop="confirmDeleteConversation(conv.id)">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </el-button>
                 </div>
               </div>
           </div>
