@@ -1037,6 +1037,13 @@ const handleRemoteInstall = (data) => {
       immediate: true
     },
 
+    showHistorySidebar() {
+      this.$nextTick(() => {
+        // 如果侧边栏消失/出现，聊天区和侧边栏应该保持原有比例填满剩下空间
+        this.updatePanelWidths();
+      });
+    },
+
     'asrSettings.interactionMethod': {
       handler() { this.updateGlobalShortcut(); }
     },

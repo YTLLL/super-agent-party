@@ -619,6 +619,7 @@ let vue_data = {
     installLoading: false,
     refreshing: false,
     refreshButtonText: "",
+    showHistorySidebar: true, 
     ttsSettings: {
       enabled: false,
       engine: 'edgetts',

@@ -12889,73 +12889,64 @@ async togglePlugin(plugin) {
     if (!this.chatAreaOpen || !this.sidePanelOpen) return;
     
     const container = this.$refs.chatWrapperRef;
-    if (!container) {
-      console.error('Container not found');
-      return;
-    }
-    
+    // 获取当前历史侧边栏是否可见并获取宽度
+    const historySidebar = container.querySelector('.chat-history-sidebar');
+    const isSidebarVisible = this.showHistorySidebar && !this.isMobile;
+    const sidebarWidth = isSidebarVisible ? historySidebar.offsetWidth : 0;
+
     this.isResizing = true;
-    const startX = e.clientX;
     const containerRect = container.getBoundingClientRect();
-    const containerWidth = containerRect.width;
+    const availableWidth = containerRect.width - sidebarWidth; // 减去历史栏宽度
     
-    // 添加拖拽状态类到容器
     container.classList.add('resizing');
 
     const handleMouseMove = (e) => {
       if (!this.isResizing) return;
       
-      // 计算鼠标相对于容器的位置
-      const mouseX = e.clientX - containerRect.left;
+      // 这里的 mouseX 必须相对于聊天区的左边缘
+      const mouseXInChat = e.clientX - (containerRect.left + sidebarWidth);
+      const clampedMouseX = Math.max(0, Math.min(mouseXInChat, availableWidth));
       
-      // 限制鼠标位置在容器范围内
-      const clampedMouseX = Math.max(0, Math.min(mouseX, containerWidth));
+      const leftWidth = clampedMouseX;
+      const rightWidth = availableWidth - clampedMouseX - 10; // 10 是分割条宽
       
-      // 计算新的分割条位置（像素值）
-      const newResizerPosition = clampedMouseX;
+      const leftPercent = (leftWidth / availableWidth) * 100;
+      const rightPercent = (rightWidth / availableWidth) * 100;
       
-      // 计算左右面板的像素宽度
-      const leftWidth = newResizerPosition;
-      const rightWidth = containerWidth - newResizerPosition - 8; // 8px 是分割条宽度
-      
-      // 转换为百分比（用于检查最小宽度）
-      const leftPercent = (leftWidth / containerWidth) * 100;
-      const rightPercent = (rightWidth / containerWidth) * 100;
-      
-      // 检查是否需要收起面板
       if (leftPercent < this.minPanelWidth) {
         this.collapseChatArea();
+        handleMouseUp();
         return;
       }
       
       if (rightPercent < this.minPanelWidth) {
         this.collapseSidePanel();
+        handleMouseUp();
         return;
       }
       
-      // 直接设置像素宽度，而不是百分比
       this.updatePanelWidthsWithPixels(leftWidth, rightWidth);
     };
 
     const handleMouseUp = () => {
       this.isResizing = false;
-      
-      // 移除拖拽状态类
       container.classList.remove('resizing');
-      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      
-      // 拖拽结束后，重新计算百分比（用于响应式）
-      this.recalculatePercentages();
+      this.recalculatePercentages(availableWidth);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
+  },
+
+  handleHistoryToggle() {
+      this.showHistorySidebar = !this.showHistorySidebar;
+      // 强制触发一次 recalculate，让右侧聊天区重新适应剩余宽度
+      this.$nextTick(() => {
+          this.handleResize(); 
+      });
   },
 
   // 使用像素宽度更新面板
@@ -12976,22 +12967,26 @@ async togglePlugin(plugin) {
   },
 
   // 重新计算百分比（用于保存状态和响应式）
-  recalculatePercentages() {
+  recalculatePercentages(providedAvailableWidth) {
     const container = this.$refs.chatWrapperRef;
-    if (!container) return;
+    const historySidebar = container?.querySelector('.chat-history-sidebar');
+    const sidebarWidth = (historySidebar && !this.isMobile) ? historySidebar.offsetWidth : 0;
     
-    const containerWidth = container.offsetWidth;
+    // 如果没有传入宽度，则实时计算
+    const availableWidth = providedAvailableWidth || (container.offsetWidth - sidebarWidth);
+    
     const chatArea = this.$refs.chatAreaRef;
     const sidePanel = this.$refs.sidePanelRef;
     
     if (chatArea && sidePanel && this.chatAreaOpen && this.sidePanelOpen) {
-      const chatAreaWidth = chatArea.offsetWidth;
-      const sidePanelWidth = sidePanel.offsetWidth;
+      const chatAreaWidthPx = chatArea.offsetWidth;
+      const sidePanelWidthPx = sidePanel.offsetWidth;
       
-      this.chatAreaWidth = (chatAreaWidth / containerWidth) * 100;
-      this.sidePanelWidth = (sidePanelWidth / containerWidth) * 100;
+      // 基于可用宽度计算比例
+      this.chatAreaWidth = (chatAreaWidthPx / availableWidth) * 100;
+      this.sidePanelWidth = (sidePanelWidthPx / availableWidth) * 100;
     }
-  },
+  },  
 
   // 处理分割条点击
   handleResizerClick(e) {
