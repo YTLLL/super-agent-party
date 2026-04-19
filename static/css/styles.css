@@ -11062,3 +11062,56 @@ code {
     position: relative; overflow: visible !important; 
 }
 .browser-toggle-handle, .browser-toggle-handle--left { z-index: 1000 !important; }
+
+/* ============================================================
+   🌟 完美终极修复：丝滑双向展开/收起动画
+   ============================================================ */
+
+/* 1. 恢复正常的从左到右流式布局 */
+.chat-main-body {
+    flex: 1; display: flex; min-width: 0; height: 100%;
+    position: relative; overflow: visible !important; 
+    justify-content: flex-start !important; 
+}
+
+/* 2. 强制覆盖 v-show，支持 CSS 动画 */
+.chat-area, .side-panel {
+    display: flex !important; 
+    overflow: hidden;
+    /* 仅对 width, margin, opacity 进行过渡，千万不要去过渡 flex 属性 */
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+                margin 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.2s ease !important;
+}
+
+/* 拖拽时必须禁用动画，保证跟手不卡顿 */
+.chat-wrapper.resizing .chat-area,
+.chat-wrapper.resizing .side-panel {
+    transition: none !important;
+}
+
+/* 3. 定义收起状态：仅用 width: 0 触发动画 */
+.chat-area.collapsed,
+.side-panel.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    /* 🚨 核心修复：我已经删掉了 flex: 0 0 0，防止瞬间坍塌导致瞬移！ */
+    opacity: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    white-space: nowrap; 
+}
+
+/* 4. 修复展开时的宽度挤压与完美向左吸附 */
+.chat-wrapper.collapsed-left .side-panel {
+    margin-left: 12px !important;
+    /* 扣除左右各 12px 的 margin = 24px，保证变宽时刚好填满。
+       左侧平滑缩小，右侧平滑变宽，总宽度恒定 100%，视觉上完美向左生长！ */
+    width: calc(100% - 24px) !important;
+}
+
+.chat-wrapper.collapsed-right .chat-area {
+    margin-right: 12px !important;
+    width: calc(100% - 12px) !important;
+}
