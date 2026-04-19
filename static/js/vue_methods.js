@@ -2430,7 +2430,7 @@ let vue_methods = {
                             this.playPCMChunk(delta.audio.data, currentMsg.pure_content, currentMsg);
                         }
                         if (parsed.usage?.total_tokens) {
-                            currentMsg.total_tokens = parsed.usage.total_tokens;
+                            currentMsg.total_tokens += parsed.usage.total_tokens;
                         }
                         if (delta.async_tool_id) {
                             if (!this.asyncToolsID) this.asyncToolsID = [];
