@@ -367,7 +367,6 @@ from py.mcp_clients import McpClient
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 import aiofiles
-import aiosqlite
 import argparse
 from py.dify_openai import DifyOpenAIAsync
 from py.ClaudeAsOpenAI import AsyncClaudeAsOpenAI
@@ -1510,6 +1509,7 @@ async def _fetch_group_memories(group_id: str, query_text: str, top_k: int = 6) 
     if not group_id:
         return []
     query_tokens = _memory_tokens(query_text)
+    import aiosqlite
     async with aiosqlite.connect(COVS_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
@@ -1533,6 +1533,7 @@ async def _fetch_group_memories(group_id: str, query_text: str, top_k: int = 6) 
     selected = ranked[:top_k]
     if selected:
         now_ts = int(time.time() * 1000)
+        import aiosqlite
         async with aiosqlite.connect(COVS_PATH) as db:
             await db.executemany(
                 "UPDATE group_memory SET last_used_at = ? WHERE id = ?",
@@ -1685,6 +1686,7 @@ async def _upsert_group_memories(group_id: str, source_chat_id: str, source_mess
     if not group_id or not source_chat_id or not memories:
         return
     now_ts = int(time.time() * 1000)
+    import aiosqlite
     async with aiosqlite.connect(COVS_PATH) as db:
         db.row_factory = aiosqlite.Row
         for memory in memories:
@@ -1762,6 +1764,7 @@ async def _invalidate_group_memories_by_chat(source_chat_id: str) -> None:
     if not source_chat_id:
         return
     now_ts = int(time.time() * 1000)
+    import aiosqlite
     async with aiosqlite.connect(COVS_PATH) as db:
         await db.execute(
             "UPDATE group_memory SET status = 'deleted', updated_at = ? WHERE source_chat_id = ?",
