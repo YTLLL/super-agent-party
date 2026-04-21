@@ -2005,6 +2005,11 @@ function getVMCBoneData() {
     let qz = node.quaternion.z;
     let qw = node.quaternion.w;
 
+    if (!isVRM1) {
+        qx = -qx;
+        qz = -qz;
+    }
+
     const vmcRot = { 
         x: qx, 
         y: -qy, 
@@ -3529,6 +3534,10 @@ function addcontrolPanel() {
         controlPanel.appendChild(moreButton);          // 🌟 更多按钮
         controlPanel.appendChild(refreshButton);       // 刷新
         controlPanel.appendChild(closeButton);         // 关闭
+        if (isElectron) {
+            controlPanel.appendChild(vmcButton);           // VMC 设置
+        }
+
 
         // 2. 组装子面板（收纳次要按钮）
         subPanel.appendChild(idleAnimationButton);     // 闲置动画
@@ -3536,9 +3545,6 @@ function addcontrolPanel() {
         subPanel.appendChild(moveModeBtn);             // 物体平移缩放
         subPanel.appendChild(wsStatusButton);          // WS 状态
         subPanel.appendChild(xrAutoBtn);               // XR
-        if (isElectron) {
-            subPanel.appendChild(vmcButton);           // VMC 设置
-        }
 
         // 3. 把子面板挂载到主面板内部
         controlPanel.appendChild(subPanel);
