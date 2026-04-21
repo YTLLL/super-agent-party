@@ -13320,6 +13320,38 @@ async togglePlugin(plugin) {
       window.open(url, '_blank')
     }
   },
+  startChatHistoryResize(e) {
+    if (this.isMobile || !this.chatHistoryPanelOpen) return;
+
+    const container = this.$refs.chatWrapperRef;
+    const panel = this.$refs.chatHistoryPanelRef;
+    if (!container || !panel) return;
+
+    this.isHistoryPanelResizing = true;
+    const containerRect = container.getBoundingClientRect();
+    const minWidth = 220;
+    const maxWidth = Math.max(minWidth, Math.min(520, containerRect.width - 320));
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (event) => {
+      if (!this.isHistoryPanelResizing) return;
+      const nextWidth = Math.max(minWidth, Math.min(event.clientX - containerRect.left, maxWidth));
+      this.chatHistoryPanelWidth = nextWidth;
+    };
+
+    const handleMouseUp = () => {
+      this.isHistoryPanelResizing = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  },
   // 开始拖拽调整大小
   startResize(e) {
     if (!this.chatAreaOpen || !this.sidePanelOpen) return;
