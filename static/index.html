@@ -1017,50 +1017,6 @@ function updateElement(el, rawMarkdown, formatFn) {
               'resizing': isResizing
             }">
           
-          <!-- 对话历史二级侧边栏 -->
-          <div class="chat-history-sidebar" v-show="showHistorySidebar && !isMobile && !isCapsuleMode">
-              <!-- A. 新建对话 -->
-              <div class="history-header">
-                <el-button class="new-chat-btn" @click="clearMessages">
-                  {{ t('newChat') }}
-                </el-button>
-              </div>
-
-              <!-- B. 搜索行：锁定间距 -->
-              <div class="history-search-row">
-                <el-input v-model="searchKeyword" :placeholder="t('search')" clearable size="small" class="history-search-input">
-                  <template #prefix><i class="fa-solid fa-magnifying-glass"></i></template>
-                </el-input>
-                
-                <!-- 两个按钮强制并排且紧凑 -->
-                <div class="history-quick-tools">
-                  <el-button @click="keepLastWeek" circle size="small" class="quick-tool-btn">
-                    <i class="fa-solid fa-calendar-week"></i>
-                  </el-button>
-                  <el-button @click="confirmClearAll" circle size="small" class="quick-tool-btn danger">
-                    <i class="fa-solid fa-trash-can"></i>
-                  </el-button>
-                </div>
-              </div>
-
-              <!-- C. 列表区：还原样式 -->
-              <div class="history-list-container">
-                <div v-for="conv in filteredConversations" :key="conv.id" 
-                    class="history-item-row" 
-                    :class="{ active: currentConversationId === conv.id }" 
-                    @click="loadConversation(conv.id)">
-                  <i class="fa-regular fa-comment item-icon"></i>
-                  <span class="item-title">{{ conv.title || t('untitled') }}</span>
-                  <el-button 
-                    class="item-delete-btn" 
-                    circle 
-                    @click.stop="confirmDeleteConversation(conv.id)">
-                    <i class="fa-solid fa-trash-can"></i>
-                  </el-button>
-                </div>
-              </div>
-          </div>
-
           <div class="chat-main-body">
             <!-- 添加拖拽遮罩层 -->
             <div v-if="isResizing" class="resize-overlay"></div>
@@ -1069,6 +1025,212 @@ function updateElement(el, rawMarkdown, formatFn) {
                   ref="chatAreaRef"
                   :class="{ collapsed: !chatAreaOpen }" 
                   v-show="chatAreaOpen">
+                <div class="chat-area-layout">
+                  <aside
+                    v-if="!isCapsuleMode && !isAssistantMode && !isMobile"
+                    ref="chatHistoryPanelRef"
+                    class="chat-history-panel"
+                    :class="{ collapsed: !chatHistoryPanelOpen }"
+                    :style="chatHistoryPanelOpen ? { width: `${chatHistoryPanelWidth}px` } : { width: '0px' }"
+                  >
+                    <div v-show="chatHistoryPanelOpen" class="chat-history-inner">
+                      <div
+                        class="chat-history-header"
+                        :class="{
+                          compact: chatHistoryPanelWidth < 320,
+                          stacked: chatHistoryPanelWidth < 250
+                        }"
+                      >
+                        <div class="chat-history-header-top">
+                          <div class="chat-history-heading">
+                            <div class="chat-history-title">{{ t('chatHistory') }}</div>
+                            <div class="chat-history-subtitle">{{ conversations.length }} / {{ t('conversation') }}</div>
+                          </div>
+                          <div class="chat-history-header-tools">
+                            <el-tooltip :content="t('keepLastWeek')" placement="top">
+                              <el-button
+                                class="chat-history-header-icon-btn"
+                                @click="pruneHistoryToLastWeek"
+                                circle
+                              >
+                                <i class="fa-solid fa-calendar-week"></i>
+                              </el-button>
+                            </el-tooltip>
+                            <el-tooltip :content="t('clearAllHistory')" placement="top">
+                              <el-button
+                                class="chat-history-header-icon-btn danger"
+                                @click="clearAllHistoryRecords"
+                                circle
+                              >
+                                <i class="fa-solid fa-trash-can"></i>
+                              </el-button>
+                            </el-tooltip>
+                          </div>
+                        </div>
+                        <div class="chat-history-header-actions">
+                          <el-button class="chat-history-new-btn" @click="startConversationInGroup()">
+                            <i class="fa-solid fa-plus"></i>
+                            {{ t('newChat') }}
+                          </el-button>
+                          <template v-if="chatHistoryPanelWidth >= 250">
+                            <el-button class="chat-history-new-group-btn" @click="createConversationGroup()">
+                              <i class="fa-solid fa-folder-plus"></i>
+                              {{ t('newGroup') }}
+                            </el-button>
+                          </template>
+                          <el-dropdown v-else trigger="click" placement="bottom-end">
+                            <el-button class="chat-history-header-more-btn" @click.stop>
+                              <i class="fa-solid fa-ellipsis"></i>
+                            </el-button>
+                            <template #dropdown>
+                              <el-dropdown-menu>
+                                <el-dropdown-item @click="createConversationGroup()">
+                                  {{ t('newGroup') }}
+                                </el-dropdown-item>
+                              </el-dropdown-menu>
+                            </template>
+                          </el-dropdown>
+                        </div>
+                      </div>
+
+                      <div class="chat-history-search">
+                        <el-input
+                          v-model="searchKeyword"
+                          :placeholder="t('searchChatHistoryPlaceholder')"
+                          clearable
+                        >
+                          <template #prefix>
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                          </template>
+                        </el-input>
+                      </div>
+
+                      <div class="chat-history-list">
+                        <div
+                          v-for="group in groupedFilteredConversations"
+                          :key="group.id"
+                          class="chat-history-group"
+                        >
+                          <div
+                            class="chat-history-group-header"
+                            :class="{ active: group.id === activeConversationGroupId }"
+                            role="button"
+                            tabindex="0"
+                            @click="setActiveConversationGroup(group.id)"
+                            @keydown.enter.prevent="setActiveConversationGroup(group.id)"
+                          >
+                            <div class="chat-history-group-title-wrap">
+                              <i class="fa-solid fa-folder-open chat-history-group-icon"></i>
+                              <span class="chat-history-group-title">{{ group.name }}</span>
+                              <span class="chat-history-group-count">{{ group.conversations.length }}</span>
+                            </div>
+                            <div class="chat-history-group-actions">
+                              <el-button
+                                class="chat-history-toggle-btn"
+                                link
+                                @click.stop="toggleConversationGroupCollapsed(group.id)"
+                              >
+                                <i :class="isConversationGroupCollapsed(group.id) ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-down'"></i>
+                              </el-button>
+                              <el-dropdown
+                                v-if="group.id !== 'default'"
+                                trigger="click"
+                                placement="bottom-end"
+                                @click.stop
+                              >
+                                <el-button class="chat-history-more" link @click.stop>
+                                  <i class="fa-solid fa-ellipsis"></i>
+                                </el-button>
+                                <template #dropdown>
+                                  <el-dropdown-menu>
+                                    <el-dropdown-item @click="openRenameConversationGroupDialog(group)">
+                                      {{ t('rename') }}
+                                    </el-dropdown-item>
+                                    <el-dropdown-item divided @click="openDeleteGroupDialog(group)">
+                                      {{ t('delete') }}
+                                    </el-dropdown-item>
+                                  </el-dropdown-menu>
+                                </template>
+                              </el-dropdown>
+                            </div>
+                          </div>
+
+                          <transition name="chat-history-group-collapse">
+                            <div
+                              v-show="!isConversationGroupCollapsed(group.id)"
+                              class="chat-history-group-conversations"
+                            >
+                              <button
+                                v-for="conv in group.conversations"
+                                :key="conv.id"
+                                class="chat-history-item"
+                                :class="{ active: conversationId === conv.id }"
+                                @click="loadConversation(conv.id)"
+                              >
+                                <div class="chat-history-item-main">
+                                  <div class="chat-history-item-top">
+                                    <div class="chat-history-item-title">{{ conv.title || t('untitled') }}</div>
+                                    <div class="chat-history-item-time">{{ formatConversationTime(conv.timestamp) }}</div>
+                                  </div>
+                                  <div class="chat-history-item-preview">{{ getConversationPreview(conv) }}</div>
+                                </div>
+                                <div class="chat-history-item-actions">
+                                  <el-dropdown trigger="click" placement="bottom-end" @click.stop>
+                                    <el-button class="chat-history-more" link @click.stop>
+                                      <i class="fa-solid fa-ellipsis"></i>
+                                    </el-button>
+                                    <template #dropdown>
+                                      <el-dropdown-menu>
+                                        <el-dropdown-item @click="openRenameConversationDialog(conv)">
+                                          {{ t('rename') }}
+                                        </el-dropdown-item>
+                                        <el-dropdown placement="right-start" trigger="hover">
+                                          <div class="el-dropdown-menu__item chat-history-submenu-item">
+                                            <div class="chat-history-submenu-trigger">
+                                              <span>{{ t('moveToGroup') }}</span>
+                                              <i class="fa-solid fa-angle-right"></i>
+                                            </div>
+                                          </div>
+                                          <template #dropdown>
+                                            <el-dropdown-menu>
+                                              <el-dropdown-item
+                                                v-for="moveGroup in conversationGroups"
+                                                :key="moveGroup.id"
+                                                @click="moveConversationToGroup(conv.id, moveGroup.id)"
+                                              >
+                                                {{ moveGroup.name }}
+                                              </el-dropdown-item>
+                                            </el-dropdown-menu>
+                                          </template>
+                                        </el-dropdown>
+                                        <el-dropdown-item divided @click="confirmDeleteConversation(conv.id)">
+                                          {{ t('delete') }}
+                                        </el-dropdown-item>
+                                      </el-dropdown-menu>
+                                    </template>
+                                  </el-dropdown>
+                                </div>
+                              </button>
+                            </div>
+                          </transition>
+                        </div>
+
+                        <div
+                          v-if="groupedFilteredConversations.length === 0"
+                          class="chat-history-empty"
+                        >
+                          <i class="fa-solid fa-magnifying-glass"></i>
+                          <span>{{ searchKeyword ? t('noResults') : t('noChatHistory') }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </aside>
+                  <div
+                    v-if="chatHistoryPanelOpen && !isCapsuleMode && !isAssistantMode && !isMobile"
+                    class="chat-history-divider"
+                    @mousedown="startChatHistoryResize"
+                  ></div>
+                  <div class="chat-main-column">
                 <div class="messages-container" ref="messagesContainer" v-if="!isCapsuleMode" @click.capture="handleMessageLinkClick">
                   <!-- 添加 is-group-mode 类 -->
                   <div v-for="(message, index) in messages" :key="index" class="message" :class="[message.role, { 'is-group-mode': isGroupMode }]">
@@ -1385,9 +1547,9 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                       <el-tooltip :content="t('chatHistory')" placement="top">
                         <el-button
-                          @click="handleHistoryToggle"
+                          @click="toggleChatHistoryPanel()"
                           class="icon-btn history-btn"
-                          :type="showHistorySidebar ? 'primary' : 'default'"
+                          :type="isMobile ? (conversations.length === 0 ? 'default' : 'primary') : (chatHistoryPanelOpen ? 'primary' : 'default')"
                           circle>
                           <i class="fa-solid fa-clock-rotate-left"></i>
                         </el-button>
@@ -1975,6 +2137,8 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </div>
                     
                   </div> <!-- 结束 unified-input-wrapper -->
+                </div>
+                  </div>
                 </div>
               </div>
               <!-- 可拖拽的分割条 -->
@@ -2946,10 +3110,91 @@ function updateElement(el, rawMarkdown, formatFn) {
             </div>
 
             <!-- 空状态提示 -->
-            <div v-if="filteredConversations.length === 0" class="empty-tip">
-              {{ searchKeyword ? t('noResults') : t('noChatHistory') }}
-            </div>
-          </div>
+        <div v-if="filteredConversations.length === 0" class="empty-tip">
+          {{ searchKeyword ? t('noResults') : t('noChatHistory') }}
+        </div>
+      </div>
+    </el-dialog>
+
+        <el-dialog
+          append-to-body
+          v-model="showConversationGroupDialog"
+          :title="conversationGroupDialogMode === 'create' ? t('createGroup') : t('renameGroup')"
+          width="420px"
+        >
+          <el-form label-position="top">
+            <el-form-item :label="t('groupNamePlaceholder')">
+              <el-input
+                v-model="conversationGroupForm.name"
+                :placeholder="t('groupNamePlaceholder')"
+                @keyup.enter="submitConversationGroupDialog"
+              ></el-input>
+            </el-form-item>
+            <el-form-item :label="t('groupMemoryEnabled')">
+              <div class="group-memory-switch-row">
+                <el-switch v-model="conversationGroupForm.memoryEnabled"></el-switch>
+                <span class="group-memory-switch-hint">{{ t('groupMemoryEnabledHint') }}</span>
+              </div>
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="showConversationGroupDialog = false">{{ t('cancel') }}</el-button>
+            <el-button type="primary" @click="submitConversationGroupDialog">{{ t('confirm') }}</el-button>
+          </template>
+        </el-dialog>
+
+        <el-dialog
+          append-to-body
+          v-model="showConversationRenameDialog"
+          :title="t('renameConversation')"
+          width="420px"
+        >
+          <el-form label-position="top">
+            <el-form-item :label="t('renameConversation')">
+              <el-input
+                v-model="conversationRenameForm.name"
+                :placeholder="t('renameConversation')"
+                @keyup.enter="submitConversationRename"
+              ></el-input>
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="showConversationRenameDialog = false">{{ t('cancel') }}</el-button>
+            <el-button type="primary" @click="submitConversationRename">{{ t('confirm') }}</el-button>
+          </template>
+        </el-dialog>
+
+        <el-dialog
+          append-to-body
+          v-model="showDeleteConversationDialog"
+          :title="t('delete')"
+          width="420px"
+        >
+          <div class="chat-history-confirm-copy">{{ t('confirmDeleteConversation') }}</div>
+          <div class="chat-history-confirm-title">{{ deleteConversationForm.title }}</div>
+          <label class="chat-history-delete-memory-option">
+            <el-switch v-model="deleteConversationForm.deleteMemory"></el-switch>
+            <span>{{ t('deleteRelatedMemory') }}</span>
+          </label>
+          <template #footer>
+            <el-button @click="showDeleteConversationDialog = false">{{ t('cancel') }}</el-button>
+            <el-button type="danger" @click="confirmDeleteConversationDeletion">{{ t('delete') }}</el-button>
+          </template>
+        </el-dialog>
+
+        <el-dialog
+          append-to-body
+          v-model="showDeleteGroupDialog"
+          :title="t('delete')"
+          width="420px"
+        >
+          <div class="chat-history-confirm-copy">{{ t('confirmDeleteGroup') }}</div>
+          <div class="chat-history-confirm-title">{{ deleteGroupForm.name }}</div>
+          <div class="chat-history-confirm-note">{{ getDeleteGroupWarningText() }}</div>
+          <template #footer>
+            <el-button @click="showDeleteGroupDialog = false">{{ t('cancel') }}</el-button>
+            <el-button type="danger" @click="confirmDeleteGroupDeletion">{{ t('delete') }}</el-button>
+          </template>
         </el-dialog>
 
         <div v-show="activeMenu === 'role'" class="page agent-suite-container">
