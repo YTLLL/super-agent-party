@@ -8565,7 +8565,7 @@ handleCreateSlackSeparator(val) {
         // 0. 基础清理逻辑 (保持不变)
         buffer = buffer
             .replace(/#{1,6}\s/gm, '')
-            .replace(/[*_~`]+/g, '')
+            .replace(/[*~`]+/g, '')
             .replace(/^\s*[-*]\s/gm, '')
             .replace(/[\u{2600}-\u{27BF}\u{2700}-\u{27BF}\u{1F300}-\u{1F9FF}]/gu, '')
             .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
@@ -8869,7 +8869,6 @@ handleCreateSlackSeparator(val) {
 
         if (!lastMessage.isPlaying) {
             lastMessage.isPlaying = true;
-            console.log(`Playing audio chunk ${currentIndex}`);
             if (currentIndex == 0){
               this.stopTimer();
               lastMessage.first_sentence_latency = this.elapsedTime;
@@ -8885,6 +8884,8 @@ handleCreateSlackSeparator(val) {
                         expressions: audioChunk.expressions,
                         mimeType: audioChunk.mimeType
                     };
+
+                    console.log(`Sending audio chunk ${currentIndex} to VRM with metadata:`, metadata);
                     // 此时发送，VRM 插件会立刻开始播放，与浏览器端的“静音播放”逻辑完美同步
                     this.sendBinaryToVRM(metadata, audioChunk.buffer);
                 }
