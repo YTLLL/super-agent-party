@@ -553,10 +553,13 @@ let vue_methods = {
         }));
 
       this.conversationGroups = [defaultGroup, ...groups];
-      this.conversations = (Array.isArray(this.conversations) ? this.conversations : []).map(conv => ({
-        ...conv,
-        groupId: conv.groupId || 'default'
-      }));
+      if (Array.isArray(this.conversations)) {
+        this.conversations.forEach(conv => {
+          if (!conv.groupId) {
+            conv.groupId = 'default';
+          }
+        });
+      }
       const nextCollapsedState = { ...(this.collapsedConversationGroups || {}) };
       this.conversationGroups.forEach(group => {
         if (typeof nextCollapsedState[group.id] !== 'boolean') {
@@ -901,17 +904,19 @@ let vue_methods = {
       }
       return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
     },
+    // 修改 getConversationPreview，移除沉重的 DOM/正则替换，改用极简截取
     getConversationPreview(conversation) {
-      const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
+      const messages = Array.isArray(conversation?.messages) ? conversation.messages :[];
       const firstUsefulMessage = messages.find(msg => msg && msg.role !== 'system' && msg.content);
       if (!firstUsefulMessage) return this.t('newChat');
-
+      
+      // 仅做简单的字符串截取（最高效），或者直接返回首句的纯文本部分
       const rawContent = Array.isArray(firstUsefulMessage.content)
         ? firstUsefulMessage.content.map(item => item?.text || '').join(' ')
         : String(firstUsefulMessage.content);
-
-      const preview = rawContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      return preview || this.t('newChat');
+        
+      // 只取前 30 个字符，放弃全局正则替换
+      return rawContent.substring(0, 30) + (rawContent.length > 30 ? '...' : '') || this.t('newChat');
     },
     async syncGroupMemoryAfterReply(userMessage, assistantMessage) {
       const groupId = this.draftConversationGroupId || this.activeConversationGroupId || 'default';
@@ -1787,6 +1792,8 @@ let vue_methods = {
           this.customHttpTools = data.data.custom_http || this.customHttpTools;
       }
       else if (data.type === 'settings') {
+          this.ensureConversationGroups();
+          this.loadConversation(this.conversationId);
           this.isdocker = data.data.isdocker || false;
           this.settings = {
             model: data.data.model || '',
@@ -1887,8 +1894,6 @@ let vue_methods = {
           this.customHttpTools = data.data.custom_http || this.customHttpTools;
           this.isGroupMode = data.data.isGroupMode || this.isGroupMode;
           this.selectedGroupAgents = data.data.selectedGroupAgents || this.selectedGroupAgents;
-          this.ensureConversationGroups();
-          this.loadConversation(this.conversationId);
           // 初始化时确保数据一致性
           this.edgettsLanguage = this.ttsSettings.edgettsLanguage;
           this.edgettsGender = this.ttsSettings.edgettsGender;
