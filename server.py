@@ -1595,7 +1595,13 @@ async def _apply_group_memory_context(request: ChatRequest) -> dict:
     if memory_prompt:
         system_messages = [m for m in request.messages if m.get("role") == "system"]
         dialog_messages = [m for m in request.messages if m.get("role") != "system"]
-        request.messages = system_messages + [{"role": "system", "content": memory_prompt}] + dialog_messages
+        if system_messages:
+            merged_system = copy.deepcopy(system_messages[0])
+            merged_content = _extract_text_content(merged_system.get("content"))
+            merged_system["content"] = f"{merged_content}\n\n{memory_prompt}".strip() if merged_content else memory_prompt
+            request.messages = [merged_system] + dialog_messages
+        else:
+            request.messages = [{"role": "system", "content": memory_prompt}] + dialog_messages
     return {"enabled": memory_enabled, "group_id": group_id, "group": group, "memories": memories}
 
 async def _extract_group_memories(client, settings: dict, payload: dict) -> list[dict]:
@@ -1771,12 +1777,30 @@ async def _upsert_group_memories(group_id: str, source_chat_id: str, source_mess
 async def _invalidate_group_memories_by_chat(source_chat_id: str) -> None:
     if not source_chat_id:
         return
-    now_ts = int(time.time() * 1000)
     import aiosqlite
     async with aiosqlite.connect(COVS_PATH) as db:
         await db.execute(
-            "UPDATE group_memory SET status = 'deleted', updated_at = ? WHERE source_chat_id = ?",
-            (now_ts, source_chat_id),
+            "DELETE FROM group_memory WHERE source_chat_id = ?",
+            (source_chat_id,),
+        )
+        await db.commit()
+
+async def _invalidate_group_memories_by_group(group_id: str) -> None:
+    if not group_id:
+        return
+    import aiosqlite
+    async with aiosqlite.connect(COVS_PATH) as db:
+        await db.execute(
+            "DELETE FROM group_memory WHERE group_id = ?",
+            (group_id,),
+        )
+        await db.commit()
+
+async def _invalidate_all_group_memories() -> None:
+    import aiosqlite
+    async with aiosqlite.connect(COVS_PATH) as db:
+        await db.execute(
+            "DELETE FROM group_memory",
         )
         await db.commit()
 
@@ -6955,6 +6979,9 @@ class DeleteConversationRequest(BaseModel):
     conversation_id: Union[str, int, float]
     delete_memory: bool = False
 
+class ClearGroupMemoryRequest(BaseModel):
+    group_id: Union[str, int, float]
+
 @app.post("/api/group-memory/extract")
 async def extract_group_memory_endpoint(req: GroupMemoryExtractRequest):
     req.group_id = _normalize_entity_id(req.group_id)
@@ -6991,6 +7018,17 @@ async def delete_conversation_endpoint(req: DeleteConversationRequest):
     await save_covs(covs)
     if req.delete_memory:
         await _invalidate_group_memories_by_chat(req.conversation_id)
+    return {"success": True}
+
+@app.post("/api/group-memory/clear-group")
+async def clear_group_memory_endpoint(req: ClearGroupMemoryRequest):
+    req.group_id = _normalize_entity_id(req.group_id)
+    await _invalidate_group_memories_by_group(req.group_id)
+    return {"success": True}
+
+@app.post("/api/group-memory/clear-all")
+async def clear_all_group_memory_endpoint():
+    await _invalidate_all_group_memories()
     return {"success": True}
 
 from py.task_center import get_task_center
