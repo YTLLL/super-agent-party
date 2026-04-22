@@ -3530,13 +3530,12 @@ function addcontrolPanel() {
         if (!isElectron) {
             controlPanel.appendChild(voiceControlBtn);            // 语音控制
         }
-        
-        controlPanel.appendChild(moreButton);          // 🌟 更多按钮
-        controlPanel.appendChild(refreshButton);       // 刷新
-        controlPanel.appendChild(closeButton);         // 关闭
         if (isElectron) {
             controlPanel.appendChild(vmcButton);           // VMC 设置
         }
+        controlPanel.appendChild(moreButton);          // 🌟 更多按钮
+        controlPanel.appendChild(refreshButton);       // 刷新
+        controlPanel.appendChild(closeButton);         // 关闭
 
 
         // 2. 组装子面板（收纳次要按钮）
