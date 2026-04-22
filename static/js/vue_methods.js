@@ -723,6 +723,28 @@ let vue_methods = {
 
       this.conversations = this.conversations.filter(c => c.id !== conversationId);
     },
+    async clearGroupMemoriesByGroupId(groupId) {
+      const response = await fetch('/api/group-memory/clear-group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          group_id: this.stringifyEntityId(groupId),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('delete_failed');
+      }
+    },
+    async clearAllGroupMemories() {
+      const response = await fetch('/api/group-memory/clear-all', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('delete_failed');
+      }
+    },
     async clearAllHistoryRecords() {
       try {
         await this.$confirm(this.t('confirmClearAllHistory'), this.t('warning'), {
@@ -737,6 +759,7 @@ let vue_methods = {
             deleteMemory: true,
           });
         }
+        await this.clearAllGroupMemories();
 
         this.conversationId = null;
         this.messages = [{ id: Date.now() + Math.random(), role: 'system', content: this.system_prompt }];
@@ -797,13 +820,14 @@ let vue_methods = {
         .filter(conv => (conv.groupId || 'default') === groupId)
         .map(conv => conv.id);
 
-      for (const conversationId of groupConversationIds) {
-        await this.deleteConversationById(conversationId, {
-          deleteMemory: true,
-        });
-      }
+        for (const conversationId of groupConversationIds) {
+          await this.deleteConversationById(conversationId, {
+            deleteMemory: true,
+          });
+        }
+        await this.clearGroupMemoriesByGroupId(groupId);
 
-      this.conversationGroups = this.conversationGroups.filter(group => group.id !== groupId);
+        this.conversationGroups = this.conversationGroups.filter(group => group.id !== groupId);
 
       if (this.draftConversationGroupId === groupId) {
         this.draftConversationGroupId = 'default';
@@ -837,6 +861,7 @@ let vue_methods = {
             deleteMemory: true,
           });
         }
+        await this.clearGroupMemoriesByGroupId(groupId);
 
         if (this.conversationId === null) {
           this.messages = [{ id: Date.now() + Math.random(), role: 'system', content: this.system_prompt }];
@@ -10771,19 +10796,7 @@ async deleteGaussSceneOption(sceneId) {
 
 
   async confirmClearAll() {
-    try {
-      await this.$confirm(this.t('confirmClearAllHistory'), this.t('warning'), {
-        confirmButtonText: this.t('confirm'),
-        cancelButtonText: this.t('cancel'),
-        type: 'warning'
-      });
-      
-      this.conversations = [];
-      this.conversationId = null;
-      await this.saveConversations();
-    } catch (error) {
-      // 用户取消操作
-    }
+    await this.clearAllHistoryRecords();
   },
 
   async keepLastWeek() {
