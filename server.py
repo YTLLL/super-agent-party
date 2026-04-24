@@ -2937,6 +2937,42 @@ def get_drs_stage_system_message(DRS_STAGE,user_prompt,full_content):
 """    
     return search_prompt
 
+# =========================================================================
+# 第二阶段：强制合法性清洗 (Sanitizer) - 无论是否压缩都必须执行
+# 目标：彻底杜绝 Messages with role 'tool' must be a response... 报错
+# =========================================================================
+def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
+def get_tcs(m): 
+    if get_role(m) != "assistant": return None
+    return m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)
+
+# =========================================================================
+# 第三阶段：思考模式字段填充 (Thinking Mode Sanitizer)
+# 目标：防止 "reasoning_content must be passed back" 错误
+# 策略：为所有 assistant 消息添加 reasoning_content: ""
+# =========================================================================
+
+def ensure_thinking_fields(messages):
+    """
+    为所有 assistant 消息强制添加 reasoning_content: ""（空字符串）
+    """
+    if not messages:
+        return messages
+    
+    for msg in messages:
+        role = get_role(msg)
+        
+        if role == "assistant":
+            # 处理字典格式
+            if isinstance(msg, dict):
+                # 强制设置为空字符串
+                msg["reasoning_content"] = ""
+            
+            # 处理对象格式
+            else:
+                setattr(msg, "reasoning_content", "")
+    
+    return messages
 async def generate_stream_response(client, reasoner_client, request: ChatRequest, settings: dict, 
                                    fastapi_base_url, enable_thinking, enable_deep_research, 
                                    enable_web_search, async_tools_id):
@@ -3068,7 +3104,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
         chat_messages = request.messages # 这里的 chat_messages 包含 system
         
         if max_rounds > 0:
-            def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
             
             # 区分系统消息和对话消息
             sys_msgs = [m for m in chat_messages if get_role(m) == "system"]
@@ -3104,15 +3139,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 compressed_dialog = [dialog_msgs[i] for i in sorted(list(keep_indices))]
                 chat_messages = sys_msgs + compressed_dialog
                 print(f"[Context] Compressed to {len(chat_messages)} msgs.")
-
-        # =========================================================================
-        # 第二阶段：强制合法性清洗 (Sanitizer) - 无论是否压缩都必须执行
-        # 目标：彻底杜绝 Messages with role 'tool' must be a response... 报错
-        # =========================================================================
-        def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
-        def get_tcs(m): 
-            if get_role(m) != "assistant": return None
-            return m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)
 
         final_messages = []
         pending_tool_call_ids = set()
@@ -3171,6 +3197,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 break
 
         request.messages = final_messages
+        request.messages = ensure_thinking_fields(request.messages)
         # =========================================================================
         images = await images_in_messages(request.messages,fastapi_base_url)
         request.messages = await message_without_images(request.messages)
@@ -4546,7 +4573,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         chat_messages = request.messages # 这里的 chat_messages 包含 system
                         
                         if max_rounds > 0:
-                            def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
                             
                             # 区分系统消息和对话消息
                             sys_msgs = [m for m in chat_messages if get_role(m) == "system"]
@@ -4583,14 +4609,6 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 chat_messages = sys_msgs + compressed_dialog
                                 print(f"[Context] Compressed to {len(chat_messages)} msgs.")
 
-                        # =========================================================================
-                        # 第二阶段：强制合法性清洗 (Sanitizer) - 无论是否压缩都必须执行
-                        # 目标：彻底杜绝 Messages with role 'tool' must be a response... 报错
-                        # =========================================================================
-                        def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
-                        def get_tcs(m): 
-                            if get_role(m) != "assistant": return None
-                            return m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)
 
                         final_messages = []
                         pending_tool_call_ids = set()
@@ -4649,6 +4667,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                                 break
 
                         request.messages = final_messages
+                        request.messages = ensure_thinking_fields(request.messages)
                         # =========================================================================
                         reasoner_messages.append(
                             {
@@ -5272,7 +5291,6 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
         chat_messages = request.messages # 这里的 chat_messages 包含 system
         
         if max_rounds > 0:
-            def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
             
             # 区分系统消息和对话消息
             sys_msgs = [m for m in chat_messages if get_role(m) == "system"]
@@ -5308,15 +5326,6 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                 compressed_dialog = [dialog_msgs[i] for i in sorted(list(keep_indices))]
                 chat_messages = sys_msgs + compressed_dialog
                 print(f"[Context] Compressed to {len(chat_messages)} msgs.")
-
-        # =========================================================================
-        # 第二阶段：强制合法性清洗 (Sanitizer) - 无论是否压缩都必须执行
-        # 目标：彻底杜绝 Messages with role 'tool' must be a response... 报错
-        # =========================================================================
-        def get_role(m): return m.get("role") if isinstance(m, dict) else m.role
-        def get_tcs(m): 
-            if get_role(m) != "assistant": return None
-            return m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)
 
         final_messages = []
         pending_tool_call_ids = set()
@@ -5375,6 +5384,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                 break
 
         request.messages = final_messages
+        request.messages = ensure_thinking_fields(request.messages)
         # =========================================================================
 
     from py.load_files import get_files_content,file_tool,image_tool
