@@ -1992,7 +1992,7 @@ docker-compose up -d
     frameborder="0" 
     allowfullscreen>
   </iframe>
-  <p>Powered By<a href="${backendURL}/chat.html">Super Agent Party</a></p>
+  <p>Powered By<a href="https://github.com/heshengtao/super-agent-party">Super Agent Party</a></p>
 </div>`,
     codeExamples: {
       python: `from openai import OpenAI
