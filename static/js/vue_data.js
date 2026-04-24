@@ -1598,7 +1598,6 @@ let vue_data = {
       { id: 'im_bot', title: 'imBot', icon: 'fa-solid fa-comment' },
       { id: 'read_bot', title: 'readBot', icon: "fa-solid fa-book-open-reader"}, 
       { id: 'translate_bot', title: 'translateBot', icon: "fa-solid fa-language"}, 
-      { id: 'bot_config', title: 'bot_config', icon: 'fa-solid fa-robot' }
     ],
     activeImBotTab: 'qq',
     sourceText: '',
@@ -1824,10 +1823,20 @@ let vue_data = {
       body: ''
     },
     editingCustomHttpTool: false,
+
+    searchQuery: '', // 搜索框的值
+    activeCategory: 'all', // 当前选中的分类：'all' | 'local' | 'cloud'
+    
+    // 定义属于本地/自建的供应商列表
+    localVendors:[
+      'Ollama', 'Vllm', 'LMstudio', 'xinference', 
+      'LocalAI', 'ttswebui', 'Dify', 'newapi'
+    ],
+
     vendorValues: [
-      'custom','customAnthropic', 'OpenAI', 'Ollama','Vllm','LMstudio','xinference','Dify','newapi','LocalAI','ttswebui', 'Deepseek', 'Volcano','302.AI',
-      'siliconflow', 'aliyun', 'ZhipuAI', 'moonshot', 'minimax', 'Gemini','Anthropic', 
-      'Grok', 'mistral', 'lingyi','baichuan', 'qianfan', 'hunyuan', 'stepfun', 'Github', 
+      'custom','customAnthropic', 'OpenAI','Anthropic', 'Gemini','Grok', 'Ollama','Vllm','LMstudio','xinference','Dify','newapi','LocalAI','ttswebui', 'Deepseek', 'Volcano','302.AI',
+      'siliconflow', 'aliyun', 'ZhipuAI', 'moonshot', 'minimax', 
+       'mistral', 'lingyi','baichuan', 'qianfan', 'hunyuan', 'stepfun', 'Github', 
       'openrouter','together', 'fireworks', '360', 'Nvidia',
       'jina', 'gitee', 'perplexity', 'infini',
       'modelscope', 'tencent', 'MiMo','longcat'

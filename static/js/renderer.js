@@ -1736,6 +1736,30 @@ const app = Vue.createApp({
         value
       }));
     },
+  // 新增：根据搜索词和分类过滤后的供应商列表
+  filteredVendorOptions() {
+    return this.vendorOptions.filter(item => {
+      // 1. 搜索过滤 (不区分大小写匹配 value 或 翻译后的 label)
+      const keyword = this.searchQuery.toLowerCase();
+      const matchSearch = 
+        item.value.toLowerCase().includes(keyword) || 
+        item.label.toLowerCase().includes(keyword);
+
+      // 2. 分类过滤
+      const isLocal = this.localVendors.includes(item.value);
+      let matchCategory = true;
+      
+      if (this.activeCategory === 'local') {
+        matchCategory = isLocal;
+      } else if (this.activeCategory === 'cloud') {
+        matchCategory = !isLocal;
+      }
+
+      // 同时满足搜索和分类条件
+      return matchSearch && matchCategory;
+    });
+  },
+
     MCPvendorOptions() {
       return this.MCPvendorValues.map(value => ({
         label: this.t(`MCPvendor.${value}`), // 使用统一的翻译键

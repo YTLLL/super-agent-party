@@ -1652,4 +1652,8 @@ Key3`,
         'enabledVtsExpressions': 'Enable VTS Expressions',
         'enabledVtsMotions': 'Enable VTS Motions',
         'connectToVTS': 'Connect to VTS',
+        'allModel': 'All',
+        'cloudModel': 'Cloud',
+        'localModel': 'Local',
+        'searchProvider': 'Search Provider',
     }

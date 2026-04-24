@@ -6133,30 +6133,56 @@ function updateElement(el, rawMarkdown, formatFn) {
                   id="show-Add-Dialog"
                   :title="t('addNewProvider')"
                   width="80%"
-                  @closed="newProviderTemp = { vendor: '', url: '' }"
+                  @closed="newProviderTemp = { vendor: '', url: '' }; searchQuery = ''; activeCategory = 'all'"
                 >
-                  <!-- 供应商选择区域 -->
-                  <el-form-item :label="t('provider')" required label-position="top">
-                    <div class="vendor-grid">
-                      <div 
-                        v-for="item in vendorOptions" 
-                        :key="item.value"
-                        class="vendor-card"
-                        :class="{ 'selected': newProviderTemp.vendor === item.value }"
-                        @click="handleSelectVendor(item.value)"
-                        id="vendor-Option"
-                      >
-                        <img 
-                          :src="getVendorLogo(item.value)" 
-                          :alt="item.label"
-                          class="vendor-logo"
-                        />
-                        <div class="vendor-name">{{ t(item.label) }}</div>
+                  <el-form>
+                    <!-- 供应商选择区域 -->
+                    <el-form-item :label="t('provider')" required label-position="top">
+                      
+                      <!-- 新增：搜索和分类过滤器区域 -->
+                      <div class="vendor-filter-tools">
+                        <el-input
+                          v-model="searchQuery"
+                          :placeholder="t('searchProvider')" 
+                          prefix-icon="Search"
+                          clearable
+                          class="search-input"
+                        ></el-input>
+                        <el-radio-group v-model="activeCategory" class="category-tabs">
+                          <el-radio-button label="all">{{ t('allModel') }}</el-radio-button>
+                          <el-radio-button label="cloud">{{ t('cloudModel') }}</el-radio-button>
+                          <el-radio-button label="local">{{ t('localModel') }}</el-radio-button>
+                        </el-radio-group>
                       </div>
-                    </div>
-                  </el-form-item>
 
+                      <!-- 供应商卡片列表 (注意此处改为遍历 filteredVendorOptions) -->
+                      <div class="vendor-grid">
+                        <div 
+                          v-for="item in filteredVendorOptions" 
+                          :key="item.value"
+                          class="vendor-card"
+                          :class="{ 'selected': newProviderTemp.vendor === item.value }"
+                          @click="handleSelectVendor(item.value)"
+                          id="vendor-Option"
+                        >
+                          <img 
+                            :src="getVendorLogo(item.value)" 
+                            :alt="item.label"
+                            class="vendor-logo"
+                          />
+                          <div class="vendor-name">{{ t(item.label) }}</div>
+                        </div>
+                        
+                        <!-- 当没有搜索结果时显示提示 -->
+                        <el-empty 
+                          v-if="filteredVendorOptions.length === 0" 
+                          :description="t('noResultsFound')" 
+                          style="width: 100%; grid-column: 1 / -1;" 
+                        />
+                      </div>
+                    </el-form-item>
 
+                    <!-- 原有的自建 URL 和 提示信息保持不变 -->
                     <el-form-item
                       v-if="newProviderTemp.vendor === 'custom' || newProviderTemp.vendor === 'customAnthropic'"
                       :label="t('customURL')"
@@ -6196,7 +6222,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <el-button @click="showAddDialog = false">{{ t('cancel') }}</el-button>
                     <el-button
                       type="primary"
-                      id = "confirm-Add-Provider-Button"
+                      id="confirm-Add-Provider-Button"
                       @click="confirmAddProvider"
                       :disabled="!validProvider"
                     >
@@ -12549,80 +12575,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                 
                 <!-- 右侧内容 -->
                 <div class="suite-content">
-                  <!-- 通用配置页面 -->
-                  <div v-show="subMenu === 'bot_config'">
-                    <el-form class="settings-form" :model="BotConfig" label-position="top">
-                      <div class="tool-item">
-                        <!-- 通用配置头部 -->
-                        <div class="tool-header" style="display: flex; justify-content: space-between; align-items: center;">
-                          <span>
-                            <el-icon><i class="fa-solid fa-robot"></i></el-icon>
-                            {{ t('bot_config') }} <!-- 本地化文本 -->
-                          </span>
-                        </div>
-                        <div class="tool-item">
-                          <div class="tool-header">
-                            <div class="header-left">
-                              <span>
-                                {{t('imgHost')}}
-                              </span>
-                            </div>
-                            <el-switch v-model="BotConfig.imgHost_enabled" @click.stop @change="autoSaveSettings"/>
-                          </div>
-                          <div class="tool-content">
-                            <!-- 图床/文件床配置 -->
-                            <el-form-item :label="t('imgHostType')">
-                              <template #label>
-                                  <span>
-                                    {{ t('imgHostType') }}
-                                    <el-link
-                                      v-if="BotConfig.imgHost === 'easyImage2'"
-                                      type="primary"
-                                      :underline="false"
-                                      href="https://github.com/icret/EasyImages2.0" 
-                                      target="_blank"
-                                    >
-                                      <el-icon class="mr-1">
-                                        <i class="fa-solid fa-key"></i>
-                                      </el-icon>{{ t('gotoEasyImage2Github') }}
-                                    </el-link>
-                                  </span>
-                              </template>
-                              <el-select 
-                                v-model="BotConfig.imgHost"
-                                @change="changeImgHost">
-                                <el-option
-                                  v-for="option in imgHostOptions"
-                                  :key="option.value"
-                                  :label="option.label"
-                                  :value="option.value"
-                                >
-                                </el-option>
-                              </el-select>
-                            </el-form-item>
-                            <!--easyimage2图床-->
-                            <el-form-item v-if="BotConfig.imgHost === 'easyImage2'" :label="t('baseURL')">
-                              <el-input
-                                v-model="BotConfig.EI2_base_url"
-                                placeholder="https://png.cm/api/index.php"
-                                class="full-width-input"
-                                @change="autoSaveSettings"
-                              />
-                            </el-form-item>
-                            <el-form-item v-if="BotConfig.imgHost === 'easyImage2'"  :label="t('apiKey')">
-                              <el-input
-                                v-model="BotConfig.EI2_api_key"
-                                :placeholder="t('apiKeyPlaceholder')"
-                                class="full-width-input"
-                                show-password
-                                @change="autoSaveSettings"
-                              />
-                            </el-form-item>
-                          </div>
-                        </div>
-                      </div>
-                    </el-form>
-                  </div>
 
                   <!-- 合并后的 IM 机器人聚合页面 -->
                   <div v-show="subMenu === 'im_bot'">
