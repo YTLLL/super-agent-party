@@ -6462,6 +6462,16 @@ function updateElement(el, rawMarkdown, formatFn) {
                               v-model="param.value" 
                               @change="autoSaveSettings"
                             ></el-switch>
+
+                            <el-input
+                              v-if="param.type === 'dict'"
+                              v-model="param.value"
+                              type="textarea"
+                              :autosize="{ minRows: 1, maxRows: 4 }"
+                              placeholder='例如: {"type": "enabled"}'
+                              @input="autoSaveSettings"
+                            ></el-input>
+
                           </div>
                       
                           <el-button
@@ -6762,6 +6772,16 @@ function updateElement(el, rawMarkdown, formatFn) {
                               v-model="param.value" 
                               @change="autoSaveSettings"
                             ></el-switch>
+
+                            <el-input
+                              v-if="param.type === 'dict'"
+                              v-model="param.value"
+                              type="textarea"
+                              :autosize="{ minRows: 1, maxRows: 4 }"
+                              placeholder='eg: {"type": "enabled"}'
+                              @input="autoSaveSettings"
+                            ></el-input>
+
                           </div>
                       
                           <el-button

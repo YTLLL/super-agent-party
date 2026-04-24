@@ -311,8 +311,10 @@ let vue_methods = {
 
     async updateParamType(index) {
       const param = this.settings.extra_params[index];
-      // 根据类型初始化值
       switch(param.type) {
+        case 'dict':
+          param.value = '{}'; // 初始化为空 JSON 字符串
+          break;
         case 'boolean':
           param.value = false;
           break;
@@ -330,6 +332,9 @@ let vue_methods = {
       const param = this.fastSettings.extra_params[index];
       // 根据类型初始化值
       switch(param.type) {
+        case 'dict':
+          param.value = '{}'; // 初始化为空 JSON 字符串
+          break;
         case 'boolean':
           param.value = false;
           break;
