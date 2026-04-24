@@ -144,7 +144,7 @@ let vue_data = {
     },
     target_lang: 'zh-CN',
     reasoningEfforts:[
-      { value: null, label: 'auto' },
+      { value: null, label: 'reason-null' },
       { value: 'minimal', label: 'reason-minimal' },
       { value: 'low', label: 'reason-low' },
       { value: 'medium', label: 'reason-medium' },
@@ -169,7 +169,8 @@ let vue_data = {
       { value: 'integer', label: 'integer' },
       { value: 'float', label: 'float' },
       { value: 'boolean', label: 'boolean' },
-      {  value: 'dict', label: 'JSON/Dict', },
+      { value: 'dict', label: 'JSON Object (Dict)' },
+      { value: 'list', label: 'JSON List (Array)'}, 
     ],
     ws: null,
     messages: [],
