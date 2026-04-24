@@ -656,8 +656,211 @@ function updateElement(el, rawMarkdown, formatFn) {
           </div>
         </div>
 
+        <div v-show="activeMenu === 'dashboard'" class="page dashboard-container">
+          <div class="dashboard-hero">
+            <h1 class="dashboard-title">{{ t('whatToChatToday') }}</h1>
+            
+            <!-- 中心大输入框容器 -->
+            <div class="hero-input-wrapper" :class="{ 'is-focus': isHeroInputFocus }">
+              
+              <!-- ✨ 新增：附件预览区域 ✨ -->
+              <div class="attachment-preview-list" v-show="allItems.length > 0">
+                <div v-for="(item, index) in allItems" :key="index" class="attachment-item">
+                  
+                  <!-- 图片/视频类型 -->
+                  <div v-if="item.uiCategory === 'image'" class="preview-image-box">
+                    <video v-if="item.detectedType === 'video'" 
+                          :src="formatFileUrl(item.path)" 
+                          controls 
+                          style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                    </video>
+                    <img v-else :src="formatFileUrl(item.path)" />
+                    <div class="overlay">
+                      <el-button 
+                        type="danger" 
+                        size="small" 
+                        @click.stop="removeItem(index, item.uiCategory)"
+                      >
+                        <i class="fa-solid fa-trash"></i>
+                      </el-button>
+                    </div>
+                  </div>
+
+                  <!-- 文件类型 -->
+                  <div v-else class="file-card-box">
+                    <div class="file-icon">
+                      <i class="fa-solid fa-file-lines"></i>
+                    </div>
+                    <div class="file-info">
+                      <span class="file-name" :title="item.name">{{ item.name }}</span>
+                    </div>
+                    <div class="remove-btn" @click.stop="removeItem(index, item.uiCategory)">
+                      <i class="fa-solid fa-xmark"></i>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- ✨ 新增：拖拽外壳与输入框 ✨ -->
+              <div 
+                class="input-container-wrapper"
+                :class="{ 'is-dragging': isDragging }"
+                @dragover.prevent="isDragging = true"
+                @dragleave.prevent="isDragging = false"
+                @drop.prevent="handleInputDrop"
+              >
+                <!-- 注意加入了 @paste="handleInputPaste" 和 class="input-box-transparent" -->
+                <el-input
+                  v-model="userInput"
+                  type="textarea"
+                  :rows="4"
+                  :placeholder="t('inputMessage')"
+                  resize="none"
+                  @focus="isHeroInputFocus = true"
+                  @blur="isHeroInputFocus = false"
+                  @paste="handleInputPaste"
+                  @keydown="handleKeyDown($event)"
+                  class="input-box-transparent hero-textarea"
+                ></el-input>
+
+                <!-- 拖拽时的遮罩提示 -->
+                <div v-if="isDragging" class="drop-overlay">
+                  <el-icon><Upload /></el-icon>
+                  <span>{{ t('dropToUpload') }}</span>
+                </div>
+              </div>
+              
+              <!-- 底部工具栏 -->
+              <div class="hero-input-footer">
+                <div class="left-actions" style="display: flex; gap: 8px;">
+                  <!-- 附件上传按钮 -->
+                  <el-tooltip :content="t('uploadFileorImage')" placement="top">
+                    <el-button @click="browseAllFiles">
+                      <i class="fa-solid fa-paperclip"></i>
+                    </el-button>
+                  </el-tooltip>
+
+                  <!-- ✨ 迁移：语音合成 (TTS) 开关 ✨ -->
+                  <el-tooltip :content="t('tts')" placement="top">
+                    <el-button
+                      @click="ttsSettings.enabled=!ttsSettings.enabled;changeTTSstatus();"
+                      class="icon-btn"
+                      :type="ttsSettings.enabled ? 'primary' : 'default'"
+                    >
+                      <i v-if="ttsSettings.enabled" class="fa-solid fa-volume-high"></i>
+                      <i v-else class="fa-solid fa-volume-xmark"></i>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+                
+                <div class="right-actions" style="display: flex; gap: 8px; align-items: center;">
+                 
+                  <!-- ✨ 移动端/桌面端 适配切换 ✨ -->
+                  <el-tooltip :content="t('clickToSwitchModel')" placement="top" :show-after="500">
+                    <!-- 桌面端：显示胶囊 Pill -->
+                    <div v-if="!isMobile" class="status-pill hero-model-pill" @click="showModelDialog = true">
+                      <i class="fa-solid fa-microchip"></i>
+                      <span class="pill-text">{{ settings?.model !== '' ? settings.model : t('noModelSelected') }}</span>
+                    </div>
+                    
+                    <!-- 移动端：显示图标按钮，与旁边按钮样式一致 -->
+                    <el-button v-else @click="showModelDialog = true" class="icon-btn">
+                      <i class="fa-solid fa-microchip"></i>
+                    </el-button>
+                  </el-tooltip>
+                 
+                  <!-- 随机话题按钮 -->
+                  <el-tooltip :content="t('randomTopic')" placement="top">
+                    <el-button @click="generateRandomTopic">
+                      <i v-if="!isTopicGenerating" class="fa-solid fa-dice"></i>
+                      <i v-else class="fa-solid fa-dice fa-spin"></i>
+                    </el-button>
+                  </el-tooltip>
+
+                  <!-- ✨ 迁移与逻辑切换：语音识别 (ASR) / 发送按钮 ✨ -->
+                  <template v-if="!userInput">
+                    <el-tooltip :content="t('asr')" placement="top">
+                      <el-button
+                        @click="toggleASR"
+                        class="icon-btn"
+                        :type="asrSettings.enabled ? 'primary' : 'default'"
+                      >
+                        <i class="fa-solid fa-microphone"></i>
+                      </el-button>
+                    </el-tooltip>
+                  </template>
+                  
+                  <template v-else>
+                    <el-tooltip :content="t('sendMessage')" placement="top">
+                      <el-button type="primary" class="hero-send-btn" @click="handleDashboardSend">
+                        <i class="fa-solid fa-paper-plane"></i>
+                      </el-button>
+                    </el-tooltip>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 引导卡片矩阵 (瀑布流布局) -->
+          <div class="guide-grid">
+            <!-- 1. 开始对话 -->
+            <div class="guide-card" @click="activeMenu = 'home'">
+              <div class="card-icon blue"><i class="fa-solid fa-comment"></i></div>
+              <div class="card-info">
+                <h3>{{ t('startChatting') }}</h3>
+              </div>
+            </div>
+
+            <!-- 2. 召唤伴侣 -->
+            <div class="guide-card" @click="startVRM">
+              <div class="card-icon pink"><i class="fa-solid fa-user-ninja"></i></div>
+              <div class="card-info">
+                <h3>{{ t('summonCompanion') }}</h3>
+              </div>
+            </div>
+
+            <!-- 收藏的扩展卡片动态渲染 -->
+            <div v-for="ext in favoriteExtensions" :key="ext.id" class="guide-card extension" @click="openExtensionInWindow(ext)">
+              <div class="card-icon purple"><i class="fa-solid fa-puzzle-piece"></i></div>
+              <div class="card-info">
+                <h3>{{ ext.name }}</h3>
+              </div>
+              <div class="fav-star active" @click.stop="toggleFavoriteExtension(ext)">
+                <i class="fa-solid fa-star"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- 万能智能体配置弹窗 -->
+          <el-dialog append-to-body v-model="showOmniAgentDialog" :title="t('omniAgentConfig')" width="80%">
+            <el-form label-position="top">
+              <el-form-item :label="t('CLIEngine')">
+                <el-select v-model="CLISettings.engine" class="full-width">
+                  <el-option :label="t('localEnvironment')" value="local"></el-option>
+                  <el-option :label="t('dockerSandbox')" value="ds"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item :label="t('workspace')" required>
+                <el-input v-model="CLISettings.cc_path" readonly>
+                  <template #append>
+                    <el-button @click="browseDirectory"><i class="fa-solid fa-folder-open"></i></el-button>
+                  </template>
+                </el-input>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="showOmniAgentDialog = false">{{ t('cancel') }}</el-button>
+              <el-button type="primary" :disabled="!CLISettings.cc_path" @click="confirmOmniAgent">
+                {{ t('confirmAndStart') }}
+              </el-button>
+            </template>
+          </el-dialog>
+        </div>
+
         <!-- 聊天界面保持不变 -->
-        <div v-show="activeMenu === 'dashboard'" class="page chat-container">
+        <div v-show="activeMenu === 'home'" class="page chat-container">
         <!-- 最外层 wrapper，负责整体左右布局 -->
         <div class="chat-wrapper" 
             ref="chatWrapperRef"
@@ -1673,77 +1876,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 <span class="pill-text">{{ currentViewName }}</span>
                               </div>
                             </el-tooltip>
-
-                            <!-- 3. 工作区目录指示器 (仅 CLI 启用时显示) -->
-                            <el-tooltip :content="t('workspace')" placement="top" :show-after="500">
-                              <div class="status-pill" v-if="CLISettings.enabled" @click="browseDirectory">
-                                <i class="fa-solid fa-folder-open"></i>
-                                <span class="pill-text">{{ CLISettings.cc_path ? CLISettings.cc_path.split(/[/\\]/).filter(Boolean).pop() : t('pleaseSelectWorkspaceFirst') }}</span>
-                              </div>
-                            </el-tooltip>
-
-                            <!-- 4. CLI 权限模式指示器 (仅 CLI 启用时显示) -->
-                            <el-dropdown 
-                              v-if="CLISettings.enabled" 
-                              placement="top" 
-                              trigger="click"
-                              class="status-pill-dropdown"
-                            >
-                              <!-- ⚠️ 关键修复：让 status-pill 直接作为下拉组件的触发器 -->
-                              <div class="status-pill">
-                                <el-tooltip :content="t('permissionMode')" placement="top" :show-after="500">
-                                  <!-- 将内容包裹在一个 span 中，使得 tooltip 正常工作 -->
-                                  <span style="display: inline-flex; align-items: center; gap: 6px;">
-                                    <i class="fa-solid fa-shield-halved"></i>
-                                    <span class="pill-text">
-                                      {{ 
-                                        CLISettings.engine === 'local' ? localEnvSettings.permissionMode :
-                                        CLISettings.engine === 'ds' ? dsSettings.permissionMode :
-                                        CLISettings.engine === 'cc' ? ccSettings.permissionMode :
-                                        CLISettings.engine === 'qc' ? qcSettings.permissionMode : 'unknown'
-                                      }}
-                                    </span>
-                                  </span>
-                                </el-tooltip>
-                              </div>
-                              
-                              <template #dropdown>
-                                <el-dropdown-menu>
-                                  <!-- 本地环境 (Local) 选项 -->
-                                  <template v-if="CLISettings.engine === 'local'">
-                                    <el-dropdown-item @click="localEnvSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="localEnvSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="localEnvSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="localEnvSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="localEnvSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
-                                  </template>
-                                  <!-- Docker Sandbox (DS) 选项 -->
-                                  <template v-else-if="CLISettings.engine === 'ds'">
-                                    <el-dropdown-item @click="dsSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="dsSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="dsSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="dsSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('bypassPermissions') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="dsSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('coworkPermissionMode') }}</el-dropdown-item>
-                                  </template>
-                                  <!-- Claude Code (CC) 选项 -->
-                                  <template v-else-if="CLISettings.engine === 'cc'">
-                                    <el-dropdown-item @click="ccSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="ccSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="ccSettings.permissionMode='acceptEdits'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="ccSettings.permissionMode='bypassPermissions'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="ccSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
-                                  </template>
-                                  <!-- Qwen Code (QC) 选项 -->
-                                  <template v-else-if="CLISettings.engine === 'qc'">
-                                    <el-dropdown-item @click="qcSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="qcSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="qcSettings.permissionMode='auto-edit'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="qcSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="qcSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
-                                  </template>
-                                </el-dropdown-menu>
-                              </template>
-                            </el-dropdown>
                         </template>
 
                       </div>
