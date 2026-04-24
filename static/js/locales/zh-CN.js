@@ -1671,4 +1671,5 @@ key3`,
         'reason-max': '最大(max)',
         'reason-none': '无(none)',
         'reason-null': '不启用该参数',
+        'top_p': 'Top P',
     }
