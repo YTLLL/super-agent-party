@@ -1417,30 +1417,44 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         logger.error(f"Error calling tool {tool_name}: {e}")
         return f"Error calling tool {tool_name}: {e}"
 
-def process_extra_params(extra_params):
+def process_extra_params(extra_params_list):
+    """
+    将前端传来的 extra_params 列表转换为 extra_body 字典
+    """
     extra_body = {}
-    for item in extra_params:
+    for item in extra_params_list:
         name = item.get('name', '').strip()
         if not name:
             continue
             
         value = item.get('value')
-        param_type = item.get('type')
+        p_type = item.get('type')
 
-        # 如果类型是 dict，尝试解析 JSON 字符串
-        if param_type == 'dict':
-            try:
+        try:
+            if p_type == 'dict' or p_type == 'list':
+                # 如果是字符串形式，尝试解析
                 if isinstance(value, str):
-                    extra_body[name] = json.loads(value)
+                    # 只有在非空时才解析
+                    extra_body[name] = json.loads(value) if value.strip() else ({} if p_type == 'dict' else [])
                 else:
                     extra_body[name] = value
-            except Exception as e:
-                # 解析失败时可以记录日志或跳过，或者保持原样
-                print(f"JSON Parse Error for {name}: {e}")
-                extra_body[name] = value 
-        else:
-            extra_body[name] = value
-            
+            elif p_type == 'integer':
+                extra_body[name] = int(value)
+            elif p_type == 'float':
+                extra_body[name] = float(value)
+            elif p_type == 'boolean':
+                # 确保是布尔值
+                extra_body[name] = bool(value)
+            else:
+                # 默认 string
+                extra_body[name] = str(value)
+        except (json.JSONDecodeError, ValueError) as e:
+            # 如果解析 JSON 失败，可以根据需求：
+            # 1. 保持原样发送（让 API 报错）
+            # 2. 或者忽略该参数
+            print(f"Error parsing param {name}: {e}")
+            extra_body[name] = value 
+
     return extra_body
 
 class ChatRequest(BaseModel):

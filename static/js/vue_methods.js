@@ -309,11 +309,39 @@ let vue_methods = {
       await this.autoSaveSettings();
     },
 
+  isInvalidJson(param) {
+    if (param.type !== 'dict' && param.type !== 'list') return false;
+    if (!param.value) return true; // 为空也是无效的
+    try {
+      const parsed = JSON.parse(param.value);
+      if (param.type === 'dict') {
+        // 必须是对象且不能是数组，且不能是 null
+        return typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null;
+      }
+      if (param.type === 'list') {
+        // 必须是数组
+        return !Array.isArray(parsed);
+      }
+      return false;
+    } catch (e) {
+      return true; // JSON 语法错误
+    }
+  },
+
+  getParamPlaceholder(type) {
+    if (type === 'dict') return '{"type": "enabled"}';
+    if (type === 'list') return '["item1", "item2"]';
+    return this.t('paramValue'); // 默认使用翻译
+  },
+
     async updateParamType(index) {
       const param = this.settings.extra_params[index];
       switch(param.type) {
         case 'dict':
-          param.value = '{}'; // 初始化为空 JSON 字符串
+          param.value = '{}'; 
+          break;
+        case 'list':
+          param.value = '[]'; 
           break;
         case 'boolean':
           param.value = false;
@@ -333,7 +361,10 @@ let vue_methods = {
       // 根据类型初始化值
       switch(param.type) {
         case 'dict':
-          param.value = '{}'; // 初始化为空 JSON 字符串
+          param.value = '{}'; 
+          break;
+        case 'list':
+          param.value = '[]'; 
           break;
         case 'boolean':
           param.value = false;

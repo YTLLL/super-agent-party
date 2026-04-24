@@ -6472,6 +6472,16 @@ function updateElement(el, rawMarkdown, formatFn) {
                               @input="autoSaveSettings"
                             ></el-input>
 
+                            <el-input
+                              v-if="param.type === 'list'"
+                              v-model="param.value"
+                              type="textarea"
+                              :autosize="{ minRows: 1, maxRows: 4 }"
+                              :placeholder="getParamPlaceholder(param.type)"
+                              @input="autoSaveSettings"
+                              :class="{ 'json-error': isInvalidJson(param) }" 
+                            ></el-input>
+
                           </div>
                       
                           <el-button
@@ -6778,8 +6788,19 @@ function updateElement(el, rawMarkdown, formatFn) {
                               v-model="param.value"
                               type="textarea"
                               :autosize="{ minRows: 1, maxRows: 4 }"
-                              placeholder='eg: {"type": "enabled"}'
+                              :placeholder="getParamPlaceholder(param.type)"
                               @input="autoSaveSettings"
+                              :class="{ 'json-error': isInvalidJson(param) }" 
+                            ></el-input>
+
+                            <el-input
+                              v-if="param.type === 'list'"
+                              v-model="param.value"
+                              type="textarea"
+                              :autosize="{ minRows: 1, maxRows: 4 }"
+                              :placeholder="getParamPlaceholder(param.type)"
+                              @input="autoSaveSettings"
+                              :class="{ 'json-error': isInvalidJson(param) }" 
                             ></el-input>
 
                           </div>
