@@ -6361,8 +6361,8 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <el-form-item :label="t('outputLength')" class="form-item-align">
                         <el-slider
                           v-model="settings.max_tokens"
-                          :min="0"
-                          :max="128000"
+                          :min="1024"
+                          :max="1048576"
                           :step="1024"
                           show-input
                           @input="autoSaveSettings"
@@ -6681,8 +6681,8 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <el-form-item :label="t('outputLength')" class="form-item-align">
                         <el-slider
                           v-model="fastSettings.max_tokens"
-                          :min="0"
-                          :max="128000"
+                          :min="1024"
+                          :max="1048576"
                           :step="1024"
                           show-input
                           @input="autoSaveSettings"
@@ -6931,8 +6931,8 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <el-form-item :label="t('outputLength')" class="form-item-align">
                         <el-slider
                           v-model="reasonerSettings.max_tokens"
-                          :min="0"
-                          :max="128000"
+                          :min="1024"
+                          :max="1048576"
                           :step="1024"
                           show-input
                           @input="autoSaveSettings"
