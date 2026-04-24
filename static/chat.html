@@ -177,13 +177,310 @@ function updateElement(el, rawMarkdown, formatFn) {
 </head>
 <body>
   <div id="app">
+    <!-- 顶部栏 -->
+    <el-header v-if="isElectron || isMobile" class="top-bar" height="30px">
+
+      <!-- ★ 新增：集成式浏览器顶栏 -->
+      <!-- style="margin-left: 78px" 实现了左侧留白，且该区域可拖拽 -->
+      <div 
+        v-if="activeMenu === 'ai-browser' && !isMobile" 
+        class="integrated-browser-bar"
+        :style="{ 'margin-left': isCollapse ? '50px':'186px'}" 
+      >
+        
+        <!-- 2. 标签栏 (边缘滚动容器) -->
+        <div 
+            class="integrated-tabs-container" 
+            ref="tabsContainerRef"
+            @mousemove="handleTabsMouseMove"
+            @mouseleave="stopEdgeScroll"
+        >
+            <div class="tabs-scroll-wrapper" ref="tabsWrapperRef">
+                <!-- 现有的标签页循环 -->
+                <div 
+                    v-for="tab in browserTabs" 
+                    :key="tab.id"
+                    class="ib-tab"
+                    :class="{ 'active': currentTabId === tab.id }"
+                    @click="switchTab(tab.id)"
+                    @mousedown.middle="closeTab(tab.id, $event)"
+                >
+                    <div class="ib-tab-content">
+                        <span class="ib-icon" v-if="tab.isLoading"><i class="fa-solid fa-spinner fa-spin"></i></span>
+                        <span class="ib-icon" v-else-if="tab.favicon"><img :src="tab.favicon" /></span>
+                        <span class="ib-icon" v-else><i class="fa-regular fa-compass"></i></span>
+                        <span class="ib-title">{{ tab.title || t('newTab') }}</span>
+                    </div>
+                    <span class="ib-close" @click.stop="closeTab(tab.id, $event)">
+                        <i class="fa-solid fa-xmark"></i>
+                    </span>
+                </div>
+
+                <!-- ★★★ 修改点：将新建按钮移到这里 ★★★ -->
+                <button class="new-tab-inline" @click="addNewTab" :title="t('newTab')">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+        </div>
+        <!-- 1. 地址栏 (现在排在最左边) -->
+        <div class="integrated-address-bar">
+             <el-input 
+                v-model="urlInput" 
+                class="ib-input" 
+                :placeholder="t('searchOrUrl')"
+                @keyup.enter="handleUrlEnter"
+                @focus="$event.target.select()"
+            >
+                <template #prefix>
+                    <i class="fa-solid fa-lock" v-if="currentTab?.url.startsWith('https')" style="font-size: 10px;"></i>
+                    <i class="fa-solid fa-globe" v-else style="font-size: 10px;"></i>
+                </template>
+            </el-input>
+        </div>
+        <!-- 3. 右侧控制组：新建标签 + 导航按钮 -->
+        <!-- 放在一起 -->
+        <div class="browser-controls-group">
+            <button 
+                class="ib-btn" 
+                :class="{ 'is-favorite': isCurrentTabFavorite }"
+                @click="toggleFavorite(currentTab)" 
+                :title="isCurrentTabFavorite ? t('removeFavorite') : t('addFavorite')"
+                :disabled="!currentTab?.url"
+            >
+                <i :class="isCurrentTabFavorite ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+            </button>
+
+            <!-- 下载管理按钮 & 下拉框 -->
+            <div 
+                class="download-manager-wrapper"
+                @mouseenter="handleDropdownEnter" 
+                @mouseleave="handleDropdownLeave"
+            >
+                <!-- 触发按钮 -->
+                <button class="ib-btn" :class="{ 'active': showDownloadDropdown }" :title="t('downloads')">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <!-- 进度小红点/进度条 (可选) -->
+                    <span v-if="activeDownloadCount > 0" class="download-badge"></span>
+                </button>
+
+                <!-- iOS 风格下拉框 -->
+                <transition name="dropdown-fade">
+                    <div class="ios-dropdown-panel" v-show="showDownloadDropdown">
+                        <div class="dropdown-header">
+                            <span>{{ t('downloads') || 'Downloads' }}</span>
+                            <span class="clear-btn" @click="clearFinishedDownloads" v-if="downloads.length > 0">{{ t('clear') || 'Clear' }}</span>
+                        </div>
+
+                        <!-- 空状态 -->
+                        <div v-if="downloads.length === 0" class="empty-state">
+                            <i class="fa-solid fa-box-open"></i>
+                            <p>{{ t('noDownloads') || 'No recent downloads' }}</p>
+                        </div>
+
+                        <!-- 下载列表 -->
+                        <div v-else class="download-list">
+                            <div v-for="item in downloads" :key="item.id" class="download-item">
+                                
+                                <!-- 图标 -->
+                                <div class="file-icon">
+                                    <i class="fa-solid fa-file"></i>
+                                </div>
+
+                                <!-- 信息区 -->
+                                <div class="file-info">
+                                    <div class="file-name" :title="item.filename">{{ item.filename }}</div>
+                                    
+                                    <!-- 进度条 (仅在下载中显示) -->
+                                    <div class="progress-bar-bg" v-if="item.state === 'progressing' || item.state === 'paused'">
+                                        <div class="progress-bar-fill" :style="{ width: (item.progress * 100) + '%' }"></div>
+                                    </div>
+
+                                    <!-- 状态文本 -->
+                                    <div class="file-meta">
+                                        <span v-if="item.state === 'completed'" class="success-text">{{ t('completed') || 'Done' }}</span>
+                                        <span v-else-if="item.state === 'cancelled'" class="error-text">{{ t('cancelled') || 'Cancelled' }}</span>
+                                        <span v-else-if="item.state === 'interrupted'" class="error-text">{{ t('failed') || 'Failed' }}</span>
+                                        <span v-else>
+                                            {{ formatBytes(item.receivedBytes) }} / {{ formatBytes(item.totalBytes) }}
+                                            <span v-if="item.state === 'paused'">({{ t('paused') || 'Paused' }})</span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- 操作按钮区 -->
+                                <div class="item-actions">
+                                    <!-- 完成后：打开文件夹 -->
+                                    <button v-if="item.state === 'completed'" class="action-btn folder" @click="openFileFolder(item.path)" :title="t('openFolder')">
+                                        <i class="fa-regular fa-folder-open"></i>
+                                    </button>
+                                    
+                                    <!-- 下载中：暂停/开始 -->
+                                    <button v-if="item.state === 'progressing'" class="action-btn" @click="controlDownload(item.id, 'pause')" :title="t('pause')">
+                                        <i class="fa-solid fa-pause"></i>
+                                    </button>
+                                    <button v-if="item.state === 'paused'" class="action-btn" @click="controlDownload(item.id, 'resume')" :title="t('resume')">
+                                        <i class="fa-solid fa-play"></i>
+                                    </button>
+
+                                    <!-- 下载中：取消 / 完成后：移除记录 -->
+                                    <button class="action-btn delete" @click="handleStopOrRemove(item)" :title="t('cancel')">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </transition>
+            </div>
+
+            <!-- 导航按钮 -->
+            <button class="ib-btn" @click="browserGoBack" :disabled="!currentTab?.canGoBack" :title="t('back')">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <button class="ib-btn" @click="browserGoForward" :disabled="!currentTab?.canGoForward" :title="t('forward')">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+            <button class="ib-btn" @click="browserReload" :title="t('reload')">
+                <i :class="currentTab?.isLoading ? 'fa-solid fa-xmark' : 'fa-solid fa-rotate-right'"></i>
+            </button>
+            <button class="ib-btn" @click="goHome" :title="t('home')">
+                <i class="fa-solid fa-house"></i>
+            </button>
+        </div>
+
+      </div>
+
+      <div class="window-controls">
+        <el-button 
+          v-if="updateAvailable&&!isAssistantMode&&!isMobile"
+          @click="handleUpdateAction" 
+          class="top-bar-btn update-btn"
+          :class="{ 'installed': updateDownloaded }"
+          text>
+          <el-icon>
+            <i :class="updateIcon"></i>
+          </el-icon>
+          {{ updateButtonText }}
+          <span v-if="downloadProgress > 0 && !updateDownloaded" class="progress-text">
+            ({{ downloadProgress }}%)
+          </span>
+        </el-button>
+        <el-button  v-if="!isAssistantMode&&!isMobile" @click="restartDriverGuide" class="top-bar-btn" text id="driver-guide-btn" :title=" t('tutorial')">
+          <el-icon>
+            <i class="fa-solid fa-school"></i>
+          </el-icon>
+        </el-button>
+      <!-- 添加移动端菜单按钮 -->
+      <el-button 
+      class="top-bar-btn"
+       v-if="isMobile" 
+       @click="isCollapse = sidebarVisible;sidebarVisible = !sidebarVisible"
+       text
+       :title="isCollapse ? t('expandAside') : t('collapseAside')">
+          <el-icon>
+            <i :class="!sidebarVisible ? 'fa-solid fa-bars' : 'fa-solid fa-bars-staggered'"></i>
+          </el-icon>
+      </el-button>
+        <el-button 
+          v-if="!isAssistantMode&&!isMobile"
+          @click="openLogDialog"
+          class="top-bar-btn"
+          text
+          :title="t('serverLogs') || 'Server Logs'">
+          <el-icon>
+            <i class="fa-solid fa-terminal"></i>
+          </el-icon>
+        </el-button>
+        <!-- 新增展开/收起按钮 -->
+        <el-button 
+          v-if="!isAssistantMode&&!isMobile"
+          @click="isCollapse = !isCollapse"
+          class="top-bar-btn"
+          text
+          :title="isCollapse ? t('expandAside') : t('collapseAside')">
+          <el-icon>
+            <i :class="isCollapse ? 'fa-solid fa-bars' : 'fa-solid fa-bars-staggered'"></i>
+          </el-icon>
+        </el-button>
+        <el-button 
+          @click="fixedWindow"
+          v-if="isAssistantMode"
+          class="top-bar-btn"
+          text
+          :title="isFixedWindow ? t('unfixedWindow'):t('fixedWindow')">
+          <el-icon>
+            <i :class="isFixedWindow ? 'fa-solid fa-thumbtack-slash':'fa-solid fa-thumbtack'"></i>
+          </el-icon>
+        </el-button>
+        <el-button 
+          @click="toggleCapsuleMode"
+          v-if="!isCapsuleMode&&!isAssistantMode&&!isMobile"
+          class="top-bar-btn"
+          text
+          :title="t('CapsuleMode')">
+          <el-icon>
+            <i class="fa-solid fa-capsules"></i>
+          </el-icon>
+        </el-button>
+        <el-button 
+          @click="toggleAssistantMode"
+          class="top-bar-btn"
+          text
+          :title="isAssistantMode ?  t('maximize'):t('assistantMode')">
+          <el-icon>
+            <i :class="isAssistantMode ?  'fa-solid fa-expand' : 'fa-solid fa-mobile-screen'"></i>
+          </el-icon>
+        </el-button>
+        <el-button v-if="!isMac&&!isMobile" @click="minimizeWindow" class="top-bar-btn" text :title="t('minimize')">
+          <el-icon>
+            <i class="fa-solid fa-minus"></i>
+          </el-icon>
+        </el-button>
+        <el-button v-if="!isMac&&!isMobile" @click="toggleIcon" class="top-bar-btn" text :title="t('maximize')">
+          <el-icon>
+            <i :class="iconClass"></i>
+          </el-icon>
+        </el-button>
+        <el-button v-if="!isMac&&!isMobile" @click="closeWindow" class="top-bar-btn" text :title="t('close')">
+          <el-icon>
+            <i class="fa-solid fa-xmark"></i>
+          </el-icon>
+        </el-button>
+      </div>
+    </el-header>
 
     <!-- 主容器 -->
     <el-container class="main-container">
-      <el-dialog
+      <div 
+        class="sidebar-mask"
+        v-show="isMobile && sidebarVisible"
+        @click="sidebarVisible = false"></div>
+
+    <!-- 后端日志弹窗 -->
+    <el-dialog append-to-body
+      v-model="showLogDialog"
+      :title="t('serverLogs') || 'Backend Logs'"
+      width="80%"
+      top="5vh"
+      class="log-dialog"
+    >
+      <div class="log-container" ref="logContainer">
+        <pre>{{ logContent }}</pre>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="fetchLogs">
+            <el-icon><i class="fa-solid fa-rotate-right"></i></el-icon> {{ t('refresh') || 'Refresh' }}
+          </el-button>
+          <el-button type="primary" @click="showLogDialog = false">{{ t('confirm') || 'OK' }}</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+      <el-dialog append-to-body
         v-model="showModelDialog"
         :title="t('mainModel')"
-        width="600px">
+        width="80%">
         <div class="knowledge-dialog-content">
           <!-- 服务器列表 -->
           <div
@@ -219,132 +516,14 @@ function updateElement(el, rawMarkdown, formatFn) {
               {{ t('mainmodelnotice') }}
           </div>
         </div>
-      </el-dialog> 
-      <el-dialog
-        v-model="showLogoDialog"
-        :title="t('logoPage')"
-        width="90%"> 
-        <!-- logo页面 -->
-          <div class="license-notice">
-            <h1>Super Agent Party v0.4.0</h1>
-            <h3>开源协议声明 / Open Source License</h3>
-            <div class="notice-section">
-              <p>❗ 注意！本项目是基于AGPL协议开源的，请遵守AGPL协议，以避免不必要的法律问题！</p>
-              <p>❗ Attention! This project is open source based on the AGPL agreement, please abide by the AGPL agreement to avoid unnecessary legal problems!</p>
-            </div>
-
-            <div class="contact-section">
-              <h3>联系我们 / Contact</h3>
-              <div class="contact-card">
-                <p>商业授权咨询：
-                  <a href="mailto:hst97@qq.com" class="contact-link">hst97@qq.com</a>
-                </p>
-                <p>Commercial License：
-                  <a href="mailto:hst97@qq.com" class="contact-link">hst97@qq.com</a>
-                </p>
-              </div>
-            </div>
-
-            <div class="social-links">
-              <div class="link-item">
-                <span>Official Website：</span>
-                <a href="https://www.agentparty.top/" 
-                  target="_blank" 
-                  class="social-link">
-                  www.agentparty.top
-                </a>
-              </div>
-
-              <div class="link-item">
-                <span>GitHub：</span>
-                <a href="https://github.com/heshengtao/super-agent-party" 
-                  target="_blank" 
-                  class="social-link">
-                  heshengtao/super-agent-party
-                </a>
-              </div>
-              
-              <div class="link-item">
-                <span>Gitee：</span>
-                <a href="https://gitee.com/heshengtao/super-agent-party" 
-                  target="_blank" 
-                  class="social-link">
-                  heshengtao/super-agent-party
-                </a>
-              </div>
-
-              <div class="link-item">
-                <span>Bilibili：</span>
-                <a href="https://space.bilibili.com/26978344" 
-                  target="_blank" 
-                  class="social-link">
-                  @派酱llm-party
-                </a>
-              </div>
-
-              <div class="link-item">
-                <span>Youtube：</span>
-                <a href="https://www.youtube.com/@agentParty" 
-                  target="_blank" 
-                  class="social-link">
-                  @agentParty
-                </a>
-              </div>
-
-              <div class="link-item">
-                <span>discord：</span>
-                <a href="https://discord.com/invite/f2dsAKKr2V" 
-                  target="_blank" 
-                  class="social-link">
-                  @llm-party
-                </a>
-              </div>
-
-              <div class="link-item">
-                <span>QQ交流群：</span>
-                <span class="qq-group">931057213</span>
-              </div>
-
-              <div class="link-item">
-                <span>中文使用指南：</span>
-                <a href="https://gcnij7egmcww.feishu.cn/wiki/DPRKwdetCiYBhPkPpXWcugujnRc" 
-                  target="_blank" 
-                  class="social-link">
-                  点击访问
-                </a>
-              </div>
-
-              <div class="link-item">
-                <span>English Usage Guide：</span>
-                <a href="https://temporal-lantern-7e8.notion.site/super-agent-party-211b2b2cb6f180c899d1c27a98c4965d" 
-                  target="_blank" 
-                  class="social-link">
-                  Click to access
-                </a>
-              </div>
-            </div>
-
-            <div class="agreement-section">
-              <p>{{t('agplNotice')}}
-                <a href="https://www.gnu.org/licenses/agpl-3.0.html" 
-                  target="_blank" 
-                  class="agreement-link">
-                  GNU Affero General Public License v3.0
-                </a>
-              </p>
-              <p>{{t('thirdPartyNotice')}}
-                <a href="https://github.com/heshengtao/super-agent-party/tree/main/LICENSE-third-party" class="agreement-link">LICENSE-third-party</a>
-              </p>
-            </div>
-          </div>
       </el-dialog>  
       <!-- 扩展选择对话框 -->
-      <el-dialog
+      <el-dialog append-to-body
         :title="t('switchExtension')"
         v-model="showExtensionsDialog"
-        width="60%"
-        :close-on-click-modal="false">
-        <div class="extensions-list">
+        width="80%"
+        >
+        <div class="extensions-list" :style="{ 'overflow-x': 'hidden'}">
           <!-- 默认视图选项 -->
           <el-card 
             class="extension-card default-view-card"
@@ -365,6 +544,16 @@ function updateElement(el, rawMarkdown, formatFn) {
             </div>
           </el-card>
 
+          <el-card 
+            class="extension-card workspace-card"
+            @click="openWorkspace()"
+            v-show="isElectron">
+            <div class="extension-info">
+              <h3>{{ t('workspace') || '工作区文件' }}</h3>
+              <p>{{ t('workspaceDescription') || '管理与查看本地工作区文件树' }}</p>
+            </div>
+          </el-card>
+          
           <!-- 分隔线 -->
           <div class="extensions-divider" v-if="extensions.length > 0">
             <span>
@@ -383,34 +572,51 @@ function updateElement(el, rawMarkdown, formatFn) {
           </div>
           <!-- 扩展列表 -->
           <el-empty v-if="extensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
-            <el-card
+          <el-card
               v-for="ext in extensions"
               :key="ext.id"
               class="extension-card"
               :class="{ active: currentExtension && currentExtension.id === ext.id }"
               @click="switchExtension(ext)">
               
-              <!-- 右上角按钮组 -->
+              <!-- 右上角按钮组 (整合了收藏按钮) -->
               <div class="btn-top-right">
-                <!-- 浏览器打开按钮 -->
-                <el-button
-                  type="default"
-                  circle
-                  size="small"
-                  @click.stop="openExtension(ext);switchExtension(ext)">
-                  <i class="fa-solid fa-external-link"></i>
-                </el-button>
                 
-                <!-- 独立窗口打开按钮（仅在Electron环境下显示） -->
-                <el-button
-                  v-if="isElectron"
-                  type="primary"
-                  circle
-                  size="small"
-                  @click.stop="openExtensionInWindow(ext)"
-                  style="margin-left: 8px;">
-                  <i class="fa-solid fa-window-restore"></i>
-                </el-button>
+                <!-- 1. 收藏按钮 -->
+                <el-tooltip :content="favoriteExtensionIds.includes(ext.id) ? t('unfavorite') : t('favorite')" placement="top">
+                  <el-button
+                    type="default"
+                    circle
+                    size="small"
+                    @click.stop.prevent="toggleFavoriteExtension(ext)">
+                    <i :class="favoriteExtensionIds.includes(ext.id) ? 'fa-solid fa-star star-active' : 'fa-regular fa-star'"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <!-- 2. 浏览器打开按钮 -->
+                <el-tooltip :content="t('openExtensionInBrowser')" placement="top">
+                  <el-button
+                    type="default"
+                    circle
+                    size="small"
+                    @click.stop.prevent="openExtension(ext)"
+                    style="margin-left: 8px;">
+                    <i class="fa-solid fa-external-link"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <!-- 3. 独立窗口打开按钮（仅在Electron环境下显示） -->
+                <el-tooltip :content="t('openExtensionInWindow')" placement="top">
+                  <el-button
+                    v-if="isElectron"
+                    type="primary"
+                    circle
+                    size="small"
+                    @click.stop.prevent="openExtensionInWindow(ext)"
+                    style="margin-left: 8px;">
+                    <i class="fa-solid fa-window-restore"></i>
+                  </el-button>
+                </el-tooltip>
               </div>
 
               <div class="extension-info">
@@ -421,7 +627,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <span>{{ ext.author }}</span>
                 </div>
               </div>
-            </el-card>
+          </el-card>
         </div>
         <template #footer>
           <div class="dialog-footer">
@@ -431,8 +637,27 @@ function updateElement(el, rawMarkdown, formatFn) {
       </el-dialog>
       <!-- 内容区 -->
       <el-main class="content">
+
+        <div 
+          v-if="isPttRecording && asrSettings.interactionMethod === 'keyTriggered'" 
+          class="desktop-recording-overlay"
+        >
+          <div class="desktop-recording-content">
+            <!-- 麦克风图标 (你可以换成自己的 el-icon) -->
+            <el-icon class="mic-icon"><Microphone /></el-icon>
+            
+            <!-- 复用你的波纹动画 -->
+            <div class="recording-wave">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+
+            <!-- 文字提示 -->
+            <span class="ptt-text">{{ t('releaseToSend') }}</span>
+          </div>
+        </div>
+
         <!-- 聊天界面保持不变 -->
-        <div v-show="activeMenu === 'home'" class="page chat-container">
+        <div v-show="activeMenu === 'dashboard'" class="page chat-container">
         <!-- 最外层 wrapper，负责整体左右布局 -->
         <div class="chat-wrapper" 
             ref="chatWrapperRef"
@@ -442,47 +667,161 @@ function updateElement(el, rawMarkdown, formatFn) {
               'resizing': isResizing
             }">
           
-          <!-- 对话历史二级侧边栏 -->
+          <!-- 对话历史二级侧边栏 (保持用户原有结构) -->
           <div class="chat-history-sidebar" v-show="showHistorySidebar && !isMobile && !isCapsuleMode">
               <!-- A. 新建对话 -->
               <div class="history-header">
-                <el-button class="new-chat-btn" @click="clearMessages">
+                <el-button class="new-chat-btn" @click="startConversationInGroup()">
                   {{ t('newChat') }}
                 </el-button>
               </div>
 
-              <!-- B. 搜索行：锁定间距 -->
+              <!-- B. 搜索行：锁定间距 (将PR的新建分组按钮融合进快捷工具栏) -->
               <div class="history-search-row">
                 <el-input v-model="searchKeyword" :placeholder="t('search')" clearable size="small" class="history-search-input">
                   <template #prefix><i class="fa-solid fa-magnifying-glass"></i></template>
                 </el-input>
                 
-                <!-- 两个按钮强制并排且紧凑 -->
+                <!-- 按钮并排且紧凑 -->
                 <div class="history-quick-tools">
-                  <el-button @click="keepLastWeek" circle size="small" class="quick-tool-btn">
-                    <i class="fa-solid fa-calendar-week"></i>
-                  </el-button>
-                  <el-button @click="confirmClearAll" circle size="small" class="quick-tool-btn danger">
-                    <i class="fa-solid fa-trash-can"></i>
-                  </el-button>
+                  <!-- PR功能：新建分组按钮 -->
+                   <el-tooltip :content="t('newGroup')" placement="top">
+                    <el-button @click="createConversationGroup()" circle size="small" class="quick-tool-btn" :title="t('newGroup')">
+                      <i class="fa-solid fa-folder-plus"></i>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip :content="t('keepLastWeek')" placement="top">
+                    <el-button @click="keepLastWeek" circle size="small" class="quick-tool-btn" :title="t('keepLastWeek')">
+                      <i class="fa-solid fa-calendar-week"></i>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip :content="t('clearAllHistory')" placement="top">
+                    <el-button @click="confirmClearAll" circle size="small" class="quick-tool-btn danger" :title="t('clearAllHistory')">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </el-button>
+                  </el-tooltip>
                 </div>
               </div>
 
-              <!-- C. 列表区：还原样式 -->
+              <!-- C. 列表区：复用原有样式，但引入 PR 的分组遍历逻辑 -->
               <div class="history-list-container">
-                <div v-for="conv in filteredConversations" :key="conv.id" 
-                    class="history-item-row" 
-                    :class="{ active: currentConversationId === conv.id }" 
-                    @click="loadConversation(conv.id)">
-                  <i class="fa-regular fa-comment item-icon"></i>
-                  <span class="item-title">{{ conv.title || t('untitled') }}</span>
-                  <el-button 
-                    class="item-delete-btn" 
-                    circle 
-                    @click.stop="confirmDeleteConversation(conv.id)">
-                    <i class="fa-solid fa-trash-can"></i>
-                  </el-button>
+                <!-- PR功能：按分组遍历 groupedFilteredConversations -->
+                <div v-for="group in groupedFilteredConversations" :key="group.id" class="history-group-wrapper">
+                  
+                  <!-- 分组头部 (复用历史项样式) -->
+                  <div class="history-item-row group-header" 
+                       :class="{ active: group.id === activeConversationGroupId }" 
+                       @click="setActiveConversationGroup(group.id)"
+                       style="background-color: var(--el-fill-color-light); margin-bottom: 2px;">
+                    <!-- 文件夹图标 -->
+                    <i class="fa-solid fa-folder-open item-icon" style="color: #E6A23C; font-size: 14px;"></i>
+                    
+                    <!-- 【修改点1】：加 flex: 1 撑开，并加 padding-right 防止文字遮盖按钮 -->
+                    <span class="item-title" style="font-weight: bold; font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 15px;">
+                      {{ group.name }} ({{ group.conversations.length }})
+                    </span>
+                    <!-- 【修改点2】：操作区强行横向排列，重置按钮原有的 absolute 定位 -->
+                    <div class="group-actions" style="display: flex; align-items: center; flex-shrink: 0;" @click.stop>
+                      <el-dropdown trigger="click" placement="bottom-end" @click.stop>
+                        <!-- 这个按钮现在对所有组（包括默认组）都可见 -->
+                        <el-button class="item-delete-btn" circle style="position: relative; right: auto; top: auto; transform: none; margin-right: 4px; display: flex; align-items: center; justify-content: center;">
+                          <i class="fa-solid fa-ellipsis"></i>
+                        </el-button>
+                        
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <!-- 1. 重命名：仅限自定义分组 -->
+                            <el-dropdown-item 
+                              v-if="group.id !== 'default'" 
+                              @click="openRenameConversationGroupDialog(group)">
+                              <i class="fa-solid fa-pen-to-square" style="margin-right: 8px;"></i>{{ t('rename') }}
+                            </el-dropdown-item>
+
+                            <!-- 2. 清空组内对话：所有分组都适用 ✨ -->
+                            <el-dropdown-item 
+                              @click="clearConversationGroupChats(group.id)">
+                              <span style="color: var(--el-color-warning);">
+                                <i class="fa-solid fa-eraser" style="margin-right: 8px;"></i>{{ t('clearGroupChats') }}
+                              </span>
+                            </el-dropdown-item>
+
+                            <!-- 3. 删除分组：仅限自定义分组 -->
+                            <el-dropdown-item 
+                              v-if="group.id !== 'default'" 
+                              divided 
+                              @click="openDeleteGroupDialog(group)">
+                              <span style="color: var(--el-color-danger);">
+                                <i class="fa-solid fa-trash-can" style="margin-right: 8px;"></i>{{ t('delete') }}
+                              </span>
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                      <el-button class="item-delete-btn" circle style="position: relative; right: auto; top: auto; transform: none; display: flex; align-items: center; justify-content: center;" @click.stop="toggleConversationGroupCollapsed(group.id)">
+                        <i :class="isConversationGroupCollapsed(group.id) ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-down'"></i>
+                      </el-button>
+                    </div>
+                  </div>
+
+                  <!-- 组内对话列表 -->
+                  <transition name="el-zoom-in-top">
+                    <div v-show="!isConversationGroupCollapsed(group.id)" class="group-conversations-list">
+                      <div v-for="conv in group.conversations" :key="conv.id" 
+                          class="history-item-row" 
+                          :class="{ active: currentConversationId === conv.id || conversationId === conv.id }" 
+                          @click="loadConversation(conv.id)"
+                          style="padding-left: 24px;"> <!-- 缩进体现层级 -->
+                        
+                        <i class="fa-regular fa-comment item-icon"></i>
+                        
+                        <!-- 【修改点3】：右侧增加 padding-right: 35px 留出操作按钮的空间 -->
+                        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; justify-content: center; padding-right: 35px;">
+                          <span class="item-title" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ conv.title || t('untitled') }}</span>
+                          <span style="font-size: 10px; opacity: 0.6; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ formatConversationTime ? formatConversationTime(conv.timestamp) : '' }} 
+                            <span v-if="getConversationPreview"> - {{ getConversationPreview(conv) }}</span>
+                          </span>
+                        </div>
+                        
+                        <!-- 【修改点4】：外层用绝对定位居中，内部取消按钮自带的绝对定位以修复高度塌陷 -->
+                        <div class="item-actions" @click.stop style="position: absolute; right: 8px; top: 0; bottom: 0; display: flex; align-items: center;">
+                          <el-dropdown trigger="click" placement="bottom-end" @click.stop>
+                            <el-button class="item-delete-btn" circle style="position: static; transform: none; display: flex; align-items: center; justify-content: center; margin: 0;">
+                              <i class="fa-solid fa-ellipsis"></i>
+                            </el-button>
+                            <template #dropdown>
+                              <el-dropdown-menu>
+                                <el-dropdown-item @click="openRenameConversationDialog(conv)">{{ t('rename') }}</el-dropdown-item>
+                                <!-- PR功能：移动到分组 -->
+                                <el-dropdown placement="right-start" trigger="hover">
+                                  <div class="el-dropdown-menu__item" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>{{ t('moveToGroup') }}</span>
+                                    <i class="fa-solid fa-angle-right" style="margin-left: 8px;"></i>
+                                  </div>
+                                  <template #dropdown>
+                                    <el-dropdown-menu>
+                                      <el-dropdown-item v-for="moveGroup in conversationGroups" :key="moveGroup.id" @click="moveConversationToGroup(conv.id, moveGroup.id)">
+                                        {{ moveGroup.name }}
+                                      </el-dropdown-item>
+                                    </el-dropdown-menu>
+                                  </template>
+                                </el-dropdown>
+                                <el-dropdown-item divided @click="confirmDeleteConversation(conv.id)">
+                                  <span style="color: var(--el-color-danger);">{{ t('delete') }}</span>
+                                </el-dropdown-item>
+                              </el-dropdown-menu>
+                            </template>
+                          </el-dropdown>
+                        </div>
+                      </div>
+                    </div>
+                  </transition>
                 </div>
+                
+                <!-- 空状态提示 -->
+                <el-empty v-if="groupedFilteredConversations && groupedFilteredConversations.length === 0" 
+                          :description="searchKeyword ? t('noResults') : t('noChatHistory')" 
+                          :image-size="60"></el-empty>
               </div>
           </div>
 
@@ -800,7 +1139,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                       <el-tooltip :content="t('newChat')" placement="top">
                         <el-button
                           v-if="!isCapsuleMode"
-                          @click="clearMessages"
+                          @click="startConversationInGroup()"
                           class="icon-btn clear-btn"
                           type="primary"
                           circle>
@@ -810,7 +1149,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                       <el-tooltip :content="t('chatHistory')" placement="top">
                         <el-button
-                          @click="showHistorySidebar = !showHistorySidebar" 
+                          @click="handleHistoryToggle"
                           class="icon-btn history-btn"
                           :type="showHistorySidebar ? 'primary' : 'default'"
                           circle>
@@ -1191,6 +1530,23 @@ function updateElement(el, rawMarkdown, formatFn) {
                         </el-button>
                       </el-tooltip>
 
+
+                    <el-tooltip :content="t('logoPage')" placement="top">
+                      <el-button
+                        plain
+                        class="icon-btn party-btn"
+                        style="border-radius: 24px;"
+                        @click="showLogoDialog = true"
+                      >
+                        <template #icon>
+                          <img
+                            :src="getVendorLogo('unknown')"
+                            class="model-vendor-logo"
+                            draggable="false"
+                          />
+                        </template>
+                      </el-button>
+                    </el-tooltip>
 
                       <el-tooltip :content="isSending ? t('stopGenerating') : t('sendMessage')" placement="top" class="send-btn-container">
                         <el-button
@@ -1690,13 +2046,28 @@ function updateElement(el, rawMarkdown, formatFn) {
                   </div>
 
                   <!-- 2. 扩展 Iframe 视图 -->
-                  <iframe class="side-panel-iframe" 
-                          v-else-if="sidePanelURL" 
-                          :src="sidePanelURL" 
-                          frameborder="0" 
-                          allowfullscreen 
-                          style="width: 100%; height: 100%;">
-                  </iframe>
+                  <div v-else-if="sidePanelURL" class="ext-iframe-wrapper">
+                      
+                      <!-- ✨ 左侧和顶部边缘的隐形感应区 (防止 iframe 吞噬事件) -->
+                      <div class="ext-edge-trigger top" @mousemove="handleExtMouseMove" @mouseleave="hideExtButton"></div>
+                      <div class="ext-edge-trigger left" @mousemove="handleExtMouseMove" @mouseleave="hideExtButton"></div>
+
+                      <!-- ✨ 悬浮返回按钮 (绑定 is-active 类) -->
+                      <div class="ext-floating-close-btn" 
+                          :class="{ 'is-active': extButtonVisible }"
+                          @mousemove="handleExtMouseMove"
+                          @click="resetToDefaultView()" 
+                          :title="t('backToDefaultView') || '返回默认视图'">
+                          <i class="fa-solid fa-arrow-left"></i> 
+                      </div>
+
+                      <!-- 原本的 iframe -->
+                      <iframe class="side-panel-iframe" 
+                              :src="sidePanelURL" 
+                              frameborder="0" 
+                              allowfullscreen>
+                      </iframe>
+                  </div>
 
                   <!-- 3. 加载中状态 -->
                   <div v-else-if="currentExtension" class="loading-container">
@@ -2250,6 +2621,318 @@ function updateElement(el, rawMarkdown, formatFn) {
             </div>
           </el-dialog>
         </div>
+
+          <el-dialog append-to-body
+            v-model="showEditDialog"
+            :title="editType === 'system' ? t('editSystemPrompt') : t('editMessage')"
+            width="80%">
+            <el-form-item v-if="editType === 'system'" :label="t('selectSystemPrompt')" class="form-item-align" label-position="left">
+              <el-select 
+                v-model="selectSystemPromptId" 
+                :placeholder="t('selectSystemPromptPlaceholder')"
+                class="full-width-input"
+                @change="changeSystemPrompt"
+                >
+                <el-option
+                  v-for="prompt in SystemPromptsList"
+                  :key="prompt.id"
+                  :label="prompt.name"
+                  :value="prompt.id"
+                />
+              </el-select>
+            </el-form-item>
+            <el-input
+              v-model="editContent"
+              type="textarea"
+              :rows="18"
+              :placeholder="t('enterContent')"
+            ></el-input>
+            <template #footer>
+              <el-button @click="showEditDialog = false">{{ t('cancel') }}</el-button>
+              <el-button @click="switchToSystemPrompts" v-if="editType === 'system'">{{ t('addSystemPrompt') }}</el-button>
+              <el-button type="primary" @click="saveEdit">{{ editType === 'user' ? t('modifyAndSend'):t('save') }}</el-button>
+            </template>
+          </el-dialog>
+
+        <el-dialog append-to-body
+          v-model="showHistoryDialog"
+          :title="t('chatHistory')"
+          width="80%">
+          <div class="knowledge-dialog-content">
+            <!-- 搜索框与操作按钮行 -->
+            <div class="search-action-row">
+              <el-input
+                v-model="searchKeyword"
+                :placeholder="t('searchChatHistoryPlaceholder')"
+                clearable
+                class="search-input"
+                style="flex:1">
+                <template #prefix>
+                  <el-icon><i class="fa-solid fa-magnifying-glass"></i></el-icon>
+                </template>
+              </el-input>
+
+              <div class="action-buttons">
+                <el-tooltip 
+                  :content="t('keepLastWeek')" 
+                  placement="top"
+                  :disabled="!conversations || conversations.length === 0">
+                  <el-button 
+                    type="info"
+                    circle 
+                    size="small"
+                    @click="keepLastWeek"
+                    :disabled="!conversations || conversations.length === 0">
+                    <i class="fa-solid fa-calendar-week"></i>
+                  </el-button>
+                </el-tooltip>
+
+                <el-tooltip 
+                  :content="t('clearAllHistory')" 
+                  placement="top"
+                  :disabled="!conversations || conversations.length === 0">
+                  <el-button 
+                    type="danger"
+                    circle 
+                    size="small"
+                    @click="confirmClearAll"
+                    :disabled="!conversations || conversations.length === 0">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </el-button>
+                </el-tooltip>
+              </div>
+            </div>
+
+            <!-- 对话记录列表 -->
+            <div v-for="conv in filteredConversations" 
+                :key="conv.id" 
+                class="knowledge-item"
+                @click="loadConversation(conv.id)">
+              <el-button 
+                @click.stop="confirmDeleteConversation(conv.id)"
+                type="danger" 
+                circle 
+                size="small">
+                <i class="fa-solid fa-trash"></i>
+              </el-button>
+              <div class="knowledge-info">
+                <h3 class="knowledge-name">{{ conv.title || t('untitled') }}</h3>
+                <div class="knowledge-desc">
+                  <el-icon class="meta-icon"><i class="fa-solid fa-message"></i></el-icon>
+                  <span>{{ conv.messages?.length || 0 }} {{ t('messages') }}</span><br>
+                  <el-icon class="meta-icon"><i class="fa-solid fa-clock"></i></el-icon>
+                  <span>{{ formatDate(conv.timestamp) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 空状态提示 -->
+        <div v-if="filteredConversations.length === 0" class="empty-tip">
+          {{ searchKeyword ? t('noResults') : t('noChatHistory') }}
+        </div>
+      </div>
+    </el-dialog>
+
+        <el-dialog
+          append-to-body
+          v-model="showConversationGroupDialog"
+          :title="conversationGroupDialogMode === 'create' ? t('createGroup') : t('renameGroup')"
+          width="420px"
+        >
+          <el-form label-position="top">
+            <el-form-item :label="t('groupNamePlaceholder')">
+              <el-input
+                v-model="conversationGroupForm.name"
+                :placeholder="t('groupNamePlaceholder')"
+                @keyup.enter="submitConversationGroupDialog"
+              ></el-input>
+            </el-form-item>
+            <el-form-item :label="t('groupMemoryEnabled')">
+              <div class="group-memory-switch-row">
+                <el-switch v-model="conversationGroupForm.memoryEnabled"></el-switch>
+                <span class="group-memory-switch-hint">{{ t('groupMemoryEnabledHint') }}</span>
+              </div>
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="showConversationGroupDialog = false">{{ t('cancel') }}</el-button>
+            <el-button type="primary" @click="submitConversationGroupDialog">{{ t('confirm') }}</el-button>
+          </template>
+        </el-dialog>
+
+        <el-dialog
+          append-to-body
+          v-model="showConversationRenameDialog"
+          :title="t('renameConversation')"
+          width="420px"
+        >
+          <el-form label-position="top">
+            <el-form-item :label="t('renameConversation')">
+              <el-input
+                v-model="conversationRenameForm.name"
+                :placeholder="t('renameConversation')"
+                @keyup.enter="submitConversationRename"
+              ></el-input>
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="showConversationRenameDialog = false">{{ t('cancel') }}</el-button>
+            <el-button type="primary" @click="submitConversationRename">{{ t('confirm') }}</el-button>
+          </template>
+        </el-dialog>
+
+        <el-dialog
+          append-to-body
+          v-model="showDeleteConversationDialog"
+          :title="t('delete')"
+          width="420px"
+        >
+          <div class="chat-history-confirm-copy">{{ t('confirmDeleteConversation') }}</div>
+          <div class="chat-history-confirm-title">{{ deleteConversationForm.title }}</div>
+          <label class="chat-history-delete-memory-option">
+            <el-switch v-model="deleteConversationForm.deleteMemory"></el-switch>
+            <span>{{ t('deleteRelatedMemory') }}</span>
+          </label>
+          <template #footer>
+            <el-button @click="showDeleteConversationDialog = false">{{ t('cancel') }}</el-button>
+            <el-button type="danger" @click="confirmDeleteConversationDeletion">{{ t('delete') }}</el-button>
+          </template>
+        </el-dialog>
+
+        <el-dialog
+          append-to-body
+          v-model="showDeleteGroupDialog"
+          :title="t('delete')"
+          width="420px"
+        >
+          <div class="chat-history-confirm-copy">{{ t('confirmDeleteGroup') }}</div>
+          <div class="chat-history-confirm-title">{{ deleteGroupForm.name }}</div>
+          <div class="chat-history-confirm-note">{{ getDeleteGroupWarningText() }}</div>
+          <template #footer>
+            <el-button @click="showDeleteGroupDialog = false">{{ t('cancel') }}</el-button>
+            <el-button type="danger" @click="confirmDeleteGroupDeletion">{{ t('delete') }}</el-button>
+          </template>
+        </el-dialog>
+
+      <el-dialog
+        v-model="showLogoDialog"
+        :title="t('logoPage')"
+        width="90%"> 
+        <!-- logo页面 -->
+          <div class="license-notice">
+            <h1>Super Agent Party v0.4.0</h1>
+            <h3>开源协议声明 / Open Source License</h3>
+            <div class="notice-section">
+              <p>❗ 注意！本项目是基于AGPL协议开源的，请遵守AGPL协议，以避免不必要的法律问题！</p>
+              <p>❗ Attention! This project is open source based on the AGPL agreement, please abide by the AGPL agreement to avoid unnecessary legal problems!</p>
+            </div>
+
+            <div class="contact-section">
+              <h3>联系我们 / Contact</h3>
+              <div class="contact-card">
+                <p>商业授权咨询：
+                  <a href="mailto:hst97@qq.com" class="contact-link">hst97@qq.com</a>
+                </p>
+                <p>Commercial License：
+                  <a href="mailto:hst97@qq.com" class="contact-link">hst97@qq.com</a>
+                </p>
+              </div>
+            </div>
+
+            <div class="social-links">
+              <div class="link-item">
+                <span>Official Website：</span>
+                <a href="https://www.agentparty.top/" 
+                  target="_blank" 
+                  class="social-link">
+                  www.agentparty.top
+                </a>
+              </div>
+
+              <div class="link-item">
+                <span>GitHub：</span>
+                <a href="https://github.com/heshengtao/super-agent-party" 
+                  target="_blank" 
+                  class="social-link">
+                  heshengtao/super-agent-party
+                </a>
+              </div>
+              
+              <div class="link-item">
+                <span>Gitee：</span>
+                <a href="https://gitee.com/heshengtao/super-agent-party" 
+                  target="_blank" 
+                  class="social-link">
+                  heshengtao/super-agent-party
+                </a>
+              </div>
+
+              <div class="link-item">
+                <span>Bilibili：</span>
+                <a href="https://space.bilibili.com/26978344" 
+                  target="_blank" 
+                  class="social-link">
+                  @派酱llm-party
+                </a>
+              </div>
+
+              <div class="link-item">
+                <span>Youtube：</span>
+                <a href="https://www.youtube.com/@agentParty" 
+                  target="_blank" 
+                  class="social-link">
+                  @agentParty
+                </a>
+              </div>
+
+              <div class="link-item">
+                <span>discord：</span>
+                <a href="https://discord.com/invite/f2dsAKKr2V" 
+                  target="_blank" 
+                  class="social-link">
+                  @llm-party
+                </a>
+              </div>
+
+              <div class="link-item">
+                <span>QQ交流群：</span>
+                <span class="qq-group">931057213</span>
+              </div>
+
+              <div class="link-item">
+                <span>中文使用指南：</span>
+                <a href="https://gcnij7egmcww.feishu.cn/wiki/DPRKwdetCiYBhPkPpXWcugujnRc" 
+                  target="_blank" 
+                  class="social-link">
+                  点击访问
+                </a>
+              </div>
+
+              <div class="link-item">
+                <span>English Usage Guide：</span>
+                <a href="https://temporal-lantern-7e8.notion.site/super-agent-party-211b2b2cb6f180c899d1c27a98c4965d" 
+                  target="_blank" 
+                  class="social-link">
+                  Click to access
+                </a>
+              </div>
+            </div>
+
+            <div class="agreement-section">
+              <p>{{t('agplNotice')}}
+                <a href="https://www.gnu.org/licenses/agpl-3.0.html" 
+                  target="_blank" 
+                  class="agreement-link">
+                  GNU Affero General Public License v3.0
+                </a>
+              </p>
+              <p>{{t('thirdPartyNotice')}}
+                <a href="https://github.com/heshengtao/super-agent-party/tree/main/LICENSE-third-party" class="agreement-link">LICENSE-third-party</a>
+              </p>
+            </div>
+          </div>
+      </el-dialog> 
+
       </el-main>
     </el-container>
   </div>

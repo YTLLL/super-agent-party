@@ -1694,7 +1694,10 @@ let vue_methods = {
           }
       });
       this.scrollPanelToBottom();
-      this.browserPanelToBottom();
+      if (isElectron){
+        this.browserPanelToBottom();
+      }
+
     },
 
     /* 侧边栏滚动：完全一样的思路 */

@@ -683,7 +683,8 @@ const app = Vue.createApp({
   },
   async mounted() {
     try {
-      if (window.electronAPI?.onGlobalShortcutTriggered) {
+      // 只在 Electron 环境中注册全局快捷键
+      if (isElectron && window.electronAPI?.onGlobalShortcutTriggered) {
           window.electronAPI.onGlobalShortcutTriggered(async () => {
             // 只有启用了 ASR 且模式为全局快捷键时才生效
             if (this.asrSettings.interactionMethod !== 'globalKeyTriggered') return;
@@ -702,7 +703,8 @@ const app = Vue.createApp({
           });
         }
 
-      if (window.electron && window.electron.ipcRenderer) {
+      // 只在 Electron 环境中注册 IPC 监听
+      if (isElectron && window.electron && window.electron.ipcRenderer) {
           window.electron.ipcRenderer.on('trigger-search', (text) => {
               // 1. 将选中的文本填入地址栏变量
               this.urlInput = text;
@@ -712,21 +714,28 @@ const app = Vue.createApp({
               this.handleUrlEnter();
           });
       }
+      
       this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({
         sampleRate: 24000
       });
       this.audioStartTime = this.audioCtx.currentTime;
-      const appPath = await window.electronAPI.getAppPath();
-      // 拼接路径： App根目录 + static/js/webview-preload.js
-      const fullPath = await window.electronAPI.pathJoin(appPath, 'static', 'js', 'webview-preload.js');
       
-      // 2. 转换为 file:// 协议 URL
-      // 注意：Windows 下路径是反斜杠 \，需要替换为正斜杠 / 才能用于 URL
-      const fileUrl = 'file://' + (this.isWindows ? '/' : '') + fullPath.replace(/\\/g, '/');
+      // 只在 Electron 环境中获取 app 路径
+      let fileUrl = '';
+      if (isElectron && window.electronAPI) {
+        const appPath = await window.electronAPI.getAppPath();
+        // 拼接路径： App根目录 + static/js/webview-preload.js
+        const fullPath = await window.electronAPI.pathJoin(appPath, 'static', 'js', 'webview-preload.js');
+        
+        // 2. 转换为 file:// 协议 URL
+        // 注意：Windows 下路径是反斜杠 \，需要替换为正斜杠 / 才能用于 URL
+        fileUrl = 'file://' + (this.isWindows ? '/' : '') + fullPath.replace(/\\/g, '/');
+        
+        console.log('Webview Preload URL:', fileUrl); // 调试用
+      }
       
       this.webviewPreloadPath = fileUrl;
       
-      console.log('Webview Preload URL:', this.webviewPreloadPath); // 调试用
     } catch (e) {
       console.error('获取 Preload 路径失败:', e);
     }
@@ -735,15 +744,17 @@ const app = Vue.createApp({
         console.log('Global approval triggered:', toolCallId, action); // 调试日志
         this.processToolApproval(toolCallId, action);
     };
-    // ★ 监听主进程发来的“开新标签”指令
-    if (window.electronAPI && window.electronAPI.onNewTab) {
+    
+    // ★ 监听主进程发来的“开新标签”指令（仅 Electron）
+    if (isElectron && window.electronAPI && window.electronAPI.onNewTab) {
         window.electronAPI.onNewTab((url) => {
             console.log('收到新标签页请求:', url);
             this.openUrlInNewTab(url);
         });
     }
-    // 监听下载事件
-    if (window.downloadAPI) {
+    
+    // 监听下载事件（仅 Electron）
+    if (isElectron && window.downloadAPI) {
         window.downloadAPI.onDownloadStarted((data) => {
             // 新增下载项放到最前面
             this.downloads.unshift({
@@ -778,6 +789,7 @@ const app = Vue.createApp({
             }
         });
     }
+    
     await this.probeNode();
     await this.probeUv(); 
     await this.probeDocker();
@@ -786,20 +798,25 @@ const app = Vue.createApp({
     this.loadMossStatus();
     this.minilmModelStatus();
     window.addEventListener('resize', this.handleResize);
+    
     if (isElectron) {
       this.checkServerPort();
     }
+    
     window.addEventListener('keydown', this.handleKeyDown)
     window.addEventListener('keyup', this.handleKeyUp)
     window.addEventListener('resize', this.checkMobile);
     this.pollVRMStatus()   // 启动轮询
+    
     if (isElectron) {
       this.isMac = window.electron.isMac;
       this.isWindows = window.electron.isWindows;
     }
+    
     this.initWebSocket();
     this.highlightCode();
     this.initDownloadButtons();
+    
     if (isElectron) {
       // 检查更新
       this.checkForUpdates();
@@ -825,6 +842,7 @@ const app = Vue.createApp({
         this.updateIcon = 'fa-solid fa-rocket';
       });
     }
+    
     this.$nextTick(() => {
       this.initPreviewButtons();
     });
@@ -832,6 +850,7 @@ const app = Vue.createApp({
       document.addEventListener('click', this._toggleHighlight, false);
     });
     document.documentElement.setAttribute('data-theme', this.systemSettings.theme);
+    
     if (isElectron) {
       window.stopQQBotHandler = this.requestStopQQBotIfRunning;
       window.stopFeishuBotHandler = this.requestFeishuBotStopIfRunning;
@@ -845,76 +864,80 @@ const app = Vue.createApp({
         this.isMaximized = state === 'maximized'
       });
     }
-    this.initTTSWebSocket();
-    window.aiBrowser = this;
-    this.$nextTick(() => {
-      this.generateQRCode(); // 生成二维码
-    });
-// 1. 时间触发器
-this.behaviorTimeTimer = setInterval(() => {
-  if (!this.behaviorSettings.enabled) return
-  const now = new Date()
-  const hm = now.toLocaleTimeString('zh-CN', { hour12: false }) 
-  const d  = now.getDay() 
-  this.behaviorSettings.behaviorList.forEach(b => {
-    // 关键改动：使用 isTargetPlatform 检查是否属于当前网页端(chat)任务
-    if (!b.enabled || b.trigger.type !== 'time' || !this.isTargetPlatform(b, 'chat')) return
-    const tv = b.trigger.time.timeValue
-    const ds = b.trigger.time.days
-    if (tv === hm) {
-      if (ds.length === 0 || ds.includes(d)) {
-        this.runBehavior(b)
-        this.disableOnceBehavior(b)
-      }
-    }
-  })
-}, 1000)
-
-// 2. 无输入触发器
-this.noInputSec = 0 
-this.behaviorNoInputTimer = setInterval(() => {
-  if (!this.behaviorSettings.enabled) return
-  this.behaviorSettings.behaviorList.forEach(b => {
-    // 关键改动：检查平台
-    if (!b.enabled || b.trigger.type !== 'noInput' || !this.isTargetPlatform(b, 'chat')) return
-    const need = b.trigger.noInput.latency
-    if (this.noInputFlag) {
-      this.noInputSec++
-      if (this.noInputSec >= need) {
-        this.runBehavior(b)
-        this.noInputSec = 0 
-      }
-    } else {
-      this.noInputSec = 0
-    }
-  })
-}, 1000)
-
-// 3. 周期触发器
-this.behaviorCycleTimer = setInterval(() => {
-  // 核心防御：层层判断
-  if (!this.behaviorSettings) return;
-  if (this.behaviorSettings.enabled !== true) return;
-  if (!Array.isArray(this.behaviorSettings.behaviorList)) return;
-
-  this.behaviorSettings.behaviorList.forEach((b, index) => {
-    // 检查 b 及其 trigger 是否存在，防止读取 b.trigger.type 报错
-    if (!b || !b.enabled || !b.trigger) return;
     
-    // 只处理周期类型的任务
-    if (b.trigger.type !== 'cycle') return;
-
-    // 检查平台 (这里会调用上面的安全函数)
-    if (!this.isTargetPlatform(b, 'chat')) return;
-
-    // 确保存储定时器的数组存在
-    if (!this.cycleTimers) this.cycleTimers = [];
-
-    if (!this.cycleTimers[index]) {
-      this.initCycleTimer(b, index);
+    this.initTTSWebSocket();
+    if (isElectron) {
+      window.aiBrowser = this;
+      this.$nextTick(() => {
+        this.generateQRCode(); // 生成二维码
+      });
     }
-  });
-}, 1000);
+    
+    // 1. 时间触发器
+    this.behaviorTimeTimer = setInterval(() => {
+      if (!this.behaviorSettings.enabled) return
+      const now = new Date()
+      const hm = now.toLocaleTimeString('zh-CN', { hour12: false }) 
+      const d  = now.getDay() 
+      this.behaviorSettings.behaviorList.forEach(b => {
+        // 关键改动：使用 isTargetPlatform 检查是否属于当前网页端(chat)任务
+        if (!b.enabled || b.trigger.type !== 'time' || !this.isTargetPlatform(b, 'chat')) return
+        const tv = b.trigger.time.timeValue
+        const ds = b.trigger.time.days
+        if (tv === hm) {
+          if (ds.length === 0 || ds.includes(d)) {
+            this.runBehavior(b)
+            this.disableOnceBehavior(b)
+          }
+        }
+      })
+    }, 1000)
+
+    // 2. 无输入触发器
+    this.noInputSec = 0 
+    this.behaviorNoInputTimer = setInterval(() => {
+      if (!this.behaviorSettings.enabled) return
+      this.behaviorSettings.behaviorList.forEach(b => {
+        // 关键改动：检查平台
+        if (!b.enabled || b.trigger.type !== 'noInput' || !this.isTargetPlatform(b, 'chat')) return
+        const need = b.trigger.noInput.latency
+        if (this.noInputFlag) {
+          this.noInputSec++
+          if (this.noInputSec >= need) {
+            this.runBehavior(b)
+            this.noInputSec = 0 
+          }
+        } else {
+          this.noInputSec = 0
+        }
+      })
+    }, 1000)
+
+    // 3. 周期触发器
+    this.behaviorCycleTimer = setInterval(() => {
+      // 核心防御：层层判断
+      if (!this.behaviorSettings) return;
+      if (this.behaviorSettings.enabled !== true) return;
+      if (!Array.isArray(this.behaviorSettings.behaviorList)) return;
+
+      this.behaviorSettings.behaviorList.forEach((b, index) => {
+        // 检查 b 及其 trigger 是否存在，防止读取 b.trigger.type 报错
+        if (!b || !b.enabled || !b.trigger) return;
+        
+        // 只处理周期类型的任务
+        if (b.trigger.type !== 'cycle') return;
+
+        // 检查平台 (这里会调用上面的安全函数)
+        if (!this.isTargetPlatform(b, 'chat')) return;
+
+        // 确保存储定时器的数组存在
+        if (!this.cycleTimers) this.cycleTimers = [];
+
+        if (!this.cycleTimers[index]) {
+          this.initCycleTimer(b, index);
+        }
+      });
+    }, 1000);
 
     this.scanExtensions(); // 扫描扩展
     if (this.ttsSettings && this.ttsSettings.engine === 'systemtts') {
@@ -928,70 +951,72 @@ this.behaviorCycleTimer = setInterval(() => {
     });
     this.loadFavorites();
 
-const handleRemoteInstall = (data) => {
-  // 1. 根据 type 自动切换菜单和子菜单
-  if (data.type === 'mcp') {
-      this.handleRemoteMCPInstall(data);
-      return;
-  }
-  const { repo, type } = data;
-  if (!repo) return;
-  if (type === 'skill') {
-    this.activeMenu = 'toolkit'; // 假设 Skills 在这个组
-    this.subMenu = 'CLI';      // 切换到 Skills 子菜单
-    this.activeCLITab = 'skills';
-    this.newSkillUrl = repo;      
-  } else {
-    this.activeMenu = 'api-group';
-    this.subMenu = 'extension';
-    this.newExtensionUrl = repo;
-  }
-
-  // 2. 确认弹窗
-  const confirmMsg = type === 'skill' 
-    ? `${this.t('confirmInstallSkillFrom')}：\n${repo}`
-    : `${this.t('confirmInstallExtensionFrom')}：\n${repo}`;
-
-  this.$confirm(
-    confirmMsg, 
-    this.t('confirmInstall'), 
-    { 
-      confirmButtonText: this.t('confirm'), 
-      cancelButtonText: this.t('cancel'),
-      type: 'info' 
-    }
-  ).then(() => {
-    // 3. 执行对应的安装方法
-    if (type === 'skill') {
-      this.installSkillFromGithub();
-    } else {
-      this.addExtension(); // 执行安装 Extension 的方法
-    }
-  }).catch(() => {
-    console.log('用户取消了安装');
-  });
-};
-
-  // --- 挂载监听 ---
-  if (window.electronAPI) {
-    // 软件运行中触发
-    window.electronAPI.onRemoteInstall((payload) => {
-      // 这里的 payload 包含 { repo, type }
-      handleRemoteInstall(payload);
-    });
-
-    // 软件启动时检查
-    setTimeout(async () => {
-      const pendingData = await window.electronAPI.checkPendingInstall();
-      if (pendingData) {
-        handleRemoteInstall(pendingData);
+    const handleRemoteInstall = (data) => {
+      // 1. 根据 type 自动切换菜单和子菜单
+      if (data.type === 'mcp') {
+          this.handleRemoteMCPInstall(data);
+          return;
       }
-    }, 1000);
-  }
+      const { repo, type } = data;
+      if (!repo) return;
+      if (type === 'skill') {
+        this.activeMenu = 'toolkit'; // 假设 Skills 在这个组
+        this.subMenu = 'CLI';      // 切换到 Skills 子菜单
+        this.activeCLITab = 'skills';
+        this.newSkillUrl = repo;      
+      } else {
+        this.activeMenu = 'api-group';
+        this.subMenu = 'extension';
+        this.newExtensionUrl = repo;
+      }
+
+      // 2. 确认弹窗
+      const confirmMsg = type === 'skill' 
+        ? `${this.t('confirmInstallSkillFrom')}：\n${repo}`
+        : `${this.t('confirmInstallExtensionFrom')}：\n${repo}`;
+
+      this.$confirm(
+        confirmMsg, 
+        this.t('confirmInstall'), 
+        { 
+          confirmButtonText: this.t('confirm'), 
+          cancelButtonText: this.t('cancel'),
+          type: 'info' 
+        }
+      ).then(() => {
+        // 3. 执行对应的安装方法
+        if (type === 'skill') {
+          this.installSkillFromGithub();
+        } else {
+          this.addExtension(); // 执行安装 Extension 的方法
+        }
+      }).catch(() => {
+        console.log('用户取消了安装');
+      });
+    };
+
+    // --- 挂载监听（仅 Electron）---
+    if (isElectron && window.electronAPI) {
+      // 软件运行中触发
+      window.electronAPI.onRemoteInstall((payload) => {
+        // 这里的 payload 包含 { repo, type }
+        handleRemoteInstall(payload);
+      });
+
+      // 软件启动时检查
+      setTimeout(async () => {
+        const pendingData = await window.electronAPI.checkPendingInstall();
+        if (pendingData) {
+          handleRemoteInstall(pendingData);
+        }
+      }, 1000);
+    }
 
     this.$nextTick(() => {
       setTimeout(() => {
-        this.updateGlobalShortcut();
+        if (isElectron) {
+          this.updateGlobalShortcut();
+        }
       }, 1000); // 延迟 500ms 确保主进程完全 Ready
     });
   },
