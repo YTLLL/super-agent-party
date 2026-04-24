@@ -1598,7 +1598,6 @@ let vue_data = {
       { id: 'im_bot', title: 'imBot', icon: 'fa-solid fa-comment' },
       { id: 'read_bot', title: 'readBot', icon: "fa-solid fa-book-open-reader"}, 
       { id: 'translate_bot', title: 'translateBot', icon: "fa-solid fa-language"}, 
-      { id: 'bot_config', title: 'bot_config', icon: 'fa-solid fa-robot' }
     ],
     activeImBotTab: 'qq',
     sourceText: '',
@@ -1824,10 +1823,22 @@ let vue_data = {
       body: ''
     },
     editingCustomHttpTool: false,
+
+    searchQuery: '', // 搜索框的值
+    activeCategory: 'all', // 当前选中的分类：'all' | 'local' | 'cloud'
+    
+    // 定义属于本地/自建的供应商列表
+    localVendors:[
+      'llama.cpp','Ollama', 'Vllm', 'LMstudio','SGLang', 'xinference', 
+      'LocalAI', 'ttswebui', 'Dify', 'newapi'
+    ],
+
     vendorValues: [
-      'custom','customAnthropic', 'OpenAI', 'Ollama','Vllm','LMstudio','xinference','Dify','newapi','LocalAI','ttswebui', 'Deepseek', 'Volcano','302.AI',
-      'siliconflow', 'aliyun', 'ZhipuAI', 'moonshot', 'minimax', 'Gemini','Anthropic', 
-      'Grok', 'mistral', 'lingyi','baichuan', 'qianfan', 'hunyuan', 'stepfun', 'Github', 
+      'custom','customAnthropic', 'OpenAI','Anthropic', 'Gemini','Grok',
+      'llama.cpp', 'Ollama','Vllm','LMstudio','SGLang','xinference','Dify','newapi',
+      'LocalAI','ttswebui', 'Deepseek', 'Volcano','302.AI',
+      'siliconflow', 'aliyun', 'ZhipuAI', 'moonshot', 'minimax', 
+       'mistral', 'lingyi','baichuan', 'qianfan', 'hunyuan', 'stepfun', 'Github', 
       'openrouter','together', 'fireworks', '360', 'Nvidia',
       'jina', 'gitee', 'perplexity', 'infini',
       'modelscope', 'tencent', 'MiMo','longcat'
@@ -1836,6 +1847,8 @@ let vue_data = {
       'custom': 'source/providers/logo.png',
       'customAnthropic': 'source/providers/logo.png',
       'OpenAI': 'source/providers/openai.jpeg',
+      'SGLang': 'source/providers/sglang.svg',      
+      'llama.cpp': 'source/providers/llamacpp.png', 
       'Ollama': 'source/providers/ollama.png',
       'Vllm': 'source/providers/vllm.png',
       'LMstudio': 'source/providers/lmstudio.png',
@@ -1882,6 +1895,8 @@ let vue_data = {
       'Vllm': 'https://docs.vllm.ai/en/latest/',      
       'LMstudio': 'https://lmstudio.ai/docs/app',
       'xinference': 'https://inference.readthedocs.io/zh-cn/latest/index.html',
+      'SGLang': 'https://github.com/sgl-project/sglang',    
+      'llama.cpp': 'https://github.com/ggerganov/llama.cpp', 
       'Dify': 'http://localhost/apps',
       'newapi': 'https://github.com/QuantumNous/new-api',
       'LocalAI': 'https://github.com/mudler/LocalAI',

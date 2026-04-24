@@ -18,7 +18,7 @@ from PIL import Image
 import io
 import base64
 from py.get_setting import get_port,load_settings
-from py.image_host import upload_image_host
+# from py.image_host import upload_image_host
 
 # 定义请求体
 class QQBotConfig(BaseModel):
@@ -592,7 +592,7 @@ class MyClient(botpy.Client):
                 if not re.match(r'^https?://', url):
                     continue
                 # 判断是否开启了图床功能
-                url = await upload_image_host(url)
+                # url = await upload_image_host(url)
                 # 用request获取图片，保证图片存在
                 res = requests.get(url)
 
@@ -844,7 +844,7 @@ class MyClient(botpy.Client):
                 if not url.startswith(('http://', 'https://')):
                     continue
                 # 判断是否开启了图床功能
-                url = await upload_image_host(url)
+                # url = await upload_image_host(url)
                 # 用request获取图片，保证图片存在
                 res = requests.get(url)
                 print(f"发送图片: {url}")

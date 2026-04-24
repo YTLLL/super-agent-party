@@ -4193,6 +4193,8 @@ let vue_methods = {
         'newapi': this.isdocker ? 'http://host.docker.internal:3000/v1' : 'http://127.0.0.1:3000/v1',
         'LocalAI': this.isdocker ? 'http://host.docker.internal:8080/v1' : 'http://127.0.0.1:8080/v1',
         'ttswebui': this.isdocker ? 'http://host.docker.internal:7778/v1' : 'http://127.0.0.1:7778/v1',
+        'SGLang': this.isdocker ? 'http://host.docker.internal:3000/v1' : 'http://127.0.0.1:3000/v1', 
+        'llama.cpp': this.isdocker ? 'http://host.docker.internal:8080/v1' : 'http://127.0.0.1:8080/v1',
         'Gemini': 'https://generativelanguage.googleapis.com/v1beta/openai',
         'Anthropic': 'https://api.anthropic.com/v1',
         'Grok': 'https://api.groq.com/openai/v1',
@@ -4241,6 +4243,12 @@ let vue_methods = {
       }
       if (value === 'Dify') {
         this.newProviderTemp.modelId = 'dify'
+      }
+      if (value === 'SGLang') {
+        this.newProviderTemp.apiKey = 'SGLang' // 新增
+      }
+      if (value === 'llama.cpp') {
+        this.newProviderTemp.apiKey = 'llamacpp' // 新增
       }
     },
     // rerank供应商
