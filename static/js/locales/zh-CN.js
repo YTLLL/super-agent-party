@@ -110,6 +110,8 @@ window.lang_zhCN = {
         'vendor.customAnthropic': '自定义Anthropic',
         'vendor.OpenAI': 'OpenAI',
         'vendor.Ollama': 'Ollama',
+        "vendor.SGLang": "SGLang",
+        "vendor.llama.cpp": "llama.cpp",
         'vendor.Vllm': 'Vllm',
         'vendor.xinference': 'Xinference',
         'vendor.Dify': 'Dify',
