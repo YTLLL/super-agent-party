@@ -1417,6 +1417,32 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         logger.error(f"Error calling tool {tool_name}: {e}")
         return f"Error calling tool {tool_name}: {e}"
 
+def process_extra_params(extra_params):
+    extra_body = {}
+    for item in extra_params:
+        name = item.get('name', '').strip()
+        if not name:
+            continue
+            
+        value = item.get('value')
+        param_type = item.get('type')
+
+        # 如果类型是 dict，尝试解析 JSON 字符串
+        if param_type == 'dict':
+            try:
+                if isinstance(value, str):
+                    extra_body[name] = json.loads(value)
+                else:
+                    extra_body[name] = value
+            except Exception as e:
+                # 解析失败时可以记录日志或跳过，或者保持原样
+                print(f"JSON Parse Error for {name}: {e}")
+                extra_body[name] = value 
+        else:
+            extra_body[name] = value
+            
+    return extra_body
+
 class ChatRequest(BaseModel):
     messages: List[Dict]
     model: str = None
@@ -1647,7 +1673,7 @@ async def _extract_group_memories(client, settings: dict, payload: dict) -> list
 
     try:
         extra_params = settings.get('extra_params') or []
-        extra_body = {item['name']: item['value'] for item in extra_params if item.get('name', '').strip()}
+        extra_body = process_extra_params(extra_params)
         response = await client.chat.completions.create(
             model=settings['model'],
             messages=[
@@ -3504,7 +3530,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 if not extra_param['name'].strip():
                     extra_params.remove(extra_param)
             # 列表转换为字典
-            extra_params = {item['name']: item['value'] for item in extra_params}
+            extra_params = process_extra_params(extra_params)
         else:
             extra_params = {}
         async def stream_generator(user_prompt,DRS_STAGE,tools,images):
@@ -5582,7 +5608,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
                 if not extra_param['name'].strip():
                     extra_params.remove(extra_param)
             # 列表转换为字典
-            extra_params = {item['name']: item['value'] for item in extra_params}
+            extra_params = process_extra_params(extra_params)
         else:
             extra_params = {}
         if request.fileLinks:

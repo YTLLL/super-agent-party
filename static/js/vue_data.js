@@ -168,7 +168,8 @@ let vue_data = {
       { value: 'string', label: 'string' },
       { value: 'integer', label: 'integer' },
       { value: 'float', label: 'float' },
-      { value: 'boolean', label: 'boolean' }
+      { value: 'boolean', label: 'boolean' },
+      {  value: 'dict', label: 'JSON/Dict', },
     ],
     ws: null,
     messages: [],
