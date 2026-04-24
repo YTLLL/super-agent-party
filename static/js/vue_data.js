@@ -145,11 +145,13 @@ let vue_data = {
     target_lang: 'zh-CN',
     reasoningEfforts:[
       { value: null, label: 'auto' },
-      { value: 'minimal', label: 'minimal' },
-      { value: 'low', label: 'low' },
-      { value: 'medium', label: 'medium' },
-      { value: 'high', label: 'high' },
-      { value: 'none', label: 'none' },
+      { value: 'minimal', label: 'reason-minimal' },
+      { value: 'low', label: 'reason-low' },
+      { value: 'medium', label: 'reason-medium' },
+      { value: 'high', label: 'reason-high' },
+      { value: 'xhigh', label: 'reason-xhigh' },
+      { value: 'max', label: 'reason-max' },
+      { value: 'none', label: 'reason-none' },
     ],
     visionSettings: {
       enabled: false, // 默认不启用
