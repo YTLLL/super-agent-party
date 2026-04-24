@@ -9421,6 +9421,14 @@ hr.footnotes-sep {
   }
 }
 
+.input-container {
+    margin: 0 !important;
+    /* 将底部的 8px 改为 24px 或 30px，给阴影留足空间 */
+    padding: 0 4px 24px 4px !important; 
+    position: relative;
+    z-index: 10;
+}
+
 /* 2. 左下角：语音 / 键盘 切换按钮 */
 .voice-toggle-btn {
   display: flex;
@@ -9787,6 +9795,19 @@ hr.footnotes-sep {
       background-color: rgba(128, 128, 128, 0.1) !important;
     }
   }
+}
+
+.unified-input-wrapper {
+  background-color: var(--el-bg-color) !important;
+  border-radius: 24px !important; 
+  border: 1px solid var(--el-border-color) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* 修复尖角：减小向下的偏移和模糊度(例如改为 0 4px 10px)，使其在 8px 的缝隙内能平滑消散 */
+  box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.05), 
+              0 4px 10px rgba(0, 0, 0, 0.08) !important;
+              
+  overflow: hidden; 
 }
 
 /* 胶囊模式专用（或者全局标准 primary 按钮） */
