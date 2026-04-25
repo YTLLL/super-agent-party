@@ -3048,14 +3048,23 @@ let vue_methods = {
         const toolName = data?.tool_name || 'Tool';
         const blockId = `approval-${toolCallId}`;
 
+        // 【修复1】：用变量直接缓存找到的目标块的引用，不再二次查找
+        let targetBlock = null;
         if (currentMsg.displayBlocks) {
-            const block = currentMsg.displayBlocks.find(b => b.id === toolCallId && b.type === 'approval');
-            if (block) {
-                block.type = 'tool_result';
-                block.name = action === 'deny' ? this.t('denying') : `${this.t('executing')} ${toolName}...`;
-                block.content = ''; 
+            // 严格限定不仅 id 要匹配，而且必须是我们初始的 approval 块
+            targetBlock = currentMsg.displayBlocks.find(b => b.id === toolCallId && b.type === 'approval');
+            if (targetBlock) {
+                targetBlock.type = 'tool_result';
+                targetBlock.name = action === 'deny' ? this.t('denying') : `${this.t('executing')} ${toolName}...`;
+                targetBlock.content = ''; 
             }
         }
+
+        // 【修复2】：补充定义转义方法，避免 this.escapeHtml 报错崩溃
+        const escapeHtml = (text) => {
+            if (!text) return '';
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
 
         const feedbackTitle = action === 'deny' ? (this.t('denying') || 'Denying...') : `${this.t('executing') || 'Executing'} ${toolName}...`;
         this.updateUIBlock(currentMsg, blockId, `\n`);
@@ -3072,20 +3081,20 @@ let vue_methods = {
                 resultText = await this.executeToolBackend(toolName, data.tool_params, action);
             }
 
-            if (currentMsg.displayBlocks) {
-                const block = currentMsg.displayBlocks.find(b => b.id === toolCallId);
-                if (block) {
-                    block.type = action === 'deny' ? 'error' : 'tool_result';
-                    block.name = action === 'deny' ? this.t('tool_deny') : `${toolName} ${this.t('tool_result')}`;
-                    block.content = resultText;
-                }
+            // 【修复1】：直接使用缓存的对象修改，不会影响到同 id 的 tool_call 块
+            if (targetBlock) {
+                targetBlock.type = action === 'deny' ? 'error' : 'tool_result';
+                targetBlock.name = action === 'deny' ? this.t('tool_deny') : `${toolName} ${this.t('tool_result')}`;
+                targetBlock.content = resultText;
             }
 
             const className = action === 'deny' ? 'highlight-block-error' : 'highlight-block';
             const finalTitle = action === 'deny' ? this.t('tool_deny') : `${toolName} ${this.t('tool_result')}`;
+            
+            // 【修复2】：调用局部定义的 escapeHtml 方法，不再使用 this.escapeHtml
             const resultHtml = `\n<div class="${className}" id="${blockId}">
-                <div style="font-weight: bold; margin-bottom: 5px;">${this.escapeHtml(finalTitle)}</div>
-                <pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${this.escapeHtml(resultText)}</pre>
+                <div style="font-weight: bold; margin-bottom: 5px;">${escapeHtml(finalTitle)}</div>
+                <pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${escapeHtml(resultText)}</pre>
             </div>\n`;
             this.updateUIBlock(currentMsg, blockId, resultHtml);
 
@@ -3099,11 +3108,15 @@ let vue_methods = {
                 }
             }
             
+            // 成功走到这里，大模型才会被重新唤醒
             await this.generateAIResponse(this.mainAgent, currentMsg.agentName, true);
 
         } catch (e) {
             console.error("Approval flow failed:", e);
-            showNotification("Tool execution failed", 'error');
+            // 兼容性判断，防止 showNotification 在其他环境也没有定义而二次崩溃
+            if (typeof showNotification === 'function') {
+                showNotification("Tool execution failed", 'error');
+            }
             this.isSending = false;
             this.isTyping = false;
         }
