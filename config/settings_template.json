@@ -189,6 +189,12 @@
       "max_iterations": 100,
       "mode_change": false
     },
+    "acpSettings": {
+      "agent": "claude",          
+      "permissionMode": "default", 
+      "model": "",                
+      "extraEnv": ""           
+    },
     "visionControlSettings":{
       "enabled": false,
       "mouse":true,

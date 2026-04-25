@@ -968,6 +968,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                 <el-select v-model="CLISettings.engine" class="full-width">
                   <el-option :label="t('localEnvironment')" value="local"></el-option>
                   <el-option :label="t('dockerSandbox')" value="ds"></el-option>
+                  <el-option :label="t('ACPProtocol') || 'ACP Protocol'" value="acp" ></el-option>
                 </el-select>
               </el-form-item>
               <el-form-item :label="t('workspace')" required>
@@ -2030,8 +2031,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                       {{ 
                                         CLISettings.engine === 'local' ? localEnvSettings.permissionMode :
                                         CLISettings.engine === 'ds' ? dsSettings.permissionMode :
-                                        CLISettings.engine === 'cc' ? ccSettings.permissionMode :
-                                        CLISettings.engine === 'qc' ? qcSettings.permissionMode : 'unknown'
+                                        CLISettings.engine === 'acp' ? acpSettings.permissionMode : 'unknown'
                                       }}
                                     </span>
                                   </span>
@@ -2056,21 +2056,13 @@ function updateElement(el, rawMarkdown, formatFn) {
                                     <el-dropdown-item @click="dsSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('bypassPermissions') }}</el-dropdown-item>
                                     <el-dropdown-item @click="dsSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('coworkPermissionMode') }}</el-dropdown-item>
                                   </template>
-                                  <!-- Claude Code (CC) 选项 -->
-                                  <template v-else-if="CLISettings.engine === 'cc'">
-                                    <el-dropdown-item @click="ccSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="ccSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="ccSettings.permissionMode='acceptEdits'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="ccSettings.permissionMode='bypassPermissions'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="ccSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
-                                  </template>
-                                  <!-- Qwen Code (QC) 选项 -->
-                                  <template v-else-if="CLISettings.engine === 'qc'">
-                                    <el-dropdown-item @click="qcSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="qcSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="qcSettings.permissionMode='auto-edit'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="qcSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
-                                    <el-dropdown-item @click="qcSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+                                  <!-- ACP 选项 -->
+                                  <template v-else-if="CLISettings.engine === 'acp'">
+                                    <el-dropdown-item @click="acpSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="acpSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="acpSettings.permissionMode='acceptEdits'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="acpSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="acpSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
                                   </template>
                                 </el-dropdown-menu>
                               </template>
@@ -9606,6 +9598,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                           >
                             <el-option :label="t('localEnvironment')" value="local" ></el-option>
                             <el-option :label="t('dockerSandbox')" value="ds" ></el-option> 
+                            <el-option :label="t('ACPProtocol') || 'ACP Protocol'" value="acp" ></el-option>
                           </el-select>
                         </el-form-item>
 
@@ -9645,6 +9638,111 @@ function updateElement(el, rawMarkdown, formatFn) {
                         <template #default>
                           <div class="alert-content">
                             {{ t('shortcutNotice1') }}
+                          </div>
+                        </template>
+                      </el-alert>
+                    </div>
+
+
+                    <!-- ★ 新增：ACP 协议配置（放在 Docker Sandbox 配置 div 后面） -->
+                    <div class="tool-item" v-show="CLISettings.engine === 'acp'">
+                      <div class="tool-header">
+                        <div class="header-left">
+                          <span>
+                            <el-icon><i class="fa-solid fa-plug"></i></el-icon>
+                            {{ t('ACPProtocol') || 'ACP Protocol' }}
+                          </span>
+                        </div>
+                      </div>
+                      <div class="tool-content">
+
+                        <!-- ★ CLI 智能体选择 -->
+                        <el-form-item :label="t('CLIAgent') || 'CLI Agent'" class="form-item-align">
+                          <el-select 
+                            v-model="acpSettings.agent" 
+                            @change="autoSaveSettings" 
+                            class="full-width-input"
+                          >
+                            <el-option label="Claude Code" value="claude">
+                            </el-option>
+                            <el-option label="Codex CLI" value="codex">
+                            </el-option>
+                            <el-option label="Gemini CLI" value="gemini">
+                            </el-option>
+                            <el-option label="Qwen Code" value="qwen">
+                            </el-option>
+                            <el-option label="Cursor CLI" value="cursor">
+                            </el-option>
+                            <el-option label="GitHub Copilot" value="copilot">
+                            </el-option>
+                            <el-option label="OpenCode" value="opencode">
+                            </el-option>
+                          </el-select>
+                        </el-form-item>
+
+                        <!-- ★ 权限模式选择 -->
+                        <el-form-item :label="t('permissionMode')" class="form-item-align">
+                          <el-select 
+                            v-model="acpSettings.permissionMode" 
+                            @change="autoSaveSettings" 
+                            class="full-width-input"
+                          >
+                            <el-option :label="t('planMode')" value="plan" ></el-option>
+                            <el-option :label="t('defaultPermissionMode')" value="default" ></el-option>
+                            <el-option :label="t('acceptEdits')" value="auto-approve" ></el-option>
+                            <el-option :label="t('danger')+t('bypassPermissions')" value="yolo" ></el-option>
+                            <el-option :label="t('danger')+t('coworkPermissionMode')" value="cowork" ></el-option>
+                          </el-select>
+                        </el-form-item>
+
+                        <!-- ★ 模型配置（可选，用于覆盖默认模型） -->
+                        <el-form-item :label="t('modelOverride') || 'Model Override (Optional)'" class="form-item-align">
+                          <el-input 
+                            v-model="acpSettings.model" 
+                            placeholder="claude-sonnet-4-20250514 / gpt-5.1 / gemini-2.5-pro ..."
+                            @input="autoSaveSettings" 
+                            class="full-width-input"
+                          >
+                          </el-input>
+                        </el-form-item>
+
+                        <!-- ★ 额外环境变量配置 -->
+                        <el-form-item :label="t('extraEnvVars') || 'Extra Environment Variables'" class="form-item-align">
+                          <el-input 
+                            v-model="acpSettings.extraEnv" 
+                            type="textarea"
+                            :rows="3"
+                            placeholder="KEY1=value1&#10;KEY2=value2"
+                            @input="autoSaveSettings" 
+                            class="full-width-input"
+                          />
+                        </el-form-item>
+
+                        <!-- ★ ACPX 状态检查 -->
+                        <div class="acpx-status-bar">
+                          
+                          <el-button 
+                            @click="checkAcpxStatus" 
+                            :loading="checkingAcpx"
+                            type="primary" 
+                            class="add-server-btn">
+                            {{ t('checkAcpxStatus') || 'Check ACPX Status' }}
+                          </el-button>
+                        </div>
+
+                      </div>
+                      
+                      <!-- ★ ACP 协议说明 -->
+                      <el-alert
+                        type="info"
+                        :closable="false"
+                        class="mb-2"
+                      >
+                        <template #default>
+                          <div class="alert-content">
+                            1. {{ t('ACPProtocolNotice1') || 'ACP Protocol lets you use any CLI coding agent as a sub-agent via a unified interface.' }}<br>
+                            2. {{ t('ACPProtocolNotice2') || 'Make sure the target CLI tool is installed in your environment (e.g., Claude Code, Codex, Qwen Code).' }}<br>
+                            3. {{ t('ACPProtocolNotice3') || 'ACPM will automatically detect and use the installed acpx command.' }}
                           </div>
                         </template>
                       </el-alert>

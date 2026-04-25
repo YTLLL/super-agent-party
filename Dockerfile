@@ -11,6 +11,9 @@ RUN apt-get update && \
     # 清理 APT 缓存，减小镜像体积
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# 全局安装 acpx（这样任何地方都能直接用）
+RUN npm install -g acpx@latest
+
 WORKDIR /app
 
 # 2. 先只复制依赖文件 (利用缓存)

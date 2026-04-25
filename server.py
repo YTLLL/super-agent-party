@@ -1106,6 +1106,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
     )
 
     from py.mode_change import update_workspace_settings
+    from py.acpx_tools import acpx_agent
 
     # ==================== 2. 定义工具映射表 ====================
     _TOOL_HOOKS = {
@@ -1213,6 +1214,7 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         "screenshot":screenshot,
 
         "update_workspace_settings":update_workspace_settings,
+        "acpx_agent":acpx_agent,
     }
     
     # ==================== 3. 权限拦截逻辑 (Human-in-the-loop) ====================
@@ -1241,8 +1243,10 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         
         if engine == "local":
             env_settings = settings.get("localEnvSettings", {})
-        else:
+        elif engine == "ds":
             env_settings = settings.get("dsSettings", {})
+        else:
+            env_settings = settings.get("acpSettings", {})
         
         permission_mode = env_settings.get("permissionMode", "default")
         
@@ -1405,6 +1409,9 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
         
     tool_call = _TOOL_HOOKS[tool_name]
     try:
+        if tool_name in ("acpx_agent",):
+            return tool_call(**tool_params)
+
         ret_out = await tool_call(**tool_params)
         if tool_name == "auto_behavior":
             settings = ret_out
@@ -2097,8 +2104,10 @@ async def tools_change_messages(request: ChatRequest, settings: dict):
     
     if engine == "local":
         env_settings = settings.get("localEnvSettings", {})
-    else:
+    elif engine == "ds":
         env_settings = settings.get("dsSettings", {})
+    else:
+        env_settings = settings.get("acpSettings", {})
     
     permissionMode = env_settings.get("permissionMode", "default")
     
@@ -3244,6 +3253,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
         )
 
         from py.mode_change import mode_change_tool
+        from py.acpx_tools import acp_agent_tool
 
         m0 = None
         memoryId = None
@@ -3331,6 +3341,8 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 tools.extend(get_tools_for_mode('yolo'))
             elif settings['CLISettings']['engine'] == 'local':
                 tools.extend(get_local_tools_for_mode('yolo'))
+            elif settings['CLISettings']['engine'] == 'acp':
+                tools.append(acp_agent_tool)
         if  settings['CLISettings']['mode_change']:
             tools.append(mode_change_tool)
         if settings['visionControlSettings']['enabled']:
@@ -3824,7 +3836,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                 elif engine == "ds":
                     env_settings = settings.get("dsSettings", {})
                 else:
-                    env_settings = {}
+                    env_settings = settings.get("acpSettings", {})
                 
                 permission_mode = env_settings.get("permissionMode", "default")
                 if permission_mode == "cowork" and settings['CLISettings']['enabled'] and not request.is_sub_agent:
@@ -5512,6 +5524,8 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
             tools.extend(get_tools_for_mode('yolo'))
         elif settings['CLISettings']['engine'] == 'local':
             tools.extend(get_local_tools_for_mode('yolo'))
+        elif settings['CLISettings']['engine'] == 'acp':
+            tools.append(acp_agent_tool)
     if  settings['CLISettings']['mode_change']:
         tools.append(mode_change_tool)
     if settings['visionControlSettings']['enabled']:
@@ -6437,6 +6451,7 @@ async def execute_tool_manually(request: Request):
     )
 
     from py.mode_change import update_workspace_settings
+    from py.acpx_tools import acpx_agent
 
     # ==================== 2. 定义工具映射表 ====================
     _TOOL_HOOKS = {
@@ -6544,6 +6559,7 @@ async def execute_tool_manually(request: Request):
         "screenshot":screenshot,
 
         "update_workspace_settings":update_workspace_settings,
+        "acpx_agent":acpx_agent,
     }
     
 
@@ -6553,6 +6569,9 @@ async def execute_tool_manually(request: Request):
     tool_func = _TOOL_HOOKS[tool_name]
     
     try:
+        if tool_name in ("acpx_agent",):
+            return tool_func(**tool_params)
+
         # 2. 执行工具
         result = await tool_func(**tool_params)
         
@@ -11275,6 +11294,12 @@ async def shutdown_server():
     # Windows 和 Linux/Mac 都支持 SIGTERM
     os.kill(os.getpid(), signal.SIGTERM)
     return {"message": "Shutting down..."}
+
+from py.acpx_tools import check_acpx_available
+@app.get("/api/acpx/status")
+async def acpx_status():
+    """返回 ACPX 的安装状态和环境信息"""
+    return check_acpx_available()
 
 from py.uv_api import router as uv_router
 app.include_router(uv_router)

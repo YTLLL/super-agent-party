@@ -1871,6 +1871,7 @@ let vue_methods = {
           this.webSearchSettings = data.data.webSearch || this.webSearchSettings;
           this.codeSettings = data.data.codeSettings || this.codeSettings;
           this.CLISettings = data.data.CLISettings || this.CLISettings;
+          this.acpSettings = data.data.acpSettings || this.acpSettings;
           this.visionControlSettings = data.data.visionControlSettings || this.visionControlSettings;
           this.loveSettings = data.data.loveSettings || this.loveSettings;
           this.ccSettings = data.data.ccSettings || this.ccSettings;
@@ -1946,6 +1947,7 @@ let vue_methods = {
           this.webSearchSettings = data.data.webSearch || this.webSearchSettings;
           this.codeSettings = data.data.codeSettings || this.codeSettings;
           this.CLISettings = data.data.CLISettings || this.CLISettings;
+          this.acpSettings = data.data.acpSettings || this.acpSettings;
           this.visionControlSettings = data.data.visionControlSettings || this.visionControlSettings;
           this.loveSettings = data.data.loveSettings || this.loveSettings;
           this.ccSettings = data.data.ccSettings || this.ccSettings;
@@ -3549,6 +3551,7 @@ let vue_methods = {
           webSearch: this.webSearchSettings, 
           codeSettings: this.codeSettings,
           CLISettings: this.CLISettings,
+          acpSettings: this.acpSettings,
           visionControlSettings: this.visionControlSettings,
           loveSettings: this.loveSettings,
           ccSettings: this.ccSettings,
@@ -17797,4 +17800,28 @@ gotoAddExtension(){
         this.toggleVTSConnection();
       }
   },
+
+  async checkAcpxStatus() {
+    this.checkingAcpx = true
+    try {
+      const host = window.location.hostname || '127.0.0.1'
+      const port = window.location.port || '3456'
+      const res = await fetch(`http://${host}:${port}/api/acpx/status`)
+      const data = await res.json()
+      
+      if (data.available) {
+        this.acpxStatus = 'available'
+        showNotification(`ACPM Ready - Environment: ${data.environment}`)
+      } else {
+        this.acpxStatus = 'unavailable'
+        showNotification(`ACPM Not Found: ${data.error}`,'error')
+      }
+    } catch (err) {
+      this.acpxStatus = 'unavailable'
+      showNotification('Failed to check ACPX status','error')
+    } finally {
+      this.checkingAcpx = false
+    }
+  },
+
 }

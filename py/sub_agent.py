@@ -210,12 +210,51 @@ class SubAgentExecutor:
 
         return {"success": True, "task_id": task_id, "result": result}
 
-    async def _call_llm_stream_only(self, http_client, messages, model, task_id, task_center, base_progress, display_history) -> str:
+    # sub_agent.py - _call_llm_stream_only 极简版
+
+    async def _call_llm_stream_only(
+        self, http_client, messages, model, task_id, task_center, 
+        base_progress, display_history
+    ) -> str:
         payload = {
             "messages": messages, "model": model, "stream": True, "is_sub_agent": True,
             "disable_tools": ["create_subtask", "query_tasks_tool", "cancel_subtask"]
         }
-        full_content, current_text_buffer = "", ""
+        
+        full_content = ""
+        current_text_buffer = ""
+        
+        # ★ 流式缓冲区：就是简单的一个字符串
+        stream_buffer = ""
+        stream_title = ""
+        
+        last_update_time = asyncio.get_event_loop().time()
+        UPDATE_INTERVAL = 2.0
+        
+        def _push_line(line: str):
+            """把一行写入 display_history"""
+            stripped = line.strip()
+            if not stripped:
+                return
+            display_history.append(stripped)
+        
+        def _flush_buffer():
+            """把 stream_buffer 里剩下的内容拆行写入 display_history"""
+            nonlocal stream_buffer, stream_title
+            if not stream_buffer:
+                return
+            
+            # 先加标题
+            if stream_title:
+                display_history.append(f"📡 [{stream_title}]")
+                stream_title = ""
+            
+            # 按换行拆开，逐行追加
+            for part in stream_buffer.split("\n"):
+                _push_line(part)
+            
+            stream_buffer = ""
+        
         try:
             async with http_client.stream("POST", self.chat_endpoint, json=payload) as response:
                 async for line in response.aiter_lines():
@@ -225,21 +264,83 @@ class SubAgentExecutor:
                     try:
                         chunk = json.loads(data_str)
                         delta = chunk["choices"][0].get("delta", {})
+                        
+                        # --- 文本内容：刷掉流式缓冲区 ---
                         if delta.get("content"):
+                            _flush_buffer()
                             full_content += delta["content"]
                             current_text_buffer += delta["content"]
-                        if delta.get("tool_content") and task_center:
+                        
+                        # --- 工具调用：刷掉流式缓冲区 ---
+                        if delta.get("tool_calls"):
+                            _flush_buffer()
                             if current_text_buffer.strip():
                                 display_history.append(current_text_buffer.strip())
                                 current_text_buffer = ""
-                            tool = delta["tool_content"]
-                            if "finish_task" in str(tool.get("title")): continue
-                            if tool.get("type") in ["tool_result", "error"]:
-                                display_history.append(f"{'✅' if tool['type']=='tool_result' else '❌'} [{tool.get('title')}]\nResult: {str(tool.get('content'))[:200]}")
-                                await task_center.update_task_progress(task_id, base_progress, status=TaskStatus.RUNNING, context={"history": display_history})
+                            for tc in delta["tool_calls"]:
+                                display_history.append(f"🔧 Calling: {tc.get('function',{}).get('name','?')}")
+                        
+                        # --- 工具结果 ---
+                        tool = delta.get("tool_content")
+                        if tool:
+                            ttype = tool.get("type", "")
+                            title = tool.get("title", "tool")
+                            content = str(tool.get("content", ""))
+                            
+                            if "finish_task" in str(title):
+                                continue
+                            
+                            if ttype == "tool_result_stream":
+                                # ★ 记下标题
+                                if not stream_title:
+                                    stream_title = title
+                                # ★ 追加到缓冲区
+                                stream_buffer += content
+                                # ★ 遇到换行符就拆出来逐行写入
+                                while "\n" in stream_buffer:
+                                    line, stream_buffer = stream_buffer.split("\n", 1)
+                                    if not stream_title:
+                                        _push_line(line)
+                                    else:
+                                        display_history.append(f"📡 [{stream_title}]")
+                                        stream_title = ""
+                                        _push_line(line)
+                            
+                            elif ttype == "tool_result":
+                                _flush_buffer()
+                                display_history.append(f"✅ [{title}]\n{content[:500]}")
+                            
+                            elif ttype == "error":
+                                _flush_buffer()
+                                display_history.append(f"❌ [{title}]\n{content[:300]}")
+                            
+                            else:
+                                _flush_buffer()
+                                display_history.append(f"📋 [{title}]\n{content[:300]}")
+                        
+                        # --- 定期更新 ---
+                        now = asyncio.get_event_loop().time()
+                        if now - last_update_time >= UPDATE_INTERVAL:
+                            await task_center.update_task_progress(
+                                task_id, base_progress, status=TaskStatus.RUNNING,
+                                context={"history": display_history, "live_content": full_content[-800:] if full_content else ""}
+                            )
+                            last_update_time = now
+                            
                     except: continue
-        except: pass
-        if current_text_buffer.strip(): display_history.append(current_text_buffer.strip())
+        except Exception as e:
+            print(f"[SubAgent] Stream error: {e}")
+        
+        # 最后刷掉所有缓冲
+        _flush_buffer()
+        if current_text_buffer.strip():
+            display_history.append(current_text_buffer.strip())
+        
+        await task_center.update_task_progress(
+            task_id, base_progress + 10, status=TaskStatus.RUNNING,
+            context={"history": display_history, "live_content": full_content[-1000:] if full_content else ""}
+        )
+        
         return full_content
 
     def _build_system_prompt(self, task, consensus_content):

@@ -2248,5 +2248,14 @@ main();`,
       enabledExpressions: true,
       enabledMotions: true
     },
-
+    acpSettings: {
+      agent: 'claude',            // 默认 CLI 智能体
+      permissionMode: 'default',  // 默认权限模式
+      model: '',                  // 模型覆盖（可选）
+      extraEnv: '',              // 额外环境变量
+    },
+    
+    // ★ ACPX 状态
+    acpxStatus: null,            // null | 'available' | 'unavailable'
+    checkingAcpx: false,         // 检查中
 };

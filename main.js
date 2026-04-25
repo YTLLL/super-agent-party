@@ -437,6 +437,14 @@ function createSkeletonWindow() {
   })
 }
 
+function getAcpxPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'acpx');
+  } else {
+    return path.join(__dirname, 'node_modules', 'acpx');
+  }
+}
+
 // 修改后的启动后端函数
 /**
  * 启动后端服务
@@ -459,6 +467,8 @@ async function startBackend() {
           PYTHONUNBUFFERED: '1', // 强制 Python 实时刷新缓冲区
           ELECTRON_NODE_EXEC: process.execPath, 
           ELECTRON_NPM_CLI: npmCliPath,
+          ELECTRON_RESOURCES_PATH: app.isPackaged ? process.resourcesPath : path.join(__dirname),
+          ELECTRON_ACPM_PATH: getAcpxPath(),
         }
       };
 
