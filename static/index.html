@@ -6463,20 +6463,11 @@ function updateElement(el, rawMarkdown, formatFn) {
                             ></el-switch>
 
                             <el-input
-                              v-if="param.type === 'dict'"
+                              v-if="param.type === 'json'"
                               v-model="param.value"
                               type="textarea"
                               :autosize="{ minRows: 1, maxRows: 4 }"
-                              placeholder='例如: {"type": "enabled"}'
-                              @input="autoSaveSettings"
-                            ></el-input>
-
-                            <el-input
-                              v-if="param.type === 'list'"
-                              v-model="param.value"
-                              type="textarea"
-                              :autosize="{ minRows: 1, maxRows: 4 }"
-                              :placeholder="getParamPlaceholder(param.type)"
+                              placeholder='eg: {"type": "enabled"}'
                               @input="autoSaveSettings"
                               :class="{ 'json-error': isInvalidJson(param) }" 
                             ></el-input>
@@ -6783,21 +6774,11 @@ function updateElement(el, rawMarkdown, formatFn) {
                             ></el-switch>
 
                             <el-input
-                              v-if="param.type === 'dict'"
+                              v-if="param.type === 'json'"
                               v-model="param.value"
                               type="textarea"
                               :autosize="{ minRows: 1, maxRows: 4 }"
-                              :placeholder="getParamPlaceholder(param.type)"
-                              @input="autoSaveSettings"
-                              :class="{ 'json-error': isInvalidJson(param) }" 
-                            ></el-input>
-
-                            <el-input
-                              v-if="param.type === 'list'"
-                              v-model="param.value"
-                              type="textarea"
-                              :autosize="{ minRows: 1, maxRows: 4 }"
-                              :placeholder="getParamPlaceholder(param.type)"
+                              placeholder='eg: {"type": "enabled"}'
                               @input="autoSaveSettings"
                               :class="{ 'json-error': isInvalidJson(param) }" 
                             ></el-input>

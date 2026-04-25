@@ -164,13 +164,12 @@ let vue_data = {
       wakeWord: '看\nsee\nlook\n桌面\ndesktop',
       enableWakeWord: false,
     },
-    paramTypes: [
+    paramTypes:[
       { value: 'string', label: 'string' },
       { value: 'integer', label: 'integer' },
       { value: 'float', label: 'float' },
       { value: 'boolean', label: 'boolean' },
-      { value: 'dict', label: 'JSON Object (Dict)' },
-      { value: 'list', label: 'JSON List (Array)'}, 
+      { value: 'json', label: 'JSON' } // 合并为一个
     ],
     ws: null,
     messages: [],
