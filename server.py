@@ -1221,12 +1221,10 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
     SENSITIVE_TOOLS = [
         "docker_sandbox",
         "edit_file_tool",
-        "edit_file_patch_tool",   
-        "todo_write_tool",        
+        "edit_file_patch_tool",          
         "shell_tool_local",
         "edit_file_tool_local",
         "edit_file_patch_tool_local",
-        "todo_write_tool_local",
         "manage_processes_tool",
         "docker_manage_ports_tool",
         "local_net_tool",

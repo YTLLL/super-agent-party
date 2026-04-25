@@ -1137,60 +1137,58 @@ function updateElement(el, rawMarkdown, formatFn) {
                             <div v-else-if="message.displayBlocks && message.displayBlocks.length > 0" class="message-blocks-container">
                                 <template v-for="(block, bIndex) in message.displayBlocks" :key="'blk-'+bIndex">
                                     
-                                    <!-- 1. 深度思考块 (Reasoning) -->
-                                    <div v-if="block.type === 'reasoning'" class="highlight-block-reasoning" style="display: block; width: 100%;">
-                                        <div class="thinking-header" style="opacity: 0.7; font-size: 0.9em; margin-bottom: 8px;">
-                                            <i class="fa-solid fa-lightbulb"></i> {{ t('thinking') }}
-                                        </div>
-                                        <!-- 使用指令将 Markdown 渲染 -->
-                                        <div v-morph:format="block.content"></div>
-                                    </div>
-
-                                    <!-- 文本块 -->
-                                    <div v-else-if="block.type === 'text'" class="a2ui-text-wrapper">
-                                        <template v-for="(segment, sIdx) in splitMessageContent(block.content)" :key="sIdx">
-                                            <!-- 这里的 v-morph:format="segment.content" 会随着 block.content 的变化而实时重新渲染 Markdown -->
-                                            <div v-if="segment.type === 'text'" 
-                                                v-morph:format="segment.content" 
-                                                style="display: inline-block; width: 100%;">
-                                            </div>
-                                            <a2-u-i-renderer v-else-if="segment.type === 'ui'" :config="segment.content" @action="handleA2UIAction"></a2-u-i-renderer>
-                                        </template>
-                                    </div>
+                                  <!-- 1. 深度思考块 (Reasoning) -->
+                                  <div v-if="block.type === 'reasoning'" class="sap-process-block type-reasoning">
+                                      <div class="sp-header"><i class="fa-solid fa-brain"></i> {{ t('thinking') }}</div>
+                                      <div class="sp-content" v-morph:format="block.content"></div>
+                                  </div>
 
 
+                                  <!-- 文本块 -->
+                                  <div v-else-if="block.type === 'text'" class="a2ui-text-wrapper">
+                                      <template v-for="(segment, sIdx) in splitMessageContent(block.content)" :key="sIdx">
+                                          <!-- 这里的 v-morph:format="segment.content" 会随着 block.content 的变化而实时重新渲染 Markdown -->
+                                          <div v-if="segment.type === 'text'" 
+                                              v-morph:format="segment.content" 
+                                              style="display: inline-block; width: 100%;">
+                                          </div>
+                                          <a2-u-i-renderer v-else-if="segment.type === 'ui'" :config="segment.content" @action="handleA2UIAction"></a2-u-i-renderer>
+                                      </template>
+                                  </div>
 
-                                    <!-- 3. 工具调用参数块 (Tool Call) -->
-                                    <div v-else-if="block.type === 'tool_call'" class="highlight-block" :id="'tool-call-'+block.id">
-                                        <div style="font-weight: bold; margin-bottom: 5px;">{{ t('call') }} {{ block.name }} {{ t('tool') }}</div>
-                                        <!-- Vue 的 {{}} 绑定自带 HTML 转义，不再需要手动 escapeHtml -->
-                                        <pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">{{ block.args }}</pre>
-                                    </div>
+                                  <!-- 3. 工具调用 (Tool Call) -->
+                                  <div v-else-if="block.type === 'tool_call'" class="sap-process-block type-call" :id="'tool-call-'+block.id">
+                                      <div class="sp-header"><i class="fa-solid fa-wrench"></i> {{ t('call') }} <span>{{ block.name }}</span></div>
+                                      <!-- 增加 .replace 替换掉 \n 和 \" -->
+                                      <pre class="sp-content sp-code">{{ block.args ? block.args.replace(/\\n/g, '\n').replace(/\\"/g, '"') : '' }}</pre>
+                                  </div>
 
-                                    <!-- 工具结果块也支持流式渲染 -->
-                                    <div v-else-if="block.type === 'tool_result'" class="highlight-block">
-                                        <div style="font-weight: bold; margin-bottom: 5px;">{{ block.name }}</div>
-                                        <!-- 注意：如果工具返回的是 Markdown 结果，可以使用 v-morph；如果是代码/日志，直接用 {{}} 即可 -->
-                                        <pre style="margin:0;white-space:pre-wrap;word-break:break-all;background:var(--el-bg-color-page);border-radius:8px;padding:8px;">{{ block.content }}</pre>
-                                    </div>
+                                  <!-- 4. 工具结果 (Tool Result) -->
+                                  <div v-else-if="block.type === 'tool_result'" class="sap-process-block type-result">
+                                      <div class="sp-header"><i class="fa-solid fa-check"></i> {{ block.name }}</div>
+                                      <pre class="sp-content sp-code">{{ block.content ? (typeof block.content === 'string' ? block.content.replace(/\\n/g, '\n').replace(/\\"/g, '"') : block.content) : '' }}</pre>
+                                  </div>
 
-                                    <!-- 5. 权限审批卡片 (Approval) -->
-                                    <div v-else-if="block.type === 'approval'" class="approval-card" :id="'approval-'+block.id">
-                                        <div class="approval-header">{{ t('permissionRequest') }} ({{ block.data.permission_mode }})</div>
-                                        <div class="approval-body">{{ t('AIwantsToExecute') }}: <b>{{ block.data.tool_name }}</b></div>
-                                        <div class="approval-params"><pre style="background:transparent;padding:0;margin:0;white-space:pre-wrap;">{{ JSON.stringify(block.data.tool_params, null, 2) }}</pre></div>
-                                        <div class="approval-actions">
-                                            <button @click="processToolApproval(block.id, 'once')" class="btn-allow-once">{{ t('AllowOnce') }}</button>
-                                            <button @click="processToolApproval(block.id, 'always')" class="btn-allow-always">{{ t('AllowAlways') }}</button>
-                                            <button @click="processToolApproval(block.id, 'deny')" class="btn-deny">{{ t('Deny') }}</button>
-                                        </div>
-                                    </div>
+                                  <!-- 5. 权限审批 (Approval) -->
+                                  <div v-else-if="block.type === 'approval'" class="sap-process-block type-approval" :id="'approval-'+block.id">
+                                      <div class="sp-header"><i class="fa-solid fa-lock"></i> {{ t('permissionRequest') }} · {{ block.data.permission_mode }}</div>
+                                      <div class="sp-content">
+                                          <div class="sp-text">{{ t('AIwantsToExecute') }}: <span>{{ block.data.tool_name }}</span></div>
+                                          <!-- 审批时参数块保留一层极细的边框作区分 -->
+                                          <pre class="sp-code-box">{{ JSON.stringify(block.data.tool_params, null, 2) }}</pre>
+                                          <div class="sp-actions">
+                                              <button @click="processToolApproval(block.id, 'deny')" class="sp-btn ghost">{{ t('Deny') }}</button>
+                                              <button @click="processToolApproval(block.id, 'always')" class="sp-btn outline">{{ t('AllowAlways') }}</button>
+                                              <button @click="processToolApproval(block.id, 'once')" class="sp-btn primary">{{ t('AllowOnce') }}</button>
+                                          </div>
+                                      </div>
+                                  </div>
 
-                                    <!-- 6. 工具错误块 (Error) -->
-                                    <div v-else-if="block.type === 'error'" class="highlight-block-error" :id="'tool-error-'+block.id">
-                                        <div style="font-weight: bold; margin-bottom: 5px;">{{ block.name }}</div>
-                                        <pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">{{ block.content }}</pre>
-                                    </div>
+                                  <!-- 6. 工具错误 (Error) -->
+                                  <div v-else-if="block.type === 'error'" class="sap-process-block type-error" :id="'tool-error-'+block.id">
+                                      <div class="sp-header"><i class="fa-solid fa-xmark"></i> {{ block.name }}</div>
+                                      <pre class="sp-content sp-code">{{ block.content ? (typeof block.content === 'string' ? block.content.replace(/\\n/g, '\n').replace(/\\"/g, '"') : block.content) : '' }}</pre>
+                                  </div>
 
                                 </template>
                                 <div v-if="isTyping && index === messages.length - 1 && (message.displayBlocks?.length || 0) === 0"><i class="fa-solid fa-spinner fa-spin"></i></div>
