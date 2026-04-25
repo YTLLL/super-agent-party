@@ -1387,7 +1387,7 @@ let vue_methods = {
       // 获取原始内容（用户消息直接复制，AI消息复制原始markdown）
       let content = message.role === 'user' 
         ? message.content 
-        : message.rawContent || message.content;
+        : message.pure_content || message.rawContent || message.content;
       // 处理文件链接
       if (message.fileLinks?.length) {
         content += '\n\n' + message.fileLinks.map(link => `[${link.name}](${link.path})`).join('\n');
@@ -2671,7 +2671,7 @@ let vue_methods = {
                         if (delta.reasoning_content) {
                             getBlock('reasoning').content += delta.reasoning_content; 
                             if (!this.isThinkOpen) {
-                                currentMsg.content += '<div class="highlight-block-reasoning">';
+                                currentMsg.content += '<div class="sap-process-block type-reasoning"><div class="sp-header"><i class="fa-solid fa-brain"></i> Thinking Process</div><div class="sp-content">';
                                 this.isThinkOpen = true;
                             }
                             currentMsg.content += delta.reasoning_content.replace(/\n/g, '<br>');
@@ -2682,7 +2682,7 @@ let vue_methods = {
                         if (delta.content) {
                             getBlock('text').content += delta.content; 
                             if (this.isThinkOpen) { 
-                                currentMsg.content += '</div>\n\n';
+                                currentMsg.content += '</div></div>\n\n'; 
                                 this.isThinkOpen = false; 
                             }
                             currentMsg.content += delta.content; 
@@ -2743,15 +2743,20 @@ let vue_methods = {
 
                             const blockId = `tool-call-${toolCallId}`;
                             const existingBlock = currentMsg.content.includes(`id="${blockId}"`);
-                            const displayArgs = escapeHtml(accArgs);
+                            const readableArgs = accArgs ? accArgs.replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
+                            const displayArgs = escapeHtml(readableArgs);
                             
                             if (!existingBlock) {
-                                if (this.isThinkOpen) { currentMsg.content += '</div>\n\n'; this.isThinkOpen = false; }
-                                let html = `\n<div class="highlight-block" id="${blockId}">`;
-                                html += `<div style="font-weight: bold; margin-bottom: 5px;">${this.t('call')}${progress.name}${this.t('tool')}</div>`;
-                                html += `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${displayArgs}</pre>`;
+                                if (this.isThinkOpen) { 
+                                    currentMsg.content += '</div></div>\n\n'; 
+                                    this.isThinkOpen = false; 
+                                }
+                                let html = `\n<div class="sap-process-block type-call" id="${blockId}">`;
+                                html += `<div class="sp-header"><i class="fa-solid fa-wrench"></i> ${this.t('call')} <span>${progress.name}</span></div>`;
+                                html += `<pre class="sp-content sp-code">${displayArgs}</pre>`;
                                 html += '</div>\n\n';
                                 currentMsg.content += html;
+
                             } else {
                                 const blockStart = currentMsg.content.indexOf(`id="${blockId}"`);
                                 const preStart = currentMsg.content.indexOf('<pre', blockStart);
@@ -2813,19 +2818,32 @@ let vue_methods = {
                                 const b = getBlock('approval', toolCallId, toolName);
                                 b.data = approvalData;
 
-                                if (this.isThinkOpen) { currentMsg.content += '</div>\n\n'; this.isThinkOpen = false; }
+                                if (this.isThinkOpen) { 
+                                    currentMsg.content += '</div></div>\n\n'; 
+                                    this.isThinkOpen = false; 
+                                }
                                 const blockId = `approval-${toolCallId}`;
                                 this.approvalMap[toolCallId] = approvalData;
                                 
                                 let html = `\n<div class="approval-card" id="${blockId}">`;
-                                html += `<div class="approval-header">${this.t('permissionRequest')} (${approvalData.permission_mode})</div>`;
-                                html += `<div class="approval-body">${this.t('AIwantsToExecute')}: <b>${approvalData.tool_name}</b></div>`;
-                                html += `<div class="approval-params">${escapeHtml(JSON.stringify(approvalData.tool_params, null, 2))}</div>`;
+                                html += `<div class="approval-header">
+                                            <i class="fa-solid fa-shield-halved security-icon"></i>
+                                            <span>${this.t('permissionRequest')} <span class="permission-mode-tag">${approvalData.permission_mode}</span></span>
+                                        </div>`;
+                                html += `<div class="approval-body">
+                                            <span class="body-label">${this.t('AIwantsToExecute')}:</span>
+                                            <code class="tool-name-badge">${approvalData.tool_name}</code>
+                                        </div>`;
+                                html += `<div class="approval-params-wrapper">
+                                            <div class="params-header">PARAMETERS</div>
+                                            <pre class="approval-params-code">${escapeHtml(JSON.stringify(approvalData.tool_params, null, 2))}</pre>
+                                        </div>`;
                                 html += `<div class="approval-actions">`;
-                                html += `<button onclick="window.handleToolApproval('${toolCallId}', 'once')" class="btn-allow-once">${this.t('AllowOnce')}</button>`;
+                                html += `<button onclick="window.handleToolApproval('${toolCallId}', 'deny')" class="btn-deny"><i class="fa-solid fa-ban"></i> ${this.t('Deny')}</button>`;
+                                html += `<div class="action-right-group">`;
                                 html += `<button onclick="window.handleToolApproval('${toolCallId}', 'always')" class="btn-allow-always">${this.t('AllowAlways')}</button>`;
-                                html += `<button onclick="window.handleToolApproval('${toolCallId}', 'deny')" class="btn-deny">${this.t('Deny')}</button>`;
-                                html += `</div></div>\n`;
+                                html += `<button onclick="window.handleToolApproval('${toolCallId}', 'once')" class="btn-allow-once">${this.t('AllowOnce')}</button>`;
+                                html += `</div></div></div>\n`;
 
                                 currentMsg.content += html;
 
@@ -2842,7 +2860,11 @@ let vue_methods = {
                                 if (preStartIndex > -1) {
                                     let nextPreEndIndex = currentMsg.content.indexOf('</pre>', preStartIndex);
                                     if (nextPreEndIndex > -1) {
-                                        const contentToAppend = escapeHtml(tool.content);
+                                        let readableStreamChunk = tool.content;
+                                        if (typeof readableStreamChunk === 'string') {
+                                            readableStreamChunk = readableStreamChunk.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                                        }
+                                        const contentToAppend = escapeHtml(readableStreamChunk);
                                         currentMsg.content = currentMsg.content.substring(0, nextPreEndIndex) + contentToAppend + currentMsg.content.substring(nextPreEndIndex);
                                     }
                                 } else {
@@ -2866,27 +2888,32 @@ let vue_methods = {
                                 const bType = tool.type === 'error' ? 'error' : 'tool_result';
                                 getBlock(bType, toolCallId, toolName).content = tool.content;
 
-                                if (this.isThinkOpen) { currentMsg.content += '</div>\n\n'; this.isThinkOpen = false; }
-                                let className = (tool.type === 'error') ? 'highlight-block-error' : 'highlight-block';
+                                if (this.isThinkOpen) { 
+                                    currentMsg.content += '</div></div>\n\n'; 
+                                    this.isThinkOpen = false; 
+                                }
                                 const blockId = tool.type === 'call' ? `tool-call-${toolCallId}` : `tool-result-${toolCallId}`;
                                 const isCallAlreadyRendered = (tool.type === 'call' && currentMsg.content.includes(`id="${blockId}"`));
 
                                 if (!isCallAlreadyRendered) {
-                                    let uiTitle = tool.type === 'call' ? `${this.t('call')}${tool.title}${this.t('tool')}` : 
-                                                  (tool.type === 'error' ? (tool.title || 'Error') : 
-                                                  `${delta.async_tool_id || (tool.title !== 'tool_result_stream' ? tool.title : 'Tool')}${this.t('tool_result')}`);
+                                    
+                                  let blockClass = (tool.type === 'error') ? 'type-error' : 'type-result';
+                                  let iconClass = (tool.type === 'error') ? 'fa-xmark' : 'fa-check';
+                                  let uiTitle = tool.type === 'call' ? `${this.t('call')} ${tool.title}` : (tool.title || 'Result');
 
-                                    let html = `\n<div class="${className}" id="${blockId}">`;
-                                    html += `<div style="font-weight: bold; margin-bottom: 5px;">${uiTitle}</div>`;
-                                    if (tool.content) { 
-                                        if (tool.type === 'call') {
-                                            html += `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${escapeHtml(tool.content)}</pre>`;
-                                        } else {
-                                            html += `<pre id="pre-result-${toolCallId}" style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${escapeHtml(tool.content)}</pre>`;
-                                        }
-                                    }
-                                    html += '</div>\n\n';
-                                    currentMsg.content += html;
+                                  let html = `\n<div class="sap-process-block ${blockClass}" id="${blockId}">`;
+                                  html += `<div class="sp-header"><i class="fa-solid ${iconClass}"></i> ${escapeHtml(uiTitle)}</div>`;
+                                  if (tool.content) { 
+                                      let preIdAttr = tool.type === 'call' ? '' : ` id="pre-result-${toolCallId}"`;
+                                      let readableContent = tool.content;
+                                      // 确保是字符串才执行替换
+                                      if (typeof readableContent === 'string') {
+                                          readableContent = readableContent.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                                      }
+                                      html += `<pre class="sp-content sp-code"${preIdAttr}>${escapeHtml(readableContent)}</pre>`;
+                                  }
+                                  html += '</div>\n\n';
+                                  currentMsg.content += html;
                                 }
 
                                 if (tool.type === 'call') {
@@ -3048,14 +3075,23 @@ let vue_methods = {
         const toolName = data?.tool_name || 'Tool';
         const blockId = `approval-${toolCallId}`;
 
+        // 【修复1】：用变量直接缓存找到的目标块的引用，不再二次查找
+        let targetBlock = null;
         if (currentMsg.displayBlocks) {
-            const block = currentMsg.displayBlocks.find(b => b.id === toolCallId && b.type === 'approval');
-            if (block) {
-                block.type = 'tool_result';
-                block.name = action === 'deny' ? this.t('denying') : `${this.t('executing')} ${toolName}...`;
-                block.content = ''; 
+            // 严格限定不仅 id 要匹配，而且必须是我们初始的 approval 块
+            targetBlock = currentMsg.displayBlocks.find(b => b.id === toolCallId && b.type === 'approval');
+            if (targetBlock) {
+                targetBlock.type = 'tool_result';
+                targetBlock.name = action === 'deny' ? this.t('denying') : `${this.t('executing')} ${toolName}...`;
+                targetBlock.content = ''; 
             }
         }
+
+        // 【修复2】：补充定义转义方法，避免 this.escapeHtml 报错崩溃
+        const escapeHtml = (text) => {
+            if (!text) return '';
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
 
         const feedbackTitle = action === 'deny' ? (this.t('denying') || 'Denying...') : `${this.t('executing') || 'Executing'} ${toolName}...`;
         this.updateUIBlock(currentMsg, blockId, `\n`);
@@ -3072,20 +3108,20 @@ let vue_methods = {
                 resultText = await this.executeToolBackend(toolName, data.tool_params, action);
             }
 
-            if (currentMsg.displayBlocks) {
-                const block = currentMsg.displayBlocks.find(b => b.id === toolCallId);
-                if (block) {
-                    block.type = action === 'deny' ? 'error' : 'tool_result';
-                    block.name = action === 'deny' ? this.t('tool_deny') : `${toolName} ${this.t('tool_result')}`;
-                    block.content = resultText;
-                }
+            // 【修复1】：直接使用缓存的对象修改，不会影响到同 id 的 tool_call 块
+            if (targetBlock) {
+                targetBlock.type = action === 'deny' ? 'error' : 'tool_result';
+                targetBlock.name = action === 'deny' ? this.t('tool_deny') : `${toolName} ${this.t('tool_result')}`;
+                targetBlock.content = resultText;
             }
 
-            const className = action === 'deny' ? 'highlight-block-error' : 'highlight-block';
+            const blockClass = action === 'deny' ? 'type-error' : 'type-result';
+            const iconClass = action === 'deny' ? 'fa-xmark' : 'fa-check';
             const finalTitle = action === 'deny' ? this.t('tool_deny') : `${toolName} ${this.t('tool_result')}`;
-            const resultHtml = `\n<div class="${className}" id="${blockId}">
-                <div style="font-weight: bold; margin-bottom: 5px;">${this.escapeHtml(finalTitle)}</div>
-                <pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:inherit;background-color:var(--el-bg-color-page);color:var(--text-color);border-radius:12px;">${this.escapeHtml(resultText)}</pre>
+
+            const resultHtml = `\n<div class="sap-process-block ${blockClass}" id="${blockId}">
+                <div class="sp-header"><i class="fa-solid ${iconClass}"></i> ${escapeHtml(finalTitle)}</div>
+                <pre class="sp-content sp-code">${escapeHtml(resultText)}</pre>
             </div>\n`;
             this.updateUIBlock(currentMsg, blockId, resultHtml);
 
@@ -3099,11 +3135,15 @@ let vue_methods = {
                 }
             }
             
+            // 成功走到这里，大模型才会被重新唤醒
             await this.generateAIResponse(this.mainAgent, currentMsg.agentName, true);
 
         } catch (e) {
             console.error("Approval flow failed:", e);
-            showNotification("Tool execution failed", 'error');
+            // 兼容性判断，防止 showNotification 在其他环境也没有定义而二次崩溃
+            if (typeof showNotification === 'function') {
+                showNotification("Tool execution failed", 'error');
+            }
             this.isSending = false;
             this.isTyping = false;
         }
