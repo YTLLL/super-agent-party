@@ -203,6 +203,7 @@ Added a brand-new extension system. You can check available plugins at [plugins 
 | Remote      | heshengtao  | One-click expose Super Agent Party to the public internet             | https://github.com/heshengtao/sap-remote  |
 | Code Server      | heshengtao  | IDE extension for Super Agent Party          | https://github.com/heshengtao/sap-code-server  |
 | CLI      | heshengtao  |  CLI extension for Super Agent Party           | https://github.com/heshengtao/sap-cli  |
+| LX-music      | heshengtao  | Connect super agent party to LX Music API, let AI companion control music playback! | https://github.com/heshengtao/sap-lx-music  |
 
 ## Hardware requirements
 
