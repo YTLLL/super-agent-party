@@ -309,24 +309,27 @@ let vue_methods = {
       await this.autoSaveSettings();
     },
 
-  isInvalidJson(param) {
-    if (param.type !== 'dict' && param.type !== 'list') return false;
-    if (!param.value) return true; // 为空也是无效的
-    try {
-      const parsed = JSON.parse(param.value);
-      if (param.type === 'dict') {
-        // 必须是对象且不能是数组，且不能是 null
-        return typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null;
+    isInvalidJson(param) {
+      // 如果不是 json 类型，不需要进行 JSON 校验
+      if (param.type !== 'json') return false;
+      
+      // 为空或纯空格视为无效
+      if (!param.value || param.value.trim() === '') return true; 
+
+      try {
+        const parsed = JSON.parse(param.value);
+        
+        // 既然单独选了 json 类型，通常排除了基础类型(string/integer/boolean)。
+        // 这里我们限制它解析后必须是 对象({}) 或 数组([])，且不能是 null
+        if (typeof parsed !== 'object' || parsed === null) {
+          return true;
+        }
+        
+        return false; // 解析成功且是对象/数组，校验通过
+      } catch (e) {
+        return true; // JSON 语法错误，校验失败
       }
-      if (param.type === 'list') {
-        // 必须是数组
-        return !Array.isArray(parsed);
-      }
-      return false;
-    } catch (e) {
-      return true; // JSON 语法错误
-    }
-  },
+    },
 
   getParamPlaceholder(type) {
     if (type === 'dict') return '{"type": "enabled"}';
@@ -337,11 +340,8 @@ let vue_methods = {
     async updateParamType(index) {
       const param = this.settings.extra_params[index];
       switch(param.type) {
-        case 'dict':
-          param.value = '{}'; 
-          break;
-        case 'list':
-          param.value = '[]'; 
+        case 'json':
+          param.value = '{}'; // 默认给一个对象，用户需要数组自己改成[] 即可
           break;
         case 'boolean':
           param.value = false;
@@ -360,11 +360,8 @@ let vue_methods = {
       const param = this.fastSettings.extra_params[index];
       // 根据类型初始化值
       switch(param.type) {
-        case 'dict':
-          param.value = '{}'; 
-          break;
-        case 'list':
-          param.value = '[]'; 
+        case 'json':
+          param.value = '{}'; // 默认给一个对象，用户需要数组自己改成[] 即可
           break;
         case 'boolean':
           param.value = false;
