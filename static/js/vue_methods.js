@@ -2259,6 +2259,56 @@ let vue_methods = {
       console.log('Added system message:', this.messages[0]);
       await this.autoSaveSettings();
     },
+
+
+    // 敏感路径检测函数
+    isDangerousPath(path) {
+        if (!path) return false;
+
+        // 1. 规范化路径：统一斜杠，转小写，去掉末尾斜杠
+        let normalized = path.trim().replace(/\\/g, '/').toLowerCase();
+        if (normalized.length > 1 && normalized.endsWith('/')) {
+            normalized = normalized.slice(0, -1);
+        }
+
+        // --- A. 绝对禁止的磁盘/系统根目录 ---
+        // 匹配: "c:", "d:", "/"
+        const winRootRegex = /^[a-z]:$/;
+        if (winRootRegex.test(normalized) || normalized === '/' || normalized === '') {
+            return true; 
+        }
+
+        // --- B. 仅禁止目录本身，但允许其子目录 (User Containers) ---
+        // 比如禁止选择 "C:/Users"，但允许 "C:/Users/YourName/Documents"
+        const userContainers = [
+            'c:/users',
+            '/users',
+            '/home'
+        ];
+        if (userContainers.includes(normalized)) {
+            return true;
+        }
+
+        // --- C. 禁止该目录及其所有子目录 (System Core) ---
+        // 这些地方无论如何都不该让本地引擎去跑
+        const strictSystemPaths = [
+            'c:/windows',
+            'c:/program files',
+            'c:/program files (x86)',
+            'c:/boot',
+            'c:/recovery',
+            'c:/system volume information',
+            '/bin', '/boot', '/dev', '/etc', '/lib', '/lib64', '/proc', 
+            '/root', '/run', '/sbin', '/sys', '/usr', '/var', '/opt',
+            '/system', '/library', '/volumes'
+        ];
+
+        return strictSystemPaths.some(prefix => {
+            // 只有在匹配系统核心目录或其子路径时才拦截
+            return normalized === prefix || normalized.startsWith(prefix + '/');
+        });
+    },
+
     // ==========================================
     // 1. 用户动作入口与调度函数（可直接替换）
     // ==========================================
@@ -2266,7 +2316,19 @@ let vue_methods = {
         // 基础校验
         if (!this.userInput.trim() && (!this.files || this.files.length === 0) && (!this.images || this.images.length === 0)) return;
         if (this.isTyping) return;
-        
+        if (this.CLISettings.enabled) {
+            const pathToCheck = this.CLISettings.cc_path;
+
+            if (this.isDangerousPath(pathToCheck)) {
+                showNotification(
+                    this.t('dangerous_path_detected'),
+                    'error',
+                );
+                return; // 直接返回，不执行后续逻辑
+            }
+
+            // 如果校验通过，继续执行...
+        }
         // [V2新增]：切换菜单
         if (this.activeMenu === 'dashboard'){
           this.activeMenu = 'home'
