@@ -13259,7 +13259,10 @@ clearSegments() {
   async switchExtension(extension) {
     // 1. 关闭扩展弹窗，展开侧边栏
     this.showExtensionsDialog = false; 
-    this.expandSidePanel();
+    const sidePanel = this.$refs.sidePanelRef;
+    if (sidePanel.style.width == 0 ){
+        this.expandSidePanel();
+    }
 
     // 2. 检查这个扩展是否已经在多开数组里了
     const existingExt = this.openedExtensions.find(e => e.id === extension.id);
@@ -13823,7 +13826,6 @@ collapseSidePanel() {
       if (!chatArea || !sidePanel) {
         return;
       }
-      
       // ✨ 核心修复 1：每次切换状态前，强制清除拖拽留下的内联 px 宽度
       chatArea.style.width = '';
       sidePanel.style.width = '';
