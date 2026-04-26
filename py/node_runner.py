@@ -46,7 +46,7 @@ class NodeExtension:
         
         node_cmd, npm_cmd = self._get_exec_cmds()
         run_env = self._get_env()
-
+        run_env["NODE_EXTENSION_ID"] = self.ext_id 
         # 0. 快速判断：node_modules 存在且比 package.json 新
         if nm_folder.is_dir() and nm_folder.stat().st_mtime >= pkg_file.stat().st_mtime:
             print(f"[{self.ext_id}] node_modules 已存在，跳过 npm install")

@@ -192,6 +192,7 @@ chmod +x 一键更新(update).sh 一键启动(start).sh
 | Remote      | heshengtao  | Super Agent Partyをワンクリックでインターネットに公開             | https://github.com/heshengtao/sap-remote  |
 | Code Server      | heshengtao  | Super Agent Party用のIDE拡張機能          | https://github.com/heshengtao/sap-code-server  |
 | CLI      | heshengtao  |  Super Agent Party用CLI拡張機能          | https://github.com/heshengtao/sap-cli  |
+| LX-music      | heshengtao  | super agent party を LX Music API に接続し、AI パートナーが音楽再生を操作できるようにします！ | https://github.com/heshengtao/sap-lx-music  |
 
 ## ハードウェア要件
 

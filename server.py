@@ -387,6 +387,8 @@ HA_client = None
 ChromeMCP_client = None
 sql_client = None
 mcp_client_list = {}
+node_ext_mcp_clients: Dict[str, McpClient] = {}
+node_ext_mcp_tools: Dict[str, List[Dict]] = {}  # 存储每个扩展的工具列表
 locales = {}
 sleep_guard = None
 scheduler_task = None
@@ -988,8 +990,40 @@ async def get_image_content(image_url: str) -> str:
                 f.write(str(response.choices[0].message.content))
     return content
 
+# 存储等待中的MCP调用结果
+mcp_call_results: Dict[str, asyncio.Future] = {}
+
+async def call_node_extension_tool(ext_id: str, tool_name: str, tool_params: dict) -> str:
+    """通过WebSocket调用Node扩展的工具"""
+    import uuid
+    
+    call_id = str(uuid.uuid4())
+    future = asyncio.Future()
+    mcp_call_results[call_id] = future
+    
+    # 广播给所有连接，找到对应的扩展
+    await ws_manager.broadcast({
+        "type": "call_mcp_tool",
+        "data": {
+            "ext_id": ext_id,
+            "tool_name": tool_name,
+            "tool_params": tool_params,
+            "call_id": call_id
+        }
+    })
+    
+    try:
+        # 等待结果，超时30秒
+        result = await asyncio.wait_for(future, timeout=30.0)
+        return str(result)
+    except asyncio.TimeoutError:
+        return f"调用扩展 {ext_id} 的工具 {tool_name} 超时"
+    finally:
+        if call_id in mcp_call_results:
+            del mcp_call_results[call_id]
+
 async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> str | List | AsyncIterator[str] | None :
-    global mcp_client_list,_TOOL_HOOKS,HA_client,ChromeMCP_client,sql_client
+    global mcp_client_list,_TOOL_HOOKS,HA_client,ChromeMCP_client,sql_client, node_ext_mcp_clients, node_ext_mcp_tools
     print("dispatch_tool",tool_name,tool_params)
     
     # ==================== 1. 导入所有工具函数 ====================
@@ -1396,15 +1430,24 @@ async def dispatch_tool(tool_name: str, tool_params: dict, settings: dict) -> st
             return result
 
     if tool_name not in _TOOL_HOOKS:
+        # 1. 先查询常规的 MCP 客户端
         for server_name, mcp_client in mcp_client_list.items():
-            if tool_name in mcp_client._conn.tools:
+            if hasattr(mcp_client, '_conn') and mcp_client._conn and tool_name in mcp_client._conn.tools:
                 result = await mcp_client.call_tool(tool_name, tool_params)
-                if isinstance(result,str):
+                if isinstance(result, str):
                     return result
                 elif hasattr(result, 'model_dump'):
                     return str(result.model_dump())
                 else:
                     return str(result)
+        
+        # 2. 🔥 查询 Node 扩展的 MCP 工具
+        for ext_id, tools in node_ext_mcp_tools.items():
+            for tool in tools:
+                if tool['name'] == tool_name:
+                    # 找到对应的扩展，通过WebSocket调用
+                    return await call_node_extension_tool(ext_id, tool_name, tool_params)
+        
         return None
         
     tool_call = _TOOL_HOOKS[tool_name]
@@ -3300,6 +3343,7 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
         close_tag = "</think>"
 
         tools = request.tools or []
+        tool_names = set() 
         if mcp_client_list:
             for server_name, mcp_client in mcp_client_list.items():
                 if server_name in settings['mcpServers']:
@@ -3313,6 +3357,27 @@ async def generate_stream_response(client, reasoner_client, request: ChatRequest
                         function = await mcp_client.get_openai_functions(disable_tools=disable_tools)
                         if function:
                             tools.extend(function)
+        # 🔥 Node 扩展的工具
+        for ext_id, tools_list in node_ext_mcp_tools.items():
+            for tool in tools_list:
+                tool_name = tool.get('name')
+                if tool_name and tool_name not in tool_names:
+                    tool_names.add(tool_name)
+                    tools.append({
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "description": tool.get('description', f'来自扩展 {ext_id} 的工具'),
+                            "parameters": tool.get('parameters', {
+                                "type": "object",
+                                "properties": {},
+                                "required": []
+                            })
+                        }
+                    })
+                else:
+                    print(f"[WARNING] 跳过重复工具: {tool_name}")
+
         get_llm_tool_fuction = await get_llm_tool(settings)
         if get_llm_tool_fuction:
             tools.append(get_llm_tool_fuction)
@@ -11104,12 +11169,13 @@ settings_lock = asyncio.Lock()
 async def websocket_endpoint(websocket: WebSocket):
     # 1. 建立连接
     await ws_manager.connect(websocket)
-
+    print(f"[DEBUG] WebSocket连接建立成功")
     # [状态标记] 为当前连接生成唯一ID并初始化状态
     connection_id = str(shortuuid.ShortUUID().random(length=8))
+    print(f"[DEBUG] 连接ID: {connection_id}")
     has_sent_prompt = False
     has_start_tts = False
-
+    registered_ext_ids = set()
     try:
         # 2. 初始数据推送
         async with settings_lock:
@@ -11240,6 +11306,49 @@ async def websocket_endpoint(websocket: WebSocket):
                     "data": {}
                 })
 
+            elif msg_type == "register_node_extension_mcp":
+                ext_id = data.get("data", {}).get("ext_id")
+                tools = data.get("data", {}).get("tools", [])
+                
+                if ext_id and tools:
+                    node_ext_mcp_tools[ext_id] = tools
+                    registered_ext_ids.add(ext_id)  # 🔥 记录
+                    print(f"[MCP] Node扩展 {ext_id} 注册了 {len(tools)} 个工具")
+                    
+                    # 通知所有客户端更新工具列表
+                    await ws_manager.broadcast({
+                        "type": "node_ext_mcp_registered",
+                        "data": {
+                            "ext_id": ext_id,
+                            "tools": tools
+                        }
+                    })
+                    
+                    # 可选：返回注册成功消息
+                    await websocket.send_json({
+                        "type": "mcp_registered",
+                        "data": {"ext_id": ext_id, "status": "success"}
+                    })
+
+            elif msg_type == "unregister_node_extension_mcp":
+                ext_id = data.get("data", {}).get("ext_id")
+                if ext_id in node_ext_mcp_tools:
+                    del node_ext_mcp_tools[ext_id]
+                    registered_ext_ids.discard(ext_id)  # 🔥 移除记录
+                    print(f"[MCP] Node扩展 {ext_id} 已主动注销")
+                    
+                    await ws_manager.broadcast({
+                        "type": "node_ext_mcp_unregistered",
+                        "data": {"ext_id": ext_id}
+                    })
+
+            elif msg_type == "mcp_tool_result":
+                call_id = data.get("data", {}).get("call_id")
+                result = data.get("data", {}).get("result")
+                
+                if call_id in mcp_call_results:
+                    mcp_call_results[call_id].set_result(result)
+
             elif msg_type == "trigger_close_extension":
                 await ws_manager.broadcast({"type": "trigger_close_extension", "data": {}})
 
@@ -11263,6 +11372,16 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"WebSocket error for {connection_id}: {e}")
     finally:
+        for ext_id in registered_ext_ids:
+            if ext_id in node_ext_mcp_tools:
+                del node_ext_mcp_tools[ext_id]
+                print(f"[MCP] 连接断开，自动清理扩展 {ext_id}")
+                
+                await ws_manager.broadcast({
+                    "type": "node_ext_mcp_unregistered",
+                    "data": {"ext_id": ext_id}
+                })
+
         # 4. 断开连接并清理
         ws_manager.disconnect(websocket)
         
