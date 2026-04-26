@@ -2258,4 +2258,5 @@ main();`,
     // ★ ACPX 状态
     acpxStatus: null,            // null | 'available' | 'unavailable'
     checkingAcpx: false,         // 检查中
+    openedExtensions:[], 
 };

@@ -98,6 +98,7 @@ ACPM_AGENT_MAP = {
     "copilot": "copilot",
     "qwen": "qwen",
     "opencode": "opencode",
+    "openclaw": "openclaw",
 }
 
 # ==================== Permission Mode Configuration (Per-Agent) ====================
@@ -225,6 +226,22 @@ AGENT_PERMISSION_CONFIG = {
             "cowork":       "--approve-all",
         },
     },
+    "openclaw": {
+        "set_mode": {
+            "plan":         "plan",
+            "default":      "default",
+            "auto-approve": "auto-edit",
+            "yolo":         "yolo",
+            "cowork":       "yolo",
+        },
+        "global_flag": {
+            "plan":         "--deny-all",
+            "default":      None,
+            "auto-approve": "--approve-all",
+            "yolo":         "--approve-all",
+            "cowork":       "--approve-all",
+        },
+    },    
 }
 
 
@@ -346,7 +363,7 @@ async def acpx_agent(
 
     Args:
         prompt:      Instruction to send to the sub-agent
-        agent_name:  Agent name (claude/codex/gemini/cursor/copilot/qwen/opencode)
+        agent_name:  Agent name (claude/codex/gemini/cursor/copilot/qwen/opencode/openclaw)
         mode:        Permission mode (plan/default/auto-approve/yolo/cowork)
         cwd:         Working directory
         extra_env:   Extra environment variables dict

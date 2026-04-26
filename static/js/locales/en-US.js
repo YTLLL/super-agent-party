@@ -1678,4 +1678,6 @@ Key3`,
         "ACPProtocolNotice1": "ACP Protocol lets you use any CLI coding agent as a sub-agent via a unified interface.",
         "ACPProtocolNotice2": "Make sure the target CLI tool is installed in your environment (e.g., Claude Code, Codex, Qwen Code).",
         "ACPProtocolNotice3": "ACPM will automatically detect and use the installed acpx command.",
+        'extensionsView': 'Extensions',
+        'dangerous_path_detected': 'Detected that the workspace is a system-sensitive directory. For security reasons, it is forbidden to configure it as the workspace path.',
     }

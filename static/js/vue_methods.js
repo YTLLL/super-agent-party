@@ -2259,6 +2259,56 @@ let vue_methods = {
       console.log('Added system message:', this.messages[0]);
       await this.autoSaveSettings();
     },
+
+
+    // 敏感路径检测函数
+    isDangerousPath(path) {
+        if (!path) return false;
+
+        // 1. 规范化路径：统一斜杠，转小写，去掉末尾斜杠
+        let normalized = path.trim().replace(/\\/g, '/').toLowerCase();
+        if (normalized.length > 1 && normalized.endsWith('/')) {
+            normalized = normalized.slice(0, -1);
+        }
+
+        // --- A. 绝对禁止的磁盘/系统根目录 ---
+        // 匹配: "c:", "d:", "/"
+        const winRootRegex = /^[a-z]:$/;
+        if (winRootRegex.test(normalized) || normalized === '/' || normalized === '') {
+            return true; 
+        }
+
+        // --- B. 仅禁止目录本身，但允许其子目录 (User Containers) ---
+        // 比如禁止选择 "C:/Users"，但允许 "C:/Users/YourName/Documents"
+        const userContainers = [
+            'c:/users',
+            '/users',
+            '/home'
+        ];
+        if (userContainers.includes(normalized)) {
+            return true;
+        }
+
+        // --- C. 禁止该目录及其所有子目录 (System Core) ---
+        // 这些地方无论如何都不该让本地引擎去跑
+        const strictSystemPaths = [
+            'c:/windows',
+            'c:/program files',
+            'c:/program files (x86)',
+            'c:/boot',
+            'c:/recovery',
+            'c:/system volume information',
+            '/bin', '/boot', '/dev', '/etc', '/lib', '/lib64', '/proc', 
+            '/root', '/run', '/sbin', '/sys', '/usr', '/var', '/opt',
+            '/system', '/library', '/volumes'
+        ];
+
+        return strictSystemPaths.some(prefix => {
+            // 只有在匹配系统核心目录或其子路径时才拦截
+            return normalized === prefix || normalized.startsWith(prefix + '/');
+        });
+    },
+
     // ==========================================
     // 1. 用户动作入口与调度函数（可直接替换）
     // ==========================================
@@ -2266,7 +2316,19 @@ let vue_methods = {
         // 基础校验
         if (!this.userInput.trim() && (!this.files || this.files.length === 0) && (!this.images || this.images.length === 0)) return;
         if (this.isTyping) return;
-        
+        if (this.CLISettings.enabled) {
+            const pathToCheck = this.CLISettings.cc_path;
+
+            if (this.isDangerousPath(pathToCheck)) {
+                showNotification(
+                    this.t('dangerous_path_detected'),
+                    'error',
+                );
+                return; // 直接返回，不执行后续逻辑
+            }
+
+            // 如果校验通过，继续执行...
+        }
         // [V2新增]：切换菜单
         if (this.activeMenu === 'dashboard'){
           this.activeMenu = 'home'
@@ -13163,31 +13225,97 @@ clearSegments() {
     this.extensionsSystemPromptsDict[extension.id] = extension.systemPrompt || ""; // 更新提示词
   },
   
-  // 切换到默认视图
+// 切换到默认视图 (主页书签)
   resetToDefaultView() {
-    this.extensionsSystemPromptsDict = {}; // 清空提示词字典
+    // 1. 切换焦点为 null，利用 v-show 机制隐藏所有 iframe，展示主页内容
     this.currentExtension = null;
-    console.log('已切换到默认视图');
-    this.loadExtension(null);
+    this.sidePanelURL = ''; // 清除旧的全局URL状态，防止污染
+    this.activeSideView = 'list'; // 确保侧边栏内部路由切回“列表”
+
+    // 2. 关闭可能开着的弹窗
     this.showExtensionsDialog = false;
-    this.expandChatArea();
-    this.collapseSidePanel();
-    this.activeSideView = 'list'; // 确保回到列表
-    if (this.taskRefreshTimer) clearInterval(this.taskRefreshTimer); // 清除定时器
+
+    // 3. ✨ 核心修改：移除这下面两行代码！
+    // this.expandChatArea();     // ❌ 不要强行扩张聊天区
+    // this.collapseSidePanel();  // ❌ 不要强行收起侧边栏，用户只是切回主标签，侧边栏应该开着！
+
+    // 4. 重置当前对话的附加提示词（切回默认对话，清空扩展的系统 Prompt 是合理的）
+    this.extensionsSystemPromptsDict = {}; 
+
+    // 5. 如果离开任务中心，清除任务刷新定时器以节省性能（保持原逻辑）
+    if (this.taskRefreshTimer) {
+      clearInterval(this.taskRefreshTimer);
+      this.taskRefreshTimer = null; // 顺手置空是个好习惯
+    }
+
+    console.log('已切换到侧边栏主视图 (Home Tab)');
   },
   // 打开扩展选择对话框
   openExtensionsDialog() {
     this.showExtensionsDialog = true;
   },
   
-  // 切换扩展
+// 切换（或新开）扩展标签页
   async switchExtension(extension) {
-    this.activeSideView = 'list'; // 确保回到列表
-    this.sidePanelURL = '';
-    this.showExtensionsDialog = false; // 关闭对话框
-    this.currentExtension = extension;
+    // 1. 关闭扩展弹窗，展开侧边栏
+    this.showExtensionsDialog = false; 
     this.expandSidePanel();
-    await this.loadExtension(extension);
+
+    // 2. 检查这个扩展是否已经在多开数组里了
+    const existingExt = this.openedExtensions.find(e => e.id === extension.id);
+
+    if (existingExt) {
+      // 🌟 【已打开过】：直接切换焦点，不重新加载，保留页面状态！
+      this.currentExtension = existingExt;
+      this.activeSideView = 'iframe'; // 确保视图模式是 iframe
+      
+      // 如果你的底层代码仍依赖全局的 sidePanelURL，这里做个同步
+      if (existingExt.iframeUrl) {
+        this.sidePanelURL = existingExt.iframeUrl;
+      }
+      
+    } else {
+      // 🌟 【第一次打开】：需要走加载逻辑
+      // 为了让 loading 动画立刻出来，先将当前扩展指向它
+      this.currentExtension = extension;
+      this.activeSideView = 'iframe';
+      this.sidePanelURL = ''; // 清空全局URL防止闪烁旧画面
+      
+      // 加入顶部标签栏数组
+      this.openedExtensions.push(extension);
+
+      // 执行你原本的获取 URL/Token 逻辑
+      await this.loadExtension(extension);
+
+      // 💡 极其关键的一步：loadExtension 执行完后，通常会给 this.sidePanelURL 赋值。
+      // 我们需要把这个生成的专属 URL，保存到当前这个扩展对象里，这样下次切换回来才不会丢！
+      const targetExt = this.openedExtensions.find(e => e.id === extension.id);
+      if (targetExt) {
+        // 将全局生成的 URL 永久绑定给这个 Tab
+        targetExt.iframeUrl = this.sidePanelURL; 
+      }
+    }
+  },
+
+  // ✨ 配套新增：关闭扩展标签页
+  closeExtensionTab(extId) {
+    // 1. 从已打开数组中移除
+    const index = this.openedExtensions.findIndex(e => e.id === extId);
+    if (index === -1) return;
+    
+    this.openedExtensions.splice(index, 1);
+
+    // 2. 如果关闭的刚好是【当前正在看】的标签页，需要处理焦点回退
+    if (this.currentExtension && this.currentExtension.id === extId) {
+      if (this.openedExtensions.length > 0) {
+        // 如果还有其他标签，自动跳到最后一个标签
+        const lastExt = this.openedExtensions[this.openedExtensions.length - 1];
+        this.switchExtension(lastExt);
+      } else {
+        // 如果全关光了，退回默认的列表主页
+        this.resetToDefaultView();
+      }
+    }
   },
 
   // 工具函数：返回扩展真正能访问的地址（Node > 静态）

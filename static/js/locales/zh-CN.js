@@ -1681,4 +1681,6 @@ key3`,
         "ACPProtocolNotice1": "ACP 协议让你可以通过统一接口将任何 CLI 编程智能体作为子代理使用。",
         "ACPProtocolNotice2": "请确保目标 CLI 工具已安装在你的环境中（如 Claude Code、Codex、Qwen Code）。",
         "ACPProtocolNotice3": "ACPM 会自动检测并使用已安装的 acpx 命令。",
+        'extensionsView': '扩展视图',
+        'dangerous_path_detected': '检测到工作区为系统敏感目录，出于安全考虑禁止配置为工作区路径',
     }
