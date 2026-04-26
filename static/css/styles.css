@@ -12209,7 +12209,7 @@ pre.sp-content.sp-code {
 /* 7. 白色主体面板容器：恢复 100% 宽度，并在提拉后依然稳健 */
 .side-panel-body-container {
   background-color: var(--el-bg-color); 
-  border-radius: 4px 12px 12px 12px; /* 左上角为了书签衔接更直，其余圆角稍微缩小以显精致 */
+  border-radius: 12px !important; 
   border: 1px solid var(--el-border-color-lighter);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06); /* 阴影更轻柔，符合精致感 */
   flex: 1;
