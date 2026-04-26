@@ -120,38 +120,6 @@ def find_root_dir(temp_path: Path) -> Path:
     return temp_path
 
 
-def compute_deps_hash(package_json_path: Path) -> Optional[str]:
-    """计算依赖的指纹"""
-    if not package_json_path.exists():
-        return None
-    
-    try:
-        with open(package_json_path, 'r', encoding='utf-8') as f:
-            pkg = json.load(f)
-        
-        deps = {
-            'dependencies': pkg.get('dependencies', {}),
-            'devDependencies': pkg.get('devDependencies', {}),
-            'engines': pkg.get('engines', {})
-        }
-        
-        deps_str = json.dumps(deps, sort_keys=True, ensure_ascii=False)
-        return hashlib.sha256(deps_str.encode()).hexdigest()[:16]
-    except Exception:
-        return None
-
-
-def should_reuse_node_modules(old_pkg: Path, new_pkg: Path) -> bool:
-    """判断是否可以复用 node_modules"""
-    old_hash = compute_deps_hash(old_pkg)
-    new_hash = compute_deps_hash(new_pkg)
-    
-    if old_hash is None or new_hash is None:
-        return False
-    
-    return old_hash == new_hash
-
-
 def github_url_to_zip(url: str) -> str:
     """将 GitHub/Gitee 仓库 URL 转换为 ZIP 下载链接"""
     url = url.strip().rstrip('/').removesuffix('.git')
@@ -217,44 +185,8 @@ async def download_zip(url: str, dest: Path, timeout: float = 60.0) -> None:
 
 def _do_zip_install(zip_url: str, temp_dir: Path, target: Path, ext_id: str) -> None:
     """执行 ZIP 下载和解压安装"""
-    
-    old_pkg = target / "package.json"
-    old_node_modules = target / "node_modules"
-    can_reuse = False
-    
-    if old_pkg.exists() and old_node_modules.exists():
-        try:
-            zip_path = temp_dir / "new_repo.zip"
-            asyncio.run(download_zip(zip_url, zip_path))
-            
-            temp_unpack = temp_dir / "preview"
-            shutil.unpack_archive(zip_path, temp_unpack)
-            new_root = find_root_dir(temp_unpack)
-            new_pkg = new_root / "package.json"
-            
-            if should_reuse_node_modules(old_pkg, new_pkg):
-                can_reuse = True
-                update_task_status(ext_id, "installing", "依赖未变更，保留 node_modules", 30)
-            else:
-                update_task_status(ext_id, "installing", "依赖已变更，将重新安装", 30)
-                
-            shutil.rmtree(temp_unpack)
-            
-        except Exception as e:
-            print(f"[{ext_id}] 无法比较依赖，将清理 node_modules: {e}")
-            can_reuse = False
-    else:
-        zip_path = temp_dir / "new_repo.zip"
-        asyncio.run(download_zip(zip_url, zip_path))
-    
-    if not can_reuse:
-        robust_rmtree(target)
-    else:
-        robust_rmtree(target, preserve={'node_modules'})
-    
-    if not zip_path.exists():
-        zip_path = temp_dir / "new_repo.zip"
-        asyncio.run(download_zip(zip_url, zip_path))
+    zip_path = temp_dir / "new_repo.zip"
+    asyncio.run(download_zip(zip_url, zip_path))
     
     update_task_status(ext_id, "installing", "正在解压文件...", 50)
     
@@ -264,23 +196,13 @@ def _do_zip_install(zip_url: str, temp_dir: Path, target: Path, ext_id: str) -> 
     new_root = find_root_dir(unpack_dir)
     make_tree_writable(new_root)
     
-    if can_reuse:
-        preserved_modules = target / "node_modules"
-        temp_modules = temp_dir / "preserved_node_modules"
-        
-        if preserved_modules.exists():
-            shutil.move(str(preserved_modules), str(temp_modules))
-            robust_rmtree(target)
-            shutil.move(str(new_root), str(target))
-            target.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(temp_modules), str(preserved_modules))
-        else:
-            shutil.move(str(new_root), str(target))
-    else:
-        shutil.move(str(new_root), str(target))
+    # 直接删除旧目录
+    robust_rmtree(target)
+    
+    # 移入新文件
+    shutil.move(str(new_root), str(target))
     
     update_task_status(ext_id, "installing", "文件解压完成", 80)
-
 
 def _run_bg_install(repo_url: str, ext_id: str, backup_url: str = ""):
     """后台安装任务"""
@@ -526,7 +448,7 @@ async def upload_zip(file: UploadFile = File(...), background: BackgroundTasks =
 
 
 @router.put("/{ext_id}/update")
-async def update_extension(ext_id: str):
+def update_extension(ext_id: str):
     """更新扩展（ZIP 方式，智能保留 node_modules）"""
     target = Path(EXT_DIR) / ext_id
     if not target.exists():
