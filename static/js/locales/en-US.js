@@ -37,7 +37,7 @@ window.lang_enUS = {
         'defaultConfigInfo': 'Default Configuration Information',
         'autoFilledDefaultAPI': 'Automatically filled the default API address for',
         'enterApiKeyThenClick': 'Enter the API key and then click the magnifying glass in the upper right corner to get the model ID list',
-        'localConfigNotice': 'When you choose Ollama, Vllm, LM studio, Xinference, and Dify, you need to pay attention to modifying the URL to your actual URL. Dify currently only supports chat assistant, agent, and Chatflow access modes!',
+        'localConfigNotice': 'When you choose a locally deployed provider, you need to modify the URL to your actual URL. Dify currently only supports the integration of three modes: Chat Assistant, Agent, and Chatflow!',
         'cancel': 'Cancel',
         'confirm': 'Confirm',
         'confirmAdd': 'Confirm Add',
