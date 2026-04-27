@@ -609,7 +609,7 @@ function updateElement(el, rawMarkdown, formatFn) {
           <el-card 
             class="extension-card default-view-card"
             :class="{ active: currentExtension === null }"
-            @click="resetToDefaultView()">
+            @click="resetToDefaultView();expandChatArea();collapseSidePanel();">
             <div class="extension-info">
               <h3>{{ t('defaultView') }}</h3>
               <p>{{ t('defaultViewDescription') }}</p>
@@ -2313,7 +2313,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                       <!-- 1.3 扩展列表视图 (严格还原卡片及收藏逻辑) -->
                       <div v-else class="extensions-list" style="margin: 10px; height: 100%; overflow-y: auto;">
-                        <el-card class="extension-card default-view-card" :class="{ active: currentExtension === null && activeSideView === 'list' }" @click="resetToDefaultView()">
+                        <el-card class="extension-card default-view-card" :class="{ active: currentExtension === null && activeSideView === 'list' }" @click="resetToDefaultView();expandChatArea();collapseSidePanel();">
                           <div class="extension-info"><h3>{{ t('defaultView') }}</h3><p>{{ t('defaultViewDescription') }}</p></div>
                         </el-card>
                         <el-card class="extension-card task-center-card" @click="openTaskCenter()">
@@ -2347,8 +2347,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <!-- 2. 已打开的扩展 Iframe 多开视图 (后台状态驻留) -->
                     <template v-for="ext in openedExtensions" :key="ext.id">
                       <div v-show="currentExtension && currentExtension.id === ext.id" class="ext-iframe-wrapper" style="height: 100%;">
-                          <div class="ext-edge-trigger top" @mousemove="handleExtMouseMove" @mouseleave="hideExtButton"></div>
-                          <div class="ext-edge-trigger left" @mousemove="handleExtMouseMove" @mouseleave="hideExtButton"></div>
                           <div class="ext-floating-close-btn" :class="{ 'is-active': extButtonVisible }" @mousemove="handleExtMouseMove" @click="resetToDefaultView()" :title="t('backToDefaultView') || '返回默认视图'">
                               <i class="fa-solid fa-arrow-left"></i> 
                           </div>

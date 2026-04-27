@@ -37,7 +37,7 @@ window.lang_zhCN = {
         'defaultConfigInfo': '默认配置说明',
         'autoFilledDefaultAPI': '已自动填充',
         'enterApiKeyThenClick': '填入API密钥之后点击右上角的放大镜，可以获得模型ID列表',
-        'localConfigNotice': '当你选择Ollama、Vllm、LM studio、Xinference、Dify之后，需要注意修改URL到你实际的URL，Dify目前只支持聊天助手、Agent和Chatflow三种模式的接入！',
+        'localConfigNotice': '当你选择本地部署的供应商之后，需要注意修改URL到你实际的URL，Dify目前只支持聊天助手、Agent和Chatflow三种模式的接入！',
         'cancel': '取消',
         'confirm': '确认',
         'confirmAdd': '确认添加',
