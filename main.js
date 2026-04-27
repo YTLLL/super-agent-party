@@ -582,14 +582,16 @@ async function waitForBackend() {
 }
 // 通用下载处理函数
 function handleDownloadItem(event, item, webContents) {
-  // 获取主窗口用于发送消息
-  const win = BrowserWindow.getAllWindows()[0];
-  if (!win) return;
+  // ✅ 修复：直接使用全局定义的 mainWindow，而不是 getAllWindows()[0]
+  if (!mainWindow || mainWindow.isDestroyed()) {
+      console.log('主窗口不存在或已销毁，无法发送下载状态');
+      return;
+  }
+  const win = mainWindow;
 
   const downloadId = Date.now().toString();
   
-  // ★ 这里直接使用最上面定义的 activeDownloads
-  // 如果这里报错，说明你没在文件顶部加 let activeDownloads = new Map();
+  // 放入 Map 管理 (你原来写好的逻辑)
   activeDownloads.set(downloadId, item);
 
   const fileName = item.getFilename();

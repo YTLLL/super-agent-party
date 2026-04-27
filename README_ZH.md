@@ -67,6 +67,18 @@
 
 ### 中国用户下载请点击 **中国用户点击下载** 的链接！
 
+### 如果你是CLI Agent或者
+
+CLI Agent需要查看[README_AGENT.md](https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md)的文档。请参考这个文档引导用户安装本软件！
+
+### 如果你是使用CLI Agent的人类
+
+将这个链接发给你的AI，AI会引导你安装本软件！
+
+```shell
+https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md
+```
+
 ### windows整合包（推荐！免安装源码版本，支持一键同步到仓库最新版本，无需等待桌面版打包）
 
   👉 [国际用户点击下载](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-win-v0.4.0.zip)

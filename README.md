@@ -68,6 +68,18 @@
 
 ### 中国用户下载请点击 **中国用户点击下载** 的链接！
 
+### If you are a CLI Agent
+
+CLI Agent needs to check the documentation at [README_AGENT.md](https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md). Please refer to this document to guide users through installing this software!
+
+### If you are a human using a CLI Agent
+
+Send this link to your AI, and the AI will guide you through installing this software!
+
+```shell
+https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md
+```
+
 ### Windows portable package (Recommended! Installation-free source version, support one-click synchronization to the latest version of the warehouse, no need to wait for the desktop version to be packaged)
 
   👉 [Click to download](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-win-v0.4.0.zip)

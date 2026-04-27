@@ -755,6 +755,7 @@ const app = Vue.createApp({
     
     // 监听下载事件（仅 Electron）
     if (isElectron && window.downloadAPI) {
+        console.log('🔥前端已收到下载任务:', data);
         window.downloadAPI.onDownloadStarted((data) => {
             // 新增下载项放到最前面
             this.downloads.unshift({
