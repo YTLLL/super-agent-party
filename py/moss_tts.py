@@ -162,7 +162,14 @@ def _process_tts_sync(text: str, voice: str, speed: float, prompt_audio_path: st
         
         original_sr = result["sample_rate"]
         waveform = result["waveform"]
-        
+
+        import numpy as np
+        max_val = np.max(np.abs(waveform))
+        if max_val > 1.0:
+            # 这里的 0.95 是为了留出一点余量（Headroom），防止后续处理再次溢出
+            waveform = (waveform / max_val) * 0.95
+            logging.info(f"Audio peak {max_val:.3f} normalized to 0.95 to avoid clipping.")
+
         # 验证音频质量
         is_valid, quality_msg = _validate_audio_quality(waveform)
         if not is_valid:
