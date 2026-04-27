@@ -5550,16 +5550,19 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <el-switch v-model="visionControlSettings.isFullScreen" @click.stop @change="handleFullScreenChange"></el-switch>
                         </div>
                       </el-form-item>
-                      <el-form-item v-if="!visionControlSettings.isFullScreen">
+                      <el-form-item>
                         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                          <span>
+                          <span v-if="!visionControlSettings.isFullScreen">
                             {{t('currentFieldOfView')}} : [{{ visionControlSettings.ScreenSize.join(', ') }}]
+                          </span>
+                          <span v-else>
+                            {{t('currentFieldOfView')}} : {{ t('fullScreen') }}
                           </span>
                           <el-button 
                             type="primary"
                             @click="reselectRegion"
                           >
-                            {{t('Reselect')}}
+                            {{t('selectRegion')}}
                           </el-button>
                         </div>
                       </el-form-item>
@@ -9414,16 +9417,19 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <el-switch v-model="visionControlSettings.isFullScreen" @click.stop @change="handleFullScreenChange"></el-switch>
                         </div>
                       </el-form-item>
-                      <el-form-item v-if="!visionControlSettings.isFullScreen">
+                      <el-form-item>
                         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                          <span>
+                          <span v-if="!visionControlSettings.isFullScreen">
                             {{t('currentFieldOfView')}} : [{{ visionControlSettings.ScreenSize.join(', ') }}]
+                          </span>
+                          <span v-else>
+                            {{t('currentFieldOfView')}} : {{ t('fullScreen') }}
                           </span>
                           <el-button 
                             type="primary"
                             @click="reselectRegion"
                           >
-                            {{t('Reselect')}}
+                            {{t('selectRegion')}}
                           </el-button>
                         </div>
                       </el-form-item>
