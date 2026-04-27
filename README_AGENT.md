@@ -66,8 +66,6 @@ Based on the user's choice, enter the corresponding guidance branch. Note: Outpu
 
 📌 Branch D: Pure Source Code Deployment
 
-(Confirm the user has installed Git, Node.js, and uv) Follow the steps below, asking the user to execute in the terminal one by one:
-
 1.  `git clone https://github.com/heshengtao/super-agent-party.git`
 2.  `cd super-agent-party`
 3.  Emphasize using uv: `uv sync` (Explain: this ensures exactly the same Python dependencies as the official version; prohibit using pip)
