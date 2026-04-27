@@ -68,7 +68,26 @@ def parse_github_url(url: str):
         raise ValueError("无效的 GitHub URL")
         
     owner, repo, branch, subpath = match.groups()
-    branch = branch or "main" 
+    
+    # 🎯 关键修改：如果URL中没有指定分支，需要动态获取默认分支
+    if not branch:
+        # 方法1：先尝试 main，如果失败再尝试 master（简单但不完美）
+        # 更好的方法：调用 GitHub API 获取默认分支
+        import httpx
+        try:
+            api_url = f"https://api.github.com/repos/{owner}/{repo}"
+            # 同步请求，因为当前函数不是async
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get(api_url)
+                if response.status_code == 200:
+                    repo_info = response.json()
+                    branch = repo_info.get("default_branch", "main")
+                else:
+                    branch = "main"  # 降级策略
+        except Exception:
+            branch = "main"  # API调用失败时的降级策略
+    else:
+        branch = branch
     
     zip_url = f"https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
     return zip_url, branch, subpath
