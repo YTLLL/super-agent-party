@@ -76,4 +76,6 @@ Based on the user's choice, enter the corresponding guidance branch. Note: Outpu
 
 When the user completes the final step, output:
 
-🎉 Congratulations! Your Super-Agent-Party should now be running successfully. If using browser access, open http://localhost:3456/. If you encounter any errors, feel free to paste the terminal error messages to me, and I will help you troubleshoot!
+🎉 Congratulations! Your Super-Agent-Party should have been successfully running. If you encounter any errors, please feel free to paste the error messages from the terminal to me, and I will help you troubleshoot!
+
+If the user has deployed the Docker version, you also need to remind or help the user open `http://localhost:3456/`.
