@@ -67,7 +67,7 @@
 
 ### 中国用户下载请点击 **中国用户点击下载** 的链接！
 
-### 如果你是CLI Agent或者
+### 如果你是CLI Agent
 
 CLI Agent需要查看[README_AGENT.md](https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md)的文档。请参考这个文档引导用户安装本软件！
 
