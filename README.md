@@ -76,7 +76,7 @@ CLI Agent needs to check the documentation at [README_AGENT.md](https://raw.gith
 
 Send this link to your AI, and the AI will guide you through installing this software!
 
-```shell
+```
 https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md
 ```
 

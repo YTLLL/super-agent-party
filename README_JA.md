@@ -73,7 +73,7 @@ CLIエージェントは[README_AGENT.md](https://raw.githubusercontent.com/hesh
 
 このリンクをAIに送信すると、AIが本ソフトウェアのインストールを案内します！
 
-```shell
+```
 https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md
 ```
 

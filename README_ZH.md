@@ -75,7 +75,7 @@ CLI Agent需要查看[README_AGENT.md](https://raw.githubusercontent.com/hesheng
 
 将这个链接发给你的AI，AI会引导你安装本软件！
 
-```shell
+```
 https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md
 ```
 
