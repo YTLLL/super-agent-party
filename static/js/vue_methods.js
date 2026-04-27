@@ -1718,36 +1718,81 @@ let vue_methods = {
       return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
     },
 
-    /* 聊天区原逻辑，不变 */
+      /* ==========================================
+       滚动区域逻辑优化（支持内部区块跟随滚动）
+       ========================================== */
     scrollToBottom() {
       this.$nextTick(() => {
         const container = this.$refs.messagesContainer;
-        if (this.isElemNearBottom(container) || this.isForceScrollToBottom) {
-          container.scrollTop = container.scrollHeight;
+        if (container) {
+          // 1. 滚动外层主容器
+          if (this.isElemNearBottom(container) || this.isForceScrollToBottom) {
+            container.scrollTop = container.scrollHeight;
           }
+          
+          // 2. 滚动内层带有滚动条的区块 (工具代码块、思考过程块)
+          const innerBlocks = container.querySelectorAll('.sp-code, .type-reasoning .sp-content');
+          innerBlocks.forEach(block => {
+            if (block.scrollHeight > block.clientHeight) {
+              // 同样复用 isElemNearBottom 判断，如果用户没故意往上翻，就自动贴底
+              if (this.isElemNearBottom(block) || this.isForceScrollToBottom) {
+                block.scrollTop = block.scrollHeight;
+              }
+            }
+          });
+        }
       });
+      
       this.scrollPanelToBottom();
-      if (isElectron){
+      // 兼容你原有的写法
+      if (typeof isElectron !== 'undefined' ? isElectron : this.isElectron) {
         this.browserPanelToBottom();
       }
-
     },
 
-    /* 侧边栏滚动：完全一样的思路 */
+    /* 侧边栏滚动 */
     scrollPanelToBottom() {
-        this.$nextTick(() => {
-          const panel = this.$refs.messagesPanel;
+      this.$nextTick(() => {
+        const panel = this.$refs.messagesPanel;
+        if (panel) {
+          // 1. 滚动侧边栏外层容器
           if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
             panel.scrollTop = panel.scrollHeight;
           }
+
+          // 2. 滚动侧边栏内层区块
+          const innerBlocks = panel.querySelectorAll('.sp-code, .type-reasoning .sp-content');
+          innerBlocks.forEach(block => {
+            if (block.scrollHeight > block.clientHeight) {
+              if (this.isElemNearBottom(block) || this.isForceScrollToBottom) {
+                block.scrollTop = block.scrollHeight;
+              }
+            }
+          });
+        }
       });
     },
+
+    /* 独立浏览器面板滚动 */
     browserPanelToBottom() {
-        this.$nextTick(() => {
-          const panel = this.$refs.browserMessagesContainer;
+      this.$nextTick(() => {
+        const panel = this.$refs.browserMessagesContainer;
+        if (panel) {
+          // 1. 滚动独立面板外层容器
           if (this.isElemNearBottom(panel) || this.isForceScrollToBottom) {
             panel.scrollTop = panel.scrollHeight;
           }
+
+          // 2. 滚动独立面板内层区块
+          const innerBlocks = panel.querySelectorAll('.sp-code, .type-reasoning .sp-content');
+          innerBlocks.forEach(block => {
+            if (block.scrollHeight > block.clientHeight) {
+              if (this.isElemNearBottom(block) || this.isForceScrollToBottom) {
+                block.scrollTop = block.scrollHeight;
+              }
+            }
+          });
+        }
       });
     },
     changeMainAgent(agent) {
