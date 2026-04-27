@@ -65,6 +65,18 @@
 
 ## クイックスタート
 
+### CLIエージェントの場合
+
+CLIエージェントは[README_AGENT.md](https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md)のドキュメントを確認してください。このドキュメントを参考に、ユーザーに本ソフトウェアのインストールを案内してください！
+
+### CLIエージェントを使用する人間の場合
+
+このリンクをAIに送信すると、AIが本ソフトウェアのインストールを案内します！
+
+```
+https://raw.githubusercontent.com/heshengtao/super-agent-party/main/README_AGENT.md
+```
+
 ### Windowsポータブルパッケージ（推奨！インストール不要のソースバージョン、最新リポジトリへのワンクリック同期対応、デスクトップ版のパッケージングを待つ必要なし）
 
   👉 [ダウンロードはこちら](https://github.com/heshengtao/super-agent-party/releases/download/v0.4.0/super-agent-party-win-v0.4.0.zip)
