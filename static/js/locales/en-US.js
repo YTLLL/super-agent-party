@@ -1680,4 +1680,6 @@ Key3`,
         "ACPProtocolNotice3": "ACPM will automatically detect and use the installed acpx command.",
         'extensionsView': 'Extensions',
         'dangerous_path_detected': 'Detected that the workspace is a system-sensitive directory. For security reasons, it is forbidden to configure it as the workspace path.',
+        'fullScreen': 'Full Screen',
+        'selectRegion': 'Select Region',
     }

@@ -183,6 +183,11 @@ def auto_assign_port(host):
 # 执行端口查找
 FINAL_PORT = force_bind_or_fallback(HOST, PREFERED_PORT)
 PORT = FINAL_PORT
+os.environ['DYNAMIC_PORT'] = str(FINAL_PORT)
+
+# 同时调用 change_port 保持同步
+from py.get_setting import change_port
+change_port(FINAL_PORT)
 
 # 核心：立刻打印！
 print(f"REAL_PORT_FOUND:{PORT}", flush=True)
@@ -5501,6 +5506,7 @@ async def generate_complete_response(client,reasoner_client, request: ChatReques
     from py.computer_use_tool import computer_use_tools,mouse_use_tools,keyboard_use_tools,desktopVision_use_tools
     
     from py.mode_change import mode_change_tool
+    from py.acpx_tools import acp_agent_tool
     m0 = None
     if settings["memorySettings"]["is_memory"] and settings["memorySettings"]["selectedMemory"] and settings["memorySettings"]["selectedMemory"] != "":
         memoryId = settings["memorySettings"]["selectedMemory"]

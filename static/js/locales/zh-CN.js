@@ -1683,4 +1683,6 @@ key3`,
         "ACPProtocolNotice3": "ACPM 会自动检测并使用已安装的 acpx 命令。",
         'extensionsView': '扩展视图',
         'dangerous_path_detected': '检测到工作区为系统敏感目录，出于安全考虑禁止配置为工作区路径',
+        'fullScreen': '全屏',
+        'selectRegion': '选择区域',
     }
