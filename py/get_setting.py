@@ -130,7 +130,15 @@ def get_host():
     return HOST or "127.0.0.1"
 
 def get_port():
+    # 优先级：环境变量 > 全局PORT > 默认3456
+    env_port = os.environ.get('DYNAMIC_PORT')
+    if env_port:
+        return int(env_port)
     return PORT or 3456
+
+def change_port(new_port):
+    global PORT
+    PORT = new_port
 
 def get_default_settings_sync():
     global _cached_default_settings
