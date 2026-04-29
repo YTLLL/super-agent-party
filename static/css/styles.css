@@ -5,15 +5,17 @@
   --progress: 0%;
 }
 
-/* 亮色主题：艺术纸张风格 (Paper White) */
+/* =========================================
+   亮色主题：极简云石白 (Alabaster & Silk) - 高级现代、克制护眼
+   ========================================= */
 [data-theme="light"] {
-  /* 基础颜色 - 这种白像高级铜版纸，温润而不发黄 */
-  --bg-color: #f9f9f7; 
-  --text-color: #333330; /* 深炭灰，非纯黑，阅读更舒适 */
-  --border-color: #e2e2df;
+  /* 基础颜色 - 依然是“白”主题，但去除了最高值的刺眼反光，呈现高级哑光纸质感 */
+  --bg-color: #fdfdfc; /* 卡片底色：99%的暖白，保证界面的干净清透 */
+  --text-color: #2c2c2a; /* 字体：深炭黑（带极弱的暖调），对比度清晰但不刺眼 */
+  --border-color: #e6e5e0;
   
-  /* Element Plus 核心变量 - 稍微降低主色的侵略性 */
-  --el-color-primary: #2a7a8c; /* 稍作降饱和处理的青石色 */
+  /* Element Plus 核心变量 - 沉静的高级青石蓝 */
+  --el-color-primary: #2a7a8c; 
   --el-color-primary-light-3: #599ca9;
   --el-color-primary-light-5: #8bbdc7;
   --el-color-primary-light-7: #bcdbe1;
@@ -23,50 +25,59 @@
   --el-bg-color: var(--bg-color) !important;
   --el-text-color-primary: var(--text-color) !important;
   --el-border-color: var(--border-color) !important;
-  --el-border-color-light: #ebebe8 !important;
+  --el-border-color-light: #ecece7 !important; /* 极浅的分割线 */
 
   /* 组件颜色 */
   --el-button-bg-color: var(--el-color-primary) !important;
-  --el-input-bg-color: #f2f2ef !important; /* 比背景深一点的纸感灰 */
-  --el-menu-bg-color: var(--bg-color) !important;
-  --el-table-bg-color: var(--bg-color) !important;
-  --el-tag-bg-color: #f0f4f5 !important;
-  --el-bg-color-page: #f2f2ef !important; /* 页面底色 */
-  --el-tabs-bg-color: #f2f2ef !important;
+  --el-input-bg-color: #f2f2ef !important; /* 输入框微陷，采用比卡片深一点的低饱和浅灰 */
   
-  /* 状态颜色 - 采用莫兰迪色系的变体，降低饱和度 */
-  --el-color-success: #6b9e78 !important;
+  /* 🌟 核心修改：大面积页面底色 - 采用类似 Notion 的高定哑光浅灰（微暖） */
+  /* 这能完美衬托出上方纯白卡片的悬浮感，而且大面积看一点都不刺眼，也绝对不黄 */
+  --el-bg-color-page: #f5f4f0 !important; 
+  --el-tabs-bg-color: #f5f4f0 !important;
+  
+  /* 侧边栏和菜单融入页面底色，制造现代UI的无界感 */
+  --el-menu-bg-color: var(--el-bg-color-page) !important; 
+  --el-table-bg-color: var(--bg-color) !important;
+  --el-tag-bg-color: #f0f0eb !important;
+  
+  /* 状态颜色 - 保持莫兰迪高级感 */
+  --el-color-success: #639c71 !important;
   --el-color-warning: #d4a35c !important;
-  --el-color-danger: #c96868 !important;
-  --el-color-info: #959590 !important;
+  --el-color-danger: #c76565 !important;
+  --el-color-info: #8f8f8b !important;
   
   /* 文字颜色 */
-  --el-text-color-regular: #5c5c58 !important;
-  --el-text-color-secondary: #8e8e8a !important;
+  --el-text-color-regular: #5f5e5a !important;
+  --el-text-color-secondary: #8c8b87 !important;
   
-  /* 阴影 - 减弱阴影强度，使用偏暖的灰色投影 */
-  --el-box-shadow-light: 0 4px 12px rgba(80, 80, 70, 0.08) !important;
+  /* 阴影 - 极度柔和的空气感弥散阴影，这是高级感的关键 */
+  --el-box-shadow-light: 0 8px 24px rgba(0, 0, 0, 0.03), 0 2px 6px rgba(0, 0, 0, 0.02) !important;
 
   /* Input 调整 */
   --el-input-text-color: var(--text-color);
-  --el-input-placeholder-color: #b5b5b0;
+  --el-input-placeholder-color: #b5b4ae;
   --el-input-hover-border-color: var(--el-color-primary-light-3);
   --el-input-focus-border-color: var(--el-color-primary);
 
-  --code-bg: #f2f2ef;
-  --code-border: #e0e0dc;
+  /* 代码块 - 区别于纯白，采用淡淡的背景底色 */
+  --code-bg: #f4f4f1;
+  --code-border: #e6e5e0;
   
-  --card-shadow: 0 2px 16px 0 rgba(0, 0, 0, 0.05);
+  --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
 }
 
-/* 暗色主题：黑板/石墨风格 (Chalkboard Black) */
+/* =========================================
+   暗色主题：深空石墨风格 (Space Slate) - 通透无压抑感
+   ========================================= */
 [data-theme="dark"] {
-  /* 基础颜色 - 这种黑像深色石墨或磨砂黑板，不带蓝调 */
-  --bg-color: #1c1c1b; 
-  --text-color: #d6d6d0; /* 柔和的米白，像粉笔字 */
-  --border-color: #383835;
+  /* 基础颜色 - 告别死黑，采用稍微提亮的石墨灰 */
+  --bg-color: #2c2c2e; 
+  /* 字体 - 采用浅银灰，避免黑暗环境下的刺眼白光 */
+  --text-color: #d1d1d6; 
+  --border-color: #3a3a3c;
   
-  /* 橙色主色调优化：往琥珀色靠拢，更显稳重 */
+  /* 主色调：琥珀橙 */
   --el-color-primary: #d97706; 
   --el-color-primary-light-3: #f59e0b;
   --el-color-primary-light-5: #fbbf24;
@@ -77,42 +88,46 @@
   --el-bg-color: var(--bg-color) !important;
   --el-text-color-primary: var(--text-color) !important;
   --el-border-color: var(--border-color) !important;
-  --el-border-color-light: #2d2d2a !important;
+  --el-border-color-light: #48484a !important;
 
   /* 组件颜色 */
-  --el-button-bg-color: #2d2d2a !important;
-  --el-input-bg-color: #262624 !important;
-  --el-menu-bg-color: #1c1c1b !important;
-  --el-table-bg-color: #21211f !important;
+  --el-button-bg-color: #3a3a3c !important;
+  --el-input-bg-color: #242426 !important; /* 输入框略微下陷 */
+  
+  /* 🌟 核心修改：大面积页面底色 - 采用 macOS 风格的深空灰，有透气感，不压抑 */
+  --el-bg-color-page: #1c1c1e !important; 
+  --el-tabs-bg-color: #1c1c1e !important;
+  
+  /* 侧边栏融入背景 */
+  --el-menu-bg-color: var(--el-bg-color-page) !important;
+  --el-table-bg-color: #2c2c2e !important;
   --el-tag-bg-color: rgba(217, 119, 6, 0.15) !important;
-  --el-bg-color-page: #161615 !important;
-  --el-tabs-bg-color: #161615 !important;
 
-  /* 状态颜色 - 适应暗色的低对比度需求 */
+  /* 状态颜色 */
   --el-color-success: #7ea381 !important;
   --el-color-warning: #ccac70 !important;
   --el-color-danger: #cf7676 !important;
   --el-color-info: #858580 !important;
 
   /* 文字颜色 */
-  --el-text-color-regular: #b2b2ac !important;
-  --el-text-color-secondary: #7a7a75 !important;
+  --el-text-color-regular: #a1a1aa !important;
+  --el-text-color-secondary: #71717a !important;
 
-  /* 阴影 - 纯黑环境中通过极细微的亮边替代深阴影 */
-  --el-box-shadow-light: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+  /* 阴影 - 柔和的深色投影，让卡片在石墨底色上凸显层次 */
+  --el-box-shadow-light: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
 
-  --el-input-text-color: #d6d6d0;
-  --el-input-placeholder-color: #5c5c58;
+  --el-input-text-color: #d1d1d6;
+  --el-input-placeholder-color: #71717a;
   --el-input-hover-border-color: var(--el-color-primary-light-5);
   --el-input-focus-border-color: var(--el-color-primary-light-7);
   
-  --el-input-disabled-bg-color: #262624;
-  --el-input-disabled-border-color: #333330;
+  --el-input-disabled-bg-color: #1c1c1e;
+  --el-input-disabled-border-color: #2c2c2e;
 
-  --code-bg: #262624;
-  --code-border: #3d3d3a;
+  --code-bg: #242426;
+  --code-border: #3a3a3c;
   
-  --card-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.5);
+  --card-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4);
 }
 
 /* 新增 Ocean Midnight 主题 */
@@ -2000,9 +2015,9 @@ body {
 }
 
 .copy-button, .preview-button{
-  background:  #ffffff !important;
+  background: rgba(255,255,255,0.1) !important;
+  color: #fff !important;
   border: none;
-  color: var(--el-color-primary);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -2010,9 +2025,9 @@ body {
 }
 
 .copy-button, .download-button{
-  background: #ffffff !important;
+  background: rgba(255,255,255,0.1) !important;
+  color: #fff !important;
   border: none;
-  color: var(--el-color-primary);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -11456,7 +11471,6 @@ code {
     min-width: 280px !important;
     height: 100% !important;
     background-color: var(--el-bg-color-page) !important;
-    border-right: 1px solid var(--el-border-color-lighter);
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
@@ -11485,9 +11499,13 @@ code {
     display: flex; align-items: center; gap: 8px;
     padding: 0 16px 12px 16px;
 }
-.chat-history-sidebar .history-search-input { flex: 1; min-width: 0; }
+.chat-history-sidebar .history-search-input { 
+  flex: 1; 
+  min-width: 0;
+  color: var(--el-bg-color)!important;
+ }
 .chat-history-sidebar .history-search-input .el-input__wrapper {
-    background-color: var(--el-fill-color-lighter) !important;
+    background-color: var(--el-bg-color) !important;
     box-shadow: none !important; border-radius: 10px !important;
 }
 
@@ -11631,7 +11649,6 @@ code {
     min-width: 280px !important;
     height: 100% !important;
     background-color: var(--el-bg-color-page) !important;
-    border-right: 1px solid var(--el-border-color-lighter);
     flex-direction: column;
     flex-shrink: 0;
     z-index: 10;
@@ -12138,7 +12155,7 @@ pre.sp-content.sp-code {
   height: 20px; 
   padding: 0 8px;
   
-  background-color: var(--el-fill-color-light); 
+  background: var(--el-bg-color);
   color: var(--el-text-color-regular);
   border: 1px solid var(--el-border-color-lighter);
   border-bottom: none;

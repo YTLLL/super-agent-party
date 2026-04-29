@@ -636,7 +636,7 @@ function updateElement(el, rawMarkdown, formatFn) {
           </el-card>
           
           <!-- 分隔线 -->
-          <div class="extensions-divider" v-if="extensions.length > 0">
+          <div class="extensions-divider">
             <span>
               {{ t('availableExtensions') }}
               <el-link
@@ -2322,9 +2322,24 @@ function updateElement(el, rawMarkdown, formatFn) {
                         <el-card class="extension-card workspace-card" @click="openWorkspace()" v-show="isElectron">
                           <div class="extension-info"><h3>{{ t('workspace') || '工作区文件' }}</h3><p>{{ t('workspaceDescription') || '管理与查看本地工作区文件树' }}</p></div>
                         </el-card>
-                        <div class="extensions-divider" v-if="extensions.length > 0">
-                          <span>{{ t('availableExtensions') }} <el-link type="primary" :underline="false" href="#" @click.stop.prevent="switchToExtensionPage"><el-icon class="mr-1"><i class="fa-solid fa-puzzle-piece"></i></el-icon>{{ t('goToExtensionPage') }}</el-link></span>
+                        <!-- 分隔线 -->
+                        <div class="extensions-divider">
+                          <span>
+                            {{ t('availableExtensions') }}
+                            <el-link
+                              type="primary"
+                              :underline="false"
+                              href="#" 
+                              @click.stop.prevent="switchToExtensionPage();showExtensionsDialog = false" 
+                            >
+                              <el-icon class="mr-1">
+                                <i class="fa-solid fa-puzzle-piece"></i>
+                              </el-icon>{{ t('goToExtensionPage') }}
+                            </el-link>
+                          </span>
                         </div>
+                        <!-- 扩展列表 -->
+                        <el-empty v-if="extensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
                         <el-card v-for="ext in extensions" :key="ext.id" class="extension-card" :class="{ active: currentExtension && currentExtension.id === ext.id }" @click="switchExtension(ext)">
                             <div class="btn-top-right" @click.stop>
                               <el-tooltip :content="favoriteExtensionIds.includes(ext.id) ? t('unfavorite') : t('favorite')" placement="top">
