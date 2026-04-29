@@ -2015,9 +2015,9 @@ body {
 }
 
 .copy-button, .preview-button{
-  background:  #ffffff !important;
+  background: rgba(255,255,255,0.1) !important;
+  color: #fff !important;
   border: none;
-  color: var(--el-color-primary);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -2025,9 +2025,9 @@ body {
 }
 
 .copy-button, .download-button{
-  background: #ffffff !important;
+  background: rgba(255,255,255,0.1) !important;
+  color: #fff !important;
   border: none;
-  color: var(--el-color-primary);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -12155,7 +12155,7 @@ pre.sp-content.sp-code {
   height: 20px; 
   padding: 0 8px;
   
-  background-color: var(--el-fill-color-light); 
+  background: var(--el-bg-color);
   color: var(--el-text-color-regular);
   border: 1px solid var(--el-border-color-lighter);
   border-bottom: none;
