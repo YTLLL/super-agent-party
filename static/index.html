@@ -1478,7 +1478,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                       <el-tooltip :content="t('chatHistory')" placement="top">
                         <el-button
-                          @click="handleHistoryToggle"
+                          @click="isMobile ? showHistoryDialog = true : handleHistoryToggle()"
                           class="icon-btn history-btn"
                           :type="showHistorySidebar ? 'primary' : 'default'"
                           circle>
@@ -2933,7 +2933,7 @@ function updateElement(el, rawMarkdown, formatFn) {
           {{ searchKeyword ? t('noResults') : t('noChatHistory') }}
         </div>
       </div>
-    </el-dialog>
+        </el-dialog>
 
         <el-dialog
           append-to-body
