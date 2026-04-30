@@ -636,78 +636,58 @@ function updateElement(el, rawMarkdown, formatFn) {
           </el-card>
           
           <!-- 分隔线 -->
-          <div class="extensions-divider">
+          <div class="extensions-divider" style="margin-bottom: 12px;">
             <span>
               {{ t('availableExtensions') }}
-              <el-link
-                type="primary"
-                :underline="false"
-                href="#" 
-                @click.stop.prevent="switchToExtensionPage();showExtensionsDialog = false" 
-              >
-                <el-icon class="mr-1">
-                  <i class="fa-solid fa-puzzle-piece"></i>
-                </el-icon>{{ t('goToExtensionPage') }}
-              </el-link>
             </span>
           </div>
+
+          <!-- ✨ 搜索与操作工具栏 ✨ -->
+          <div class="extensions-toolbar" style="display: flex; align-items: center; margin-bottom: 15px; gap: 10px; flex-wrap: nowrap;">
+            <!-- 左侧：搜索框 (使用包裹层防止撑破 flex 布局) -->
+            <div style="flex: 1; min-width: 0;">
+              <el-input 
+                v-model="searchExtensionQuery" 
+                :placeholder="t('search') || '搜索扩展...'" 
+                clearable
+                style="width: 100%;"
+              >
+                <template #prefix>
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                </template>
+              </el-input>
+            </div>
+            
+            <!-- 右侧：跳转按钮 (flex-shrink: 0 防止按钮被压缩) -->
+            <el-button 
+              type="primary" 
+              :style="{color: '#fff'}"
+              plain
+              style="flex-shrink: 0;"
+              @click.stop.prevent="switchToExtensionPage();showExtensionsDialog = false"
+            >
+              <i class="fa-solid fa-puzzle-piece" style="margin-right: 5px;"></i>
+              {{ t('goToExtensionPage') }}
+            </el-button>
+          </div>
+
           <!-- 扩展列表 -->
-          <el-empty v-if="extensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
-          <el-card
-              v-for="ext in extensions"
-              :key="ext.id"
-              class="extension-card"
-              :class="{ active: currentExtension && currentExtension.id === ext.id }"
-              @click="switchExtension(ext)">
-              
-              <!-- 右上角按钮组 (整合了收藏按钮) -->
-              <div class="btn-top-right">
-                
-                <!-- 1. 收藏按钮 -->
+          <el-empty v-if="filteredExtensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
+          <el-card v-for="ext in filteredExtensions" :key="ext.id" class="extension-card" :class="{ active: currentExtension && currentExtension.id === ext.id }" @click="switchExtension(ext)">
+              <div class="btn-top-right" @click.stop>
                 <el-tooltip :content="favoriteExtensionIds.includes(ext.id) ? t('unfavorite') : t('favorite')" placement="top">
-                  <el-button
-                    type="default"
-                    circle
-                    size="small"
-                    @click.stop.prevent="toggleFavoriteExtension(ext)">
+                  <el-button type="default" circle size="small" @click.stop.prevent="toggleFavoriteExtension(ext)">
                     <i :class="favoriteExtensionIds.includes(ext.id) ? 'fa-solid fa-star star-active' : 'fa-regular fa-star'"></i>
                   </el-button>
                 </el-tooltip>
-
-                <!-- 2. 浏览器打开按钮 -->
                 <el-tooltip :content="t('openExtensionInBrowser')" placement="top">
-                  <el-button
-                    type="default"
-                    circle
-                    size="small"
-                    @click.stop.prevent="openExtension(ext)"
-                    style="margin-left: 8px;">
-                    <i class="fa-solid fa-external-link"></i>
-                  </el-button>
+                  <el-button type="default" circle size="small" @click.stop.prevent="openExtension(ext)" style="margin-left: 8px;"><i class="fa-solid fa-external-link"></i></el-button>
                 </el-tooltip>
-
-                <!-- 3. 独立窗口打开按钮（仅在Electron环境下显示） -->
-                <el-tooltip :content="t('openExtensionInWindow')" placement="top">
-                  <el-button
-                    v-if="isElectron"
-                    type="primary"
-                    circle
-                    size="small"
-                    @click.stop.prevent="openExtensionInWindow(ext)"
-                    style="margin-left: 8px;">
-                    <i class="fa-solid fa-window-restore"></i>
-                  </el-button>
+                <el-tooltip v-if="isElectron" :content="t('openExtensionInWindow')" placement="top">
+                  <el-button type="primary" circle size="small" @click.stop.prevent="openExtensionInWindow(ext)" style="margin-left: 8px;"><i class="fa-solid fa-window-restore"></i></el-button>
                 </el-tooltip>
               </div>
-
-              <div class="extension-info">
-                <h3>{{ ext.name }}</h3>
-                <p>{{ ext.description }}</p>
-                <div class="extension-meta">
-                  <span>v{{ ext.version }}</span>
-                  <span>{{ ext.author }}</span>
-                </div>
-              </div>
+              <div class="extension-info"><h3>{{ ext.name }}</h3><p>{{ ext.description }}</p><div class="extension-meta"><span>v{{ ext.version }}</span><span>{{ ext.author }}</span></div></div>
           </el-card>
         </div>
         <template #footer>
@@ -2323,24 +2303,44 @@ function updateElement(el, rawMarkdown, formatFn) {
                           <div class="extension-info"><h3>{{ t('workspace') || '工作区文件' }}</h3><p>{{ t('workspaceDescription') || '管理与查看本地工作区文件树' }}</p></div>
                         </el-card>
                         <!-- 分隔线 -->
-                        <div class="extensions-divider">
+                        <div class="extensions-divider" style="margin-bottom: 12px;">
                           <span>
                             {{ t('availableExtensions') }}
-                            <el-link
-                              type="primary"
-                              :underline="false"
-                              href="#" 
-                              @click.stop.prevent="switchToExtensionPage();showExtensionsDialog = false" 
-                            >
-                              <el-icon class="mr-1">
-                                <i class="fa-solid fa-puzzle-piece"></i>
-                              </el-icon>{{ t('goToExtensionPage') }}
-                            </el-link>
                           </span>
                         </div>
+
+                        <!-- ✨ 搜索与操作工具栏 ✨ -->
+                        <div class="extensions-toolbar" style="display: flex; align-items: center; margin-bottom: 15px; gap: 10px; flex-wrap: nowrap;">
+                          <!-- 左侧：搜索框 (使用包裹层防止撑破 flex 布局) -->
+                          <div style="flex: 1; min-width: 0;">
+                            <el-input 
+                              v-model="searchExtensionQuery" 
+                              :placeholder="t('search') || '搜索扩展...'" 
+                              clearable
+                              style="width: 100%;"
+                            >
+                              <template #prefix>
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                              </template>
+                            </el-input>
+                          </div>
+                          
+                          <!-- 右侧：跳转按钮 (flex-shrink: 0 防止按钮被压缩) -->
+                          <el-button 
+                            type="primary" 
+                            :style="{color: '#fff'}"
+                            plain
+                            style="flex-shrink: 0;"
+                            @click.stop.prevent="switchToExtensionPage();showExtensionsDialog = false"
+                          >
+                            <i class="fa-solid fa-puzzle-piece" style="margin-right: 5px;"></i>
+                            {{ t('goToExtensionPage') }}
+                          </el-button>
+                        </div>
+
                         <!-- 扩展列表 -->
-                        <el-empty v-if="extensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
-                        <el-card v-for="ext in extensions" :key="ext.id" class="extension-card" :class="{ active: currentExtension && currentExtension.id === ext.id }" @click="switchExtension(ext)">
+                        <el-empty v-if="filteredExtensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
+                        <el-card v-for="ext in filteredExtensions" :key="ext.id" class="extension-card" :class="{ active: currentExtension && currentExtension.id === ext.id }" @click="switchExtension(ext)">
                             <div class="btn-top-right" @click.stop>
                               <el-tooltip :content="favoriteExtensionIds.includes(ext.id) ? t('unfavorite') : t('favorite')" placement="top">
                                 <el-button type="default" circle size="small" @click.stop.prevent="toggleFavoriteExtension(ext)">
@@ -6178,24 +6178,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </el-option>
                         </el-select>
                       </el-form-item>
-                      <el-form-item :label="t('enableOmniTTS')" class="form-item-align" label-position="left">
-                        <el-switch 
-                          v-model="settings.enableOmniTTS" 
-                          @change="handleOmniTTSenabled(settings.enableOmniTTS)"
-                        ></el-switch>
-                      </el-form-item>
-                      <el-form-item v-if="settings.enableOmniTTS" :label="t('enabledInterruption')" class="form-item-align" label-position="left">
-                        <el-switch 
-                          v-model="ttsSettings.enabledInterruption" 
-                          @change="autoSaveSettings"
-                        ></el-switch>
-                      </el-form-item>
-                      <el-form-item v-if="settings.enableOmniTTS" :label="t('omniVoice')" class="form-item-align" label-position="left">
-                        <el-input
-                          v-model="settings.omniVoice"
-                          :placeholder="t('omniVoicePlaceholder')"
-                        ></el-input>
-                      </el-form-item>
                     </div>
                   </div>
                   <!-- 新增高级配置 -->
@@ -6266,6 +6248,25 @@ function updateElement(el, rawMarkdown, formatFn) {
                           ></el-option>
                         </el-select>
                       </el-form-item>
+                      <el-form-item :label="t('enableOmniTTS')" class="form-item-align" label-position="left">
+                        <el-switch 
+                          v-model="settings.enableOmniTTS" 
+                          @change="handleOmniTTSenabled(settings.enableOmniTTS)"
+                        ></el-switch>
+                      </el-form-item>
+                      <el-form-item v-if="settings.enableOmniTTS" :label="t('enabledInterruption')" class="form-item-align" label-position="left">
+                        <el-switch 
+                          v-model="ttsSettings.enabledInterruption" 
+                          @change="autoSaveSettings"
+                        ></el-switch>
+                      </el-form-item>
+                      <el-form-item v-if="settings.enableOmniTTS" :label="t('omniVoice')" class="form-item-align" label-position="left">
+                        <el-input
+                          v-model="settings.omniVoice"
+                          :placeholder="t('omniVoicePlaceholder')"
+                        ></el-input>
+                      </el-form-item>
+
                       <div class="param-header">
                         <span>{{ t('extraParams') }}</span>
                         <el-button 
@@ -6489,24 +6490,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                           </el-form-item>
                         </div>
                       </template>
-                      <el-form-item :label="t('enableOmniTTS')" class="form-item-align" label-position="left">
-                        <el-switch 
-                          v-model="fastSettings.enableOmniTTS" 
-                          @change="autoSaveSettings"
-                        ></el-switch>
-                      </el-form-item>
-                      <el-form-item v-if="fastSettings.enableOmniTTS" :label="t('enabledInterruption')" class="form-item-align" label-position="left">
-                        <el-switch 
-                          v-model="ttsSettings.enabledInterruption" 
-                          @change="autoSaveSettings"
-                        ></el-switch>
-                      </el-form-item>
-                      <el-form-item v-if="fastSettings.enableOmniTTS" :label="t('omniVoice')" class="form-item-align" label-position="left">
-                        <el-input
-                          v-model="fastSettings.omniVoice"
-                          :placeholder="t('omniVoicePlaceholder')"
-                        ></el-input>
-                      </el-form-item>
                     </div>
                   </div>
                   <!-- 新增高级配置 -->
@@ -6577,6 +6560,25 @@ function updateElement(el, rawMarkdown, formatFn) {
                           ></el-option>
                         </el-select>
                       </el-form-item>
+                      <el-form-item :label="t('enableOmniTTS')" class="form-item-align" label-position="left">
+                        <el-switch 
+                          v-model="fastSettings.enableOmniTTS" 
+                          @change="autoSaveSettings"
+                        ></el-switch>
+                      </el-form-item>
+                      <el-form-item v-if="fastSettings.enableOmniTTS" :label="t('enabledInterruption')" class="form-item-align" label-position="left">
+                        <el-switch 
+                          v-model="ttsSettings.enabledInterruption" 
+                          @change="autoSaveSettings"
+                        ></el-switch>
+                      </el-form-item>
+                      <el-form-item v-if="fastSettings.enableOmniTTS" :label="t('omniVoice')" class="form-item-align" label-position="left">
+                        <el-input
+                          v-model="fastSettings.omniVoice"
+                          :placeholder="t('omniVoicePlaceholder')"
+                        ></el-input>
+                      </el-form-item>
+
                       <div class="param-header">
                         <span>{{ t('extraParams') }}</span>
                         <el-button 
@@ -8942,43 +8944,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <el-alert type="info" :closable="false" class="mb-2">
                       <div class="alert-content">
                         {{ t('autoBehaviorToolNotice') }}
-                      </div>
-                    </el-alert>
-                  </div>
-
-                  <!-- 随机话题工具 -->
-                  <div class="provider-card tool-card">
-                    <div class="card-header">
-                      <el-switch
-                        v-model="toolsSettings.randomTopic.enabled"
-                        @change="autoSaveSettings"
-                        class="tool-switch"
-                      ></el-switch>
-                    </div>
-                    <div class="tool-card-title">
-                      <h3 class="kb-title">{{ t('randomTopicTool') }}</h3>
-                      <el-link
-                        type="primary"
-                        :underline="false"
-                        href="https://github.com/heshengtao/topics-after-party" 
-                        target="_blank"
-                      >
-                        <el-icon class="mr-1">
-                          <i class="fa-solid fa-key"></i>
-                        </el-icon>{{ t('gotoGithub') }}
-                      </el-link>
-                    </div>
-                    <el-form-item :label="t('baseURL')">
-                      <el-input
-                        v-model="toolsSettings.randomTopic.baseURL"
-                        @change="autoSaveSettings"
-                        class="mini-input"
-                        :placeholder="t('randomTopicPlaceholder')"
-                      ></el-input>
-                    </el-form-item>
-                    <el-alert type="info" :closable="false" class="mb-2">
-                      <div class="alert-content">
-                        {{ t('randomTopicNotice') }}
                       </div>
                     </el-alert>
                   </div>
@@ -16148,95 +16113,64 @@ function updateElement(el, rawMarkdown, formatFn) {
                     </div>
                   </div>
                 </div>
-                <div class="plugin-header">
-                  <h3>{{t('availableExtensions')}}</h3>
+                <span>
+                  <br>
+                </span>
+                <div class="plugin-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                  <!-- ✨ 左侧：标题 + 新增的短搜索框 ✨ -->
+                  <div style="display: flex; align-items: center; gap: 15px;">
+                    <h3 style="margin: 0; white-space: nowrap; flex-shrink: 0;">{{t('availableExtensions')}}</h3>
+                    <el-input 
+                      v-model="searchManageExtensionQuery" 
+                      :placeholder="t('search') || '搜索扩展...'" 
+                      clearable 
+                      style="width: 200px;"
+                    >
+                      <template #prefix><i class="fa-solid fa-magnifying-glass"></i></template>
+                    </el-input>
+                  </div>
+                  
+                  <!-- 右侧：按钮组保持不变 -->
                   <div class="plugin-button-group">
-                    <el-button 
-                      @click="openAddExtensionDialog" 
-                      type="primary">
-                      {{t('addNewExtension')}}
-                    </el-button>
-                    <el-button 
-                      @click="openExtfile" 
-                      type="primary">
-                      {{t('openExtfile')}}
-                    </el-button>
-                    <el-button 
-                      @click="openRepository('https://github.com/super-agent-party/super-agent-party.github.io')" 
-                      type="primary">
-                      {{t('addYourExtensions')}}
-                    </el-button>
-                    <el-button 
-                      @click="handleRefreshClick" 
-                      type="primary"
-                      :loading="refreshing">
-                      {{refreshButtonText}}
-                    </el-button>
+                    <el-button @click="openAddExtensionDialog" type="primary">{{t('addNewExtension')}}</el-button>
+                    <el-button @click="openExtfile" type="primary">{{t('openExtfile')}}</el-button>
+                    <el-button @click="openRepository('https://github.com/super-agent-party/super-agent-party.github.io')" type="primary">{{t('addYourExtensions')}}</el-button>
+                    <el-button @click="handleRefreshClick" type="primary" :loading="refreshing">{{refreshButtonText}}</el-button>
                   </div>
                 </div>
 
                 <!-- 磁贴网格 -->
                 <div class="provider-grid">
-                  <!-- 已有智能体 -->
-                  <div class="provider-card" v-for="extension in extensions" :key="extension.id">
+                  <!-- ✨ 循环改为 filteredManageExtensions ✨ -->
+                  <div class="provider-card" v-for="extension in filteredManageExtensions" :key="extension.id">
                     <div class="card-header">
                       <el-tooltip :content="t('useExtension')" placement="top">
-                        <el-button 
-                          type="primary" 
-                          @click="switchExtension(extension);this.activeMenu = 'home';"
-                          circle
-                        >
+                        <el-button type="primary" @click="switchExtension(extension);this.activeMenu = 'home';" circle>
                           <i class="fa-solid fa-play"></i>
                         </el-button>
                       </el-tooltip>
                       <div class="card-actions">
                         <el-tooltip :content="t('openExtensionInBrowser')" placement="top">
-                          <!-- 浏览器打开按钮 -->
-                          <el-button
-                            type="default"
-                            circle
-                            size="small"
-                            @click.stop="openExtension(extension)">
-                            <i class="fa-solid fa-external-link"></i>
-                          </el-button>
+                          <el-button type="default" circle size="small" @click.stop="openExtension(extension)"><i class="fa-solid fa-external-link"></i></el-button>
                         </el-tooltip>
                         <el-tooltip :content="t('openExtensionInWindow')" placement="top">
-                          <!-- 独立窗口打开按钮（仅在Electron环境下显示） -->
-                          <el-button
-                            v-if="isElectron"
-                            type="primary"
-                            circle
-                            size="small"
-                            @click.stop="openExtensionInWindow(extension)"
-                            style="margin-left: 8px;">
-                            <i class="fa-solid fa-window-restore"></i>
-                          </el-button>
+                          <el-button v-if="isElectron" type="primary" circle size="small" @click.stop="openExtensionInWindow(extension)" style="margin-left: 8px;"><i class="fa-solid fa-window-restore"></i></el-button>
                         </el-tooltip>
                         <el-tooltip :content="t('deleteExtension')" placement="top">
-                          <!-- 更新删除按钮样式 -->
-                          <el-button @click="removeExtension(extension)" type="danger" circle size="small">
-                            <i class="fa-solid fa-trash"></i>
-                          </el-button>
+                          <el-button @click="removeExtension(extension)" type="danger" circle size="small"><i class="fa-solid fa-trash"></i></el-button>
                         </el-tooltip>
                       </div>
                     </div>
                     <div class="kb-content">
                       <div class="kb-header"> 
                         <h3>{{ extension.name }}</h3>
-                        <el-tag 
-                          type="info" 
-                          size="small" 
-                        >
-                          v{{ extension.version }}
-                        </el-tag>                      
+                        <el-tag type="info" size="small">v{{ extension.version }}</el-tag>                      
                       </div>
                       <p class="kb-description">{{ extension.author }}</p>
-                      <div class="kb-meta">
-                        <p>{{ extension.description }}</p>
-                      </div>
+                      <div class="kb-meta"><p>{{ extension.description }}</p></div>
                     </div>
                   </div>
-                  <!-- 添加新扩展 -->
+                  <!-- 添加新扩展磁贴保持不变 -->
                   <div class="provider-card add-tile" @click="openAddExtensionDialog">
                     <el-icon :size="40" color="#909399"><i class="fa-solid fa-plus"></i></el-icon>
                     <div style="color: #606266; margin-top: 10px;">{{ t('addNewExtension') }}</div>
@@ -16286,62 +16220,47 @@ function updateElement(el, rawMarkdown, formatFn) {
                   <el-divider>{{t('or')}}</el-divider>
                   
                   <!-- 远程插件列表 - 卡片形式 -->
-                  <div class="plugin-header">
-                    <h3>{{t('availableExtensions')}}</h3>
+                  <div class="plugin-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <!-- ✨ 左侧：标题 + 新增的短搜索框 ✨ -->
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                      <h3 style="margin: 0; white-space: nowrap; flex-shrink: 0;">{{t('availableExtensions')}}</h3>
+                      <el-input 
+                        v-model="searchRemotePluginQuery" 
+                        :placeholder="t('search') || '搜索插件...'" 
+                        clearable 
+                        style="width: 200px;"
+                      >
+                        <template #prefix><i class="fa-solid fa-magnifying-glass"></i></template>
+                      </el-input>
+                    </div>
+                    
                     <div class="plugin-button-group">
-                      <el-button 
-                        @click="openExtfile" 
-                        type="primary">
-                        {{t('openExtfile')}}
-                      </el-button>
-                      <el-button 
-                        @click="openRepository('https://github.com/super-agent-party/super-agent-party.github.io')" 
-                        type="primary">
-                        {{t('addYourExtensions')}}
-                      </el-button>
-                      <el-button 
-                        @click="handleRefreshClick" 
-                        type="primary"
-                        :loading="refreshing">
-                        {{refreshButtonText}}
-                      </el-button>
+                      <el-button @click="openExtfile" type="primary">{{t('openExtfile')}}</el-button>
+                      <el-button @click="openRepository('https://github.com/super-agent-party/super-agent-party.github.io')" type="primary">{{t('addYourExtensions')}}</el-button>
+                      <el-button @click="handleRefreshClick" type="primary" :loading="refreshing">{{refreshButtonText}}</el-button>
                     </div>
                   </div>
                   
                   <div class="plugins-container">
-                    <div v-if="remotePlugins.length === 0" class="empty-plugins">
+                    <!-- ✨ 这里改为判断 filteredRemotePlugins 的长度 ✨ -->
+                    <div v-if="filteredRemotePlugins.length === 0" class="empty-plugins">
                       <el-empty :description="t('noExtensionsFound')"></el-empty>
                     </div>
                     <div v-else class="plugins-grid">
-                      <div v-for="plugin in remotePlugins" :key="plugin.name" class="plugin-card">
+                      <!-- ✨ 循环改为 filteredRemotePlugins ✨ -->
+                      <div v-for="plugin in filteredRemotePlugins" :key="plugin.name" class="plugin-card">
                         <div class="plugin-content">
                           <h4 class="plugin-name">{{ plugin.name }}</h4>
                           <p class="plugin-description">{{ plugin.description }}</p>
                         </div>
                         <div class="plugin-action">
-                          <el-button
-                            v-if="plugin.repository"
-                            type="primary"
-                            @click="openRepository(plugin.repository)"
-                            class="repo-button"
-                          >
-                            <i class="fa-brands fa-github"></i>
-                            {{ t('viewRepository') }}
+                          <el-button v-if="plugin.repository" type="primary" @click="openRepository(plugin.repository)" class="repo-button">
+                            <i class="fa-brands fa-github"></i>{{ t('viewRepository') }}
                           </el-button>
-                          <!-- 紧挨着原来的 uninstall / install 按钮 -->
-                          <el-button
-                            v-if="plugin.installed"
-                            type="warning"
-                            :loading="plugin._updating"
-                            @click="updatePlugin(plugin)"
-                          >
+                          <el-button v-if="plugin.installed" type="warning" :loading="plugin._updating" @click="updatePlugin(plugin)">
                             {{ t('update') }}
                           </el-button>
-                          <el-button
-                            :loading="installLoading&&!plugin.installed"
-                            :type="plugin.installed ? 'danger' : 'primary'"
-                            @click="togglePlugin(plugin)"
-                          >
+                          <el-button :loading="installLoading&&!plugin.installed" :type="plugin.installed ? 'danger' : 'primary'" @click="togglePlugin(plugin)">
                             {{ plugin.installed ? t('uninstall'): t('install') }}
                           </el-button>
                         </div>

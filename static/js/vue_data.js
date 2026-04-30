@@ -2259,4 +2259,7 @@ main();`,
     acpxStatus: null,            // null | 'available' | 'unavailable'
     checkingAcpx: false,         // 检查中
     openedExtensions:[], 
+    searchExtensionQuery: '',
+    searchManageExtensionQuery: '', // 用于主页面的扩展搜索
+    searchRemotePluginQuery: '',    // 用于弹窗内的远程插件搜索
 };
