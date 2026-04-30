@@ -805,58 +805,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
           <!-- 引导卡片矩阵 (瀑布流布局) -->
           <div class="guide-grid">
-            <!-- 1. 开始对话 -->
-            <div class="guide-card" @click="activeMenu = 'home'">
-              <div class="card-icon blue"><i class="fa-solid fa-comment"></i></div>
-              <div class="card-info">
-                <h3>{{ t('startChatting') }}</h3>
-              </div>
-            </div>
-
-            <!-- 2. 召唤伴侣 -->
-            <div class="guide-card" @click="startVRM">
-              <div class="card-icon pink"><i class="fa-solid fa-user-ninja"></i></div>
-              <div class="card-info">
-                <h3>{{ t('summonCompanion') }}</h3>
-              </div>
-            </div>
-
-            <!-- 收藏的扩展卡片动态渲染 -->
-            <div v-for="ext in favoriteExtensions" :key="ext.id" class="guide-card extension" @click="openExtensionInWindow(ext)">
-              <div class="card-icon purple"><i class="fa-solid fa-puzzle-piece"></i></div>
-              <div class="card-info">
-                <h3>{{ ext.name }}</h3>
-              </div>
-              <div class="fav-star active" @click.stop="toggleFavoriteExtension(ext)">
-                <i class="fa-solid fa-star"></i>
-              </div>
-            </div>
           </div>
-
-          <!-- 万能智能体配置弹窗 -->
-          <el-dialog append-to-body v-model="showOmniAgentDialog" :title="t('omniAgentConfig')" width="80%">
-            <el-form label-position="top">
-              <el-form-item :label="t('CLIEngine')">
-                <el-select v-model="CLISettings.engine" class="full-width">
-                  <el-option :label="t('localEnvironment')" value="local"></el-option>
-                  <el-option :label="t('dockerSandbox')" value="ds"></el-option>
-                </el-select>
-              </el-form-item>
-              <el-form-item :label="t('workspace')" required>
-                <el-input v-model="CLISettings.cc_path" readonly>
-                  <template #append>
-                    <el-button @click="browseDirectory"><i class="fa-solid fa-folder-open"></i></el-button>
-                  </template>
-                </el-input>
-              </el-form-item>
-            </el-form>
-            <template #footer>
-              <el-button @click="showOmniAgentDialog = false">{{ t('cancel') }}</el-button>
-              <el-button type="primary" :disabled="!CLISettings.cc_path" @click="confirmOmniAgent">
-                {{ t('confirmAndStart') }}
-              </el-button>
-            </template>
-          </el-dialog>
         </div>
 
         <!-- 聊天界面保持不变 -->
@@ -1189,6 +1138,7 @@ function updateElement(el, rawMarkdown, formatFn) {
                                       <div class="sp-header"><i class="fa-solid fa-xmark"></i> {{ block.name }}</div>
                                       <pre class="sp-content sp-code">{{ block.content ? (typeof block.content === 'string' ? block.content.replace(/\\n/g, '\n').replace(/\\"/g, '"') : block.content) : '' }}</pre>
                                   </div>
+
 
                                 </template>
                                 <div v-if="isTyping && index === messages.length - 1 && (message.displayBlocks?.length || 0) === 0"><i class="fa-solid fa-spinner fa-spin"></i></div>
@@ -1732,23 +1682,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                       </el-tooltip>
 
 
-                    <el-tooltip :content="t('logoPage')" placement="top">
-                      <el-button
-                        plain
-                        class="icon-btn party-btn"
-                        style="border-radius: 24px;"
-                        @click="showLogoDialog = true"
-                      >
-                        <template #icon>
-                          <img
-                            :src="getVendorLogo('unknown')"
-                            class="model-vendor-logo"
-                            draggable="false"
-                          />
-                        </template>
-                      </el-button>
-                    </el-tooltip>
-
                       <el-tooltip :content="isSending ? t('stopGenerating') : t('sendMessage')" placement="top" class="send-btn-container">
                         <el-button
                           v-if="!isCapsuleMode"
@@ -1874,6 +1807,68 @@ function updateElement(el, rawMarkdown, formatFn) {
                                 <span class="pill-text">{{ currentViewName }}</span>
                               </div>
                             </el-tooltip>
+
+                            <!-- 3. 工作区目录指示器 (仅 CLI 启用时显示) -->
+                            <el-tooltip :content="t('workspace')" placement="top" :show-after="500">
+                              <div class="status-pill" v-if="CLISettings.enabled" @click="browseDirectory">
+                                <i class="fa-solid fa-folder-open"></i>
+                                <span class="pill-text">{{ CLISettings.cc_path ? CLISettings.cc_path.split(/[/\\]/).filter(Boolean).pop() : t('pleaseSelectWorkspaceFirst') }}</span>
+                              </div>
+                            </el-tooltip>
+
+                            <!-- 4. CLI 权限模式指示器 (仅 CLI 启用时显示) -->
+                            <el-dropdown 
+                              v-if="CLISettings.enabled" 
+                              placement="top" 
+                              trigger="click"
+                              class="status-pill-dropdown"
+                            >
+                              <!-- ⚠️ 关键修复：让 status-pill 直接作为下拉组件的触发器 -->
+                              <div class="status-pill">
+                                <el-tooltip :content="t('permissionMode')" placement="top" :show-after="500">
+                                  <!-- 将内容包裹在一个 span 中，使得 tooltip 正常工作 -->
+                                  <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                    <span class="pill-text">
+                                      {{ 
+                                        CLISettings.engine === 'local' ? localEnvSettings.permissionMode :
+                                        CLISettings.engine === 'ds' ? dsSettings.permissionMode :
+                                        CLISettings.engine === 'acp' ? acpSettings.permissionMode : 'unknown'
+                                      }}
+                                    </span>
+                                  </span>
+                                </el-tooltip>
+                              </div>
+                              
+                              <template #dropdown>
+                                <el-dropdown-menu>
+                                  <!-- 本地环境 (Local) 选项 -->
+                                  <template v-if="CLISettings.engine === 'local'">
+                                    <el-dropdown-item @click="localEnvSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="localEnvSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="localEnvSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="localEnvSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="localEnvSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+                                  </template>
+                                  <!-- Docker Sandbox (DS) 选项 -->
+                                  <template v-else-if="CLISettings.engine === 'ds'">
+                                    <el-dropdown-item @click="dsSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="dsSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="dsSettings.permissionMode='auto-approve'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="dsSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('bypassPermissions') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="dsSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('coworkPermissionMode') }}</el-dropdown-item>
+                                  </template>
+                                  <!-- ACP 选项 -->
+                                  <template v-else-if="CLISettings.engine === 'acp'">
+                                    <el-dropdown-item @click="acpSettings.permissionMode='plan'; autoSaveSettings()">{{ t('planMode') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="acpSettings.permissionMode='default'; autoSaveSettings()">{{ t('defaultPermissionMode') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="acpSettings.permissionMode='acceptEdits'; autoSaveSettings()">{{ t('acceptEdits') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="acpSettings.permissionMode='yolo'; autoSaveSettings()">{{ t('danger')+t('bypassPermissions') }}</el-dropdown-item>
+                                    <el-dropdown-item @click="acpSettings.permissionMode='cowork'; autoSaveSettings()">{{ t('danger')+t('coworkPermissionMode') }}</el-dropdown-item>
+                                  </template>
+                                </el-dropdown-menu>
+                              </template>
+                            </el-dropdown>
                         </template>
 
                       </div>
@@ -2120,7 +2115,7 @@ function updateElement(el, rawMarkdown, formatFn) {
 
                       <!-- 1.3 扩展列表视图 (严格还原卡片及收藏逻辑) -->
                       <div v-else class="extensions-list" style="margin: 10px; height: 100%; overflow-y: auto;">
-                        <el-card class="extension-card default-view-card" :class="{ active: currentExtension === null && activeSideView === 'list' }" @click="resetToDefaultView()">
+                        <el-card class="extension-card default-view-card" :class="{ active: currentExtension === null && activeSideView === 'list' }" @click="resetToDefaultView();expandChatArea();collapseSidePanel();">
                           <div class="extension-info"><h3>{{ t('defaultView') }}</h3><p>{{ t('defaultViewDescription') }}</p></div>
                         </el-card>
                         <el-card class="extension-card task-center-card" @click="openTaskCenter()">
@@ -2129,9 +2124,24 @@ function updateElement(el, rawMarkdown, formatFn) {
                         <el-card class="extension-card workspace-card" @click="openWorkspace()" v-show="isElectron">
                           <div class="extension-info"><h3>{{ t('workspace') || '工作区文件' }}</h3><p>{{ t('workspaceDescription') || '管理与查看本地工作区文件树' }}</p></div>
                         </el-card>
-                        <div class="extensions-divider" v-if="extensions.length > 0">
-                          <span>{{ t('availableExtensions') }} <el-link type="primary" :underline="false" href="#" @click.stop.prevent="switchToExtensionPage"><el-icon class="mr-1"><i class="fa-solid fa-puzzle-piece"></i></el-icon>{{ t('goToExtensionPage') }}</el-link></span>
+                        <!-- 分隔线 -->
+                        <div class="extensions-divider">
+                          <span>
+                            {{ t('availableExtensions') }}
+                            <el-link
+                              type="primary"
+                              :underline="false"
+                              href="#" 
+                              @click.stop.prevent="switchToExtensionPage();showExtensionsDialog = false" 
+                            >
+                              <el-icon class="mr-1">
+                                <i class="fa-solid fa-puzzle-piece"></i>
+                              </el-icon>{{ t('goToExtensionPage') }}
+                            </el-link>
+                          </span>
                         </div>
+                        <!-- 扩展列表 -->
+                        <el-empty v-if="extensions.length === 0" :description="t('noExtensionsFound')" ></el-empty>
                         <el-card v-for="ext in extensions" :key="ext.id" class="extension-card" :class="{ active: currentExtension && currentExtension.id === ext.id }" @click="switchExtension(ext)">
                             <div class="btn-top-right" @click.stop>
                               <el-tooltip :content="favoriteExtensionIds.includes(ext.id) ? t('unfavorite') : t('favorite')" placement="top">
@@ -2154,8 +2164,6 @@ function updateElement(el, rawMarkdown, formatFn) {
                     <!-- 2. 已打开的扩展 Iframe 多开视图 (后台状态驻留) -->
                     <template v-for="ext in openedExtensions" :key="ext.id">
                       <div v-show="currentExtension && currentExtension.id === ext.id" class="ext-iframe-wrapper" style="height: 100%;">
-                          <div class="ext-edge-trigger top" @mousemove="handleExtMouseMove" @mouseleave="hideExtButton"></div>
-                          <div class="ext-edge-trigger left" @mousemove="handleExtMouseMove" @mouseleave="hideExtButton"></div>
                           <div class="ext-floating-close-btn" :class="{ 'is-active': extButtonVisible }" @mousemove="handleExtMouseMove" @click="resetToDefaultView()" :title="t('backToDefaultView') || '返回默认视图'">
                               <i class="fa-solid fa-arrow-left"></i> 
                           </div>
@@ -2816,7 +2824,7 @@ function updateElement(el, rawMarkdown, formatFn) {
         width="90%"> 
         <!-- logo页面 -->
           <div class="license-notice">
-            <h1>Super Agent Party v0.4.0</h1>
+            <h1>Super Agent Party v0.4.1</h1>
             <h3>开源协议声明 / Open Source License</h3>
             <div class="notice-section">
               <p>❗ 注意！本项目是基于AGPL协议开源的，请遵守AGPL协议，以避免不必要的法律问题！</p>
