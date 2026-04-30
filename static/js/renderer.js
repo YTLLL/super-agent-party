@@ -1239,6 +1239,50 @@ const app = Vue.createApp({
   },
   computed: {
 
+    // ✨ 新增：主页面扩展列表过滤逻辑 ✨
+    filteredManageExtensions() {
+      if (!this.searchManageExtensionQuery) {
+        return this.extensions;
+      }
+      const query = this.searchManageExtensionQuery.toLowerCase();
+      return this.extensions.filter(ext => {
+        const matchName = ext.name && ext.name.toLowerCase().includes(query);
+        const matchDesc = ext.description && ext.description.toLowerCase().includes(query);
+        const matchAuthor = ext.author && ext.author.toLowerCase().includes(query);
+        return matchName || matchDesc || matchAuthor; // 增加作者匹配
+      });
+    },
+
+    // ✨ 新增：弹窗远程插件列表过滤逻辑 ✨
+    filteredRemotePlugins() {
+      if (!this.searchRemotePluginQuery) {
+        return this.remotePlugins;
+      }
+      const query = this.searchRemotePluginQuery.toLowerCase();
+      return this.remotePlugins.filter(plugin => {
+        const matchName = plugin.name && plugin.name.toLowerCase().includes(query);
+        const matchDesc = plugin.description && plugin.description.toLowerCase().includes(query);
+        return matchName || matchDesc;
+      });
+    },
+
+    // 动态返回过滤后的扩展列表
+    filteredExtensions() {
+      // 如果搜索框为空，直接返回原有的扩展列表
+      if (!this.searchExtensionQuery) {
+        return this.extensions; 
+      }
+      
+      const query = this.searchExtensionQuery.toLowerCase();
+      
+      // 根据扩展的名称或描述进行模糊匹配
+      return this.extensions.filter(ext => {
+        const matchName = ext.name && ext.name.toLowerCase().includes(query);
+        const matchDesc = ext.description && ext.description.toLowerCase().includes(query);
+        return matchName || matchDesc;
+      });
+    },
+
   favoriteExtensions() {
     return this.extensions.filter(ext => this.favoriteExtensionIds.includes(ext.id));
   },
