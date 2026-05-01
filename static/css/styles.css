@@ -12243,3 +12243,85 @@ pre.sp-content.sp-code {
   padding-right: 90px !important;
   font-size: 14px !important; /* 字体稍微调小一点 */
 }
+
+@media (max-width: 768px) {
+  .resizer {
+    display: none;
+  }
+
+  .chat-area-layout {
+    display: block;
+  }
+
+  .chat-history-panel,
+  .chat-history-divider {
+    display: none;
+  }
+  
+  /* 完全清除左右缩进带来的偏左问题 */
+  .chat-wrapper.collapsed-right .chat-area,
+  .chat-wrapper.collapsed-left .side-panel,
+  .chat-area,
+  .side-panel {
+    width: 100% !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+  }
+  
+  .chat-main-column {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+
+/* ============================================================
+   🚀 移动端终极防滚动补丁 (锁定屏幕，仅允许消息区滚动)
+   ============================================================ */
+
+/* 1. 锁死 Body，引入 100dvh 解决浏览器地址栏导致的视口高度跳动 */
+html, body {
+  height: 100% !important;
+  height: 100dvh !important; /* 动态视口高度，完美避开 Safari 地址栏 */
+  width: 100vw !important;
+  position: fixed !important; /* 终极杀招：彻底切断移动端的页面拖拽橡皮筋效果 */
+  overflow: hidden !important;
+  margin: 0;
+  padding: 0;
+}
+
+/* 2. 锁死 Vue 根节点 */
+#app {
+  height: 100% !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 3. 锁死 Element Plus 的 Main 容器 */
+.el-main {
+  overflow: hidden !important; /* Element Plus 默认是 auto，会导致整个页面滑动，必须关掉 */
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 4. 严防水平溢出横向滑动 */
+.chat-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow: hidden !important; 
+}
+
+/* 5. 确保只有消息列表等特定区域可以纵向滚动 */
+.messages-container,
+.side-panel-scroll,
+.history-list-container {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch; /* 保持 iOS 丝滑滚动体验 */
+}
